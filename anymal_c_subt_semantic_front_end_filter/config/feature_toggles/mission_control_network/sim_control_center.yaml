@@ -1,0 +1,77 @@
+/use_sim_time: true # needed for terminal that runs mission control UI
+
+rqt_darpa_supervision_plugin:
+  # The frame Id in which path creator nodes are added (NOTE: this should coincide with rviz's static frame_id)
+  path_creator_frame_id: "darpa"
+
+network_address_mission_control: &network_address_mission_control
+  destination_addr: localhost # used for topics
+  server: localhost # used for services
+
+network_address_base_router: &network_address_base_router
+  destination_addr: localhost # used for topics
+
+network_address_anymal_1: &network_address_anymal_1
+  destination_addr: localhost # used for topics
+  server: localhost # used for services
+
+network_address_anymal_2: &network_address_anymal_2
+  destination_addr: localhost # used for topics
+  server: localhost # used for services
+
+nimbro_robot_transfolder_missionctrl_tcp_client:
+  <<: *network_address_mission_control
+
+# Simulation extra topics
+nimbro_anymal_missionctrl_sender_simulation:
+  <<: *network_address_mission_control
+
+## Common
+pinger_anymal_to_baserouter:
+  <<: *network_address_base_router
+
+## ANYmal 1
+nimbro_missionctrl_anymal_1_tcp_client:
+  <<: *network_address_anymal_1
+
+nimbro_missionctrl_anymal_1_sender:
+  <<: *network_address_anymal_1
+
+nimbro_sim_anymal_1_missionctrl_sender:
+  <<: *network_address_anymal_1
+
+nimbro_sim_anymal_1_missionctrl_tcp_server:
+  <<: *network_address_anymal_1
+
+pinger_missionctrl_to_anymal_1:
+  <<: *network_address_anymal_1
+
+## ANYmal 2
+nimbro_missionctrl_anymal_2_tcp_client:
+  <<: *network_address_anymal_2
+
+nimbro_missionctrl_anymal_2_sender:
+  <<: *network_address_anymal_2
+
+nimbro_sim_anymal_2_missionctrl_sender:
+  <<: *network_address_anymal_2
+
+nimbro_sim_anymal_2_missionctrl_tcp_server:
+  <<: *network_address_anymal_2
+
+pinger_missionctrl_to_anymal_2:
+  <<: *network_address_anymal_2
+
+stack_launcher:
+  stacks:
+    mission_control_center_teleoperation:
+      stacks:
+        mission_control_center_teleoperation_anymal_3:
+          enabled: false
+          name: mission_control_center_teleoperation_anymal_3
+        mission_control_center_teleoperation_anymal_4:
+          enabled: false
+          name: mission_control_center_teleoperation_anymal_4
+        mission_control_center_teleoperation_anymal_5:
+          enabled: false
+          name: mission_control_center_teleoperation_anymal_5

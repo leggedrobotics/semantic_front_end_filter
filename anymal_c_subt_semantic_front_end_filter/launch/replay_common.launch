@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- Main settings with rosbag name and rosparam dumped file -->
+  <arg name="bagfile"                               default=""/>
+  <arg name="dumped_rosparameters"                  default=""/>
+  <arg name="path_map_darpa_tf_file"                default=""/>
+
+  <!-- Other settings -->
+  <arg name="publish_rate_multiplier"               default="1.0"/>
+  <arg name="seconds_into_the_bag"                  default="0.0"/>
+  <arg name="pause_playback_on_launch"              default="true"/>
+  <arg name="run_visualization"                     default="true"/>
+  <arg name="load_map_darpa_tf_"                    value="$(eval bool(arg('path_map_darpa_tf_file')))"/>
+  <!-- rviz configuration path, used only if  run_visualization is true -->
+  <arg name="rviz_config_path"                      default="$(dirname)/../config/ui/config.rviz"/>
+  <arg name="rviz_splash_screen"                    default="$(find anymal_c_subt)/config/ui/splash_replay.png"/>
+  <!-- Slightly miss-use the param 'subt_setup_config_file' to load the robot model dumped in the yaml file -->
+  <arg name="subt_setup_config_file"                value="$(arg dumped_rosparameters)"/>
+  <!-- Slightly miss-use the param 'extension_subt' to set global params needed to replay rosbags -->
+  <arg name="extension_subt"                        value="replay"/>
+
+  <!-- Load the configuration -->
+  <include file="$(find anymal_c_subt)/launch/load_config.launch"  pass_all_args="true"/>
+
+  <!-- Common replay stack -->
+  <include file="$(find stack_launcher)/launch/stack_launcher.launch">
+    <arg name="stack"         value="replay_common_subt"/>
+    <arg name="trigger_param" value="/config_loaded"/>
+  </include>
+
+  <!-- Rosbag -->
+  <group if="$(arg pause_playback_on_launch)">
+    <node name="play_rosbag" pkg="rosbag" type="play" output="screen"
+      args="--clock $(arg bagfile) --pause -r $(arg publish_rate_multiplier) -s $(arg seconds_into_the_bag)">
+    </node>
+  </group>
+  <group unless="$(arg pause_playback_on_launch)">
+    <node name="play_rosbag" pkg="rosbag" type="play" output="screen"
+      args="--clock $(arg bagfile) -r $(arg publish_rate_multiplier) -s $(arg seconds_into_the_bag)">
+    </node>
+  </group>
+
+  <!-- Rviz & RQT -->
+  <group if="$(arg run_visualization)">
+    <node name="rviz" pkg="rviz" type="rviz"
+          args="-d $(arg rviz_config_path) --s $(arg rviz_splash_screen)" output="screen" respawn="true" launch-prefix=""/>
+
+    <node name="rqt_gui_replay" pkg="rqt_gui" type="rqt_gui"
+          args="--force-discover --clear-config --perspective-file $(find anymal_c_subt)/config/ui/replay/rqt.perspective" output="screen" respawn="true" launch-prefix=""/>
+  </group>
+
+  <!-- Load map-darpa TF -->
+  <group if="$(arg load_map_darpa_tf_)">
+    <node name="load_map_darpa_tf" pkg="supervision_helpers" type="load_map_darpa_tf.py" output="screen" launch-prefix="">
+      <param name="default_path_tf_file" value="$(arg path_map_darpa_tf_file)"/>
+    </node>
+  </group>
+
+</launch>

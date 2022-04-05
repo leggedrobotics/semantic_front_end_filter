@@ -1,0 +1,20 @@
+image_width: 720
+image_height: 540
+camera_name: cam4_sensor_frame_helper
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [349.9204665671, 0.0, 344.3032414701, 0.0, 349.8220154122, 258.449836991, 0.0, 0.0, 1.0]
+distortion_model: equidistant
+distortion_coefficients:
+  rows: 1
+  cols: 4
+  data: [-0.0435067508, 0.0048952632, -0.0035388936, 0.0003353017]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [349.9204665671, 0.0, 344.3032414701, 0.0, 0.0, 349.8220154122, 258.449836991, 0.0 ,0.0, 0.0, 1.0, 0.0]

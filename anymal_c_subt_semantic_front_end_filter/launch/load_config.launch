@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- File adapted from anymal_c launch files "load_config.launch" and "load_robot_config.launch" -->
+
+  <!-- Configuration -->
+  <arg name="version"                  default="c100"           doc="Version of the robot, e.g. 'c010', 'c020', or 'c100'."/>
+  <arg name="rsl_robot_pkg"            default="anymal_c_rsl"   doc="Robot, e.g. 'anymal_cerberus_rsl' or 'anymal_chimera_rsl'."/>
+  <arg name="robot"                    default="c100"/>
+  <arg name="environment_data_package" default=""                                                                                                                 doc="If your environment data is stored in a catkin package, use this argument to automatically search for it instead of giving an absolute path."/>
+  <arg name="environment_data_path"    default="$(eval find (environment_data_package) if environment_data_package != '' else '')"                                doc="Absolute path to the environment data folder."/>
+  <arg name="environment_config"       default="default"                                                                                                          doc="Name of the environment configuration. It must be stored at 'environment_data_path/configs/environment_config.yaml.'"/>
+  <arg name="setup"                    default="real"           doc="Configuration setup. Options: real, sim. Note: sim only is for ANYbotics level"/>
+  <arg name="setup_subt"               default="real"           doc="SubT Configuration setup. Options: real, sim_subt, sim_subt_ignition_gazebo."/>
+  <arg name="extension"                default="none"           doc="Configuration extension file in YAML format."/>
+  <arg name="extension_subt"           default="none"           doc="Subt Configuration extension file in YAML format."/>
+
+  <!-- Configuration files -->
+  <arg name="version_config_file"         default="$(find anymal_c)/config/version/$(arg version).yaml"                                                 doc="Full path of the version configuration file."/>
+  <arg name="rsl_robot_config_file"       default="$(eval find(rsl_robot_pkg) + '/config/robot/robot.yaml')"                                            doc="Full path of the robot configuration file."/>
+  <arg name="environment_config_file"     default="$(eval environment_data_path + '/configs/' + environment_config + '.yaml' if environment_data_path != '' else '')" doc="Full path of the environment configuration file."/>
+  <arg name="setup_config_file"           default="$(find anymal_c)/config/setup/$(arg setup).yaml"                                                     doc="Full path of the setup configuration file."/>
+  <arg name="subt_setup_config_file"      default="$(find anymal_c_subt)/config/setup/$(arg setup_subt).yaml"                                           doc="Full path of the subt setup configuration file."/>
+  <arg name="extension_config_file"       default="$(find anymal_c_rsl)/config/extension/$(arg extension).yaml"                                         doc="Full path of the extension configuration file."/>
+  <arg name="subt_extension_config_file"  default="$(find anymal_c_subt)/config/extension/$(arg extension_subt).yaml"                                   doc="Full path of the subt specific extension configuration file."/>
+
+  <!-- Feature toggles ANYmal Research -->
+  <arg name="state_estimator_module"        default="real"     doc="State estimator module to run. Options: real, simulated (only in simulation)."/>
+  <arg name="slam_module"                   default="real"     doc="SLAM module to run. Options: real, simulated (only in simulation)."/>
+  <arg name="point_cloud_odometry_module"   default="real"     doc="Point cloud odometry module to run. Options: real, simulated (only in simulation)."/>
+  <arg name="docking"                       default="disabled" doc="Run the docking software. Options: disabled, enabled."/>
+  <arg name="application_module"            default="agpu"     doc="Application module installed in ANYmal. Options: apc, agpu"/>
+  <arg name="battery_model"                 default="regular"  doc="Battery model mounted on ANYmal. Options: regular, travel"/>
+  <arg name="inspection_payload"            default="disabled" doc="Run the inspection payload software. Options: disabled, enabled."/>
+  <arg name="auditive_inspection_frequency" default="disabled" doc="Run the inspection software for analyzing audio frequencies. Options: disabled, enabled."/>
+  <arg name="visual_inspection_dial"        default="disabled" doc="Run the inspection software for reading dials. Options: disabled, enabled."/>
+  <arg name="diagnostic_mode"               default="disabled" doc="Run the diagnostic mode. Options: disabled, enabled."/>
+  <arg name="data_synchronization"          default="disabled" doc="Run the ANYmal Data Synchronization client node. Options: ad-hoc-only (default), enabled, disabled."/>
+  <arg name="trekker"                       default="disabled" doc="Use a learning-based controller for walking. Options: disabled (default), enabled."/>
+
+  <!-- Feature toggles DARPA SubT -->
+  <arg name="subt_simulation"               default="mission_sim"      doc="Simulation features. Options: mission_sim, navigation_sim."/>
+  <arg name="mission_control_network"       default="real"             doc="Parameters used for information exchange between anymal and mission control. Options: real, sim, sim_control_center."/>
+  <arg name="mission_autonomy"              default="real"             doc="Parameters used for pinger between anymal and mission control. Options: real, sim."/>
+
+  <!-- Load default ANYmal Research C configuration -->
+  <rosparam command="load" file="$(find anymal_c)/config/default.yaml"/>
+  <!-- Load default RSL configuration -->
+  <rosparam command="load" file="$(find anymal_c_rsl)/config/default.yaml"/>
+  <!-- Load default DARPA SubT C configuration -->
+  <rosparam command="load" file="$(find anymal_c_subt)/config/default_subt.yaml"/>
+
+  <!-- Load ANYmal Research C feature toggling configurations -->
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/state_estimation/$(arg state_estimator_module).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/slam/$(arg slam_module).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/point_cloud_odometry/$(arg point_cloud_odometry_module).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/docking/$(arg docking).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/application_module/$(arg application_module).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/battery_model/$(arg battery_model).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/inspection/inspection_payload/$(arg inspection_payload).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/inspection/auditive_inspection_frequency/$(arg auditive_inspection_frequency).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/inspection/visual_inspection_dial/$(arg visual_inspection_dial).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/diagnostic_mode/$(arg diagnostic_mode).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/data_synchronization/$(arg data_synchronization).yaml"/>
+  <rosparam command="load" file="$(find anymal_c)/config/feature_toggles/trekker/$(arg trekker).yaml"/>
+
+  <!-- Load DARPA SubT feature toggling configurations -->
+  <rosparam command="load" file="$(find anymal_c_subt)/config/feature_toggles/simulation/$(arg subt_simulation).yaml"/>
+  <rosparam command="load" file="$(find anymal_c_subt)/config/feature_toggles/mission_control_network/$(arg mission_control_network).yaml"/>
+  <rosparam command="load" file="$(find anymal_c_subt)/config/feature_toggles/mission_autonomy/$(arg mission_autonomy).yaml"/>
+  <rosparam command="load" file="$(find anymal_c_subt)/config/feature_toggles/inspection_head/$(arg inspection_payload).yaml"/>
+
+  <!-- Overlay version configuration -->
+  <rosparam command="load" file="$(arg version_config_file)"/>
+  <!-- Overlay robot configuration -->
+  <rosparam command="load" file="$(arg rsl_robot_config_file)"/>
+  <!-- Overlay environment configuration -->
+  <rosparam command="load" file="$(arg environment_config_file)" if="$(eval environment_config_file != '')"/>
+  <!-- Overlay setup configuration -->
+  <rosparam command="load" file="$(arg setup_config_file)"/>
+  <!-- Overlay Subt extension configuration -->
+  <rosparam command="load" file="$(arg subt_setup_config_file)"/>
+  <!-- Overlay extension configuration -->
+  <rosparam command="load" file="$(arg extension_config_file)"/>
+  <!-- Overlay Subt extension configuration -->
+  <rosparam command="load" file="$(arg subt_extension_config_file)"/>
+
+  <!-- Write configuration arguments to ROS parameter server for logging -->
+  <param name="/config/general/version"                               value="$(arg version)"/>
+  <param name="/config/general/robot"                                 value="$(arg robot)"/>
+  <param name="/config/general/environment_data_path"                 value="$(arg environment_data_path)"/>
+  <param name="/config/general/environment_data_package"              value="$(arg environment_data_package)"/>
+  <param name="/config/general/environment_config"                    value="$(arg environment_config)"/>
+  <param name="/config/general/setup"                                 value="$(arg setup)"/>
+  <param name="/config/general/extension"                             value="$(arg extension)"/>
+  <param name="/config/general/version_config_file"                   value="$(arg version_config_file)"/>
+  <param name="/config/general/robot_config_file"                     value="$(arg rsl_robot_config_file)"/>
+  <param name="/config/general/environment_config_file"               value="$(arg environment_config_file)"/>
+  <param name="/config/general/setup_config_file"                     value="$(arg setup_config_file)"/>
+  <param name="/config/general/extension_config_file"                 value="$(arg extension_config_file)"/>
+  <param name="/config/general/subt_extension_config_file"            value="$(arg subt_extension_config_file)"/>
+  <param name="/config/feature_toggles/state_estimator_module"        value="$(arg state_estimator_module)"/>
+  <param name="/config/feature_toggles/slam_module"                   value="$(arg slam_module)"/>
+  <param name="/config/feature_toggles/point_cloud_odometry_module"   value="$(arg point_cloud_odometry_module)"/>
+  <param name="/config/feature_toggles/docking"                       value="$(arg docking)"/>
+  <param name="/config/feature_toggles/application_module"            value="$(arg application_module)"/>
+  <param name="/config/feature_toggles/battery_model"                 value="$(arg battery_model)"/>
+  <param name="/config/feature_toggles/inspection_payload"            value="$(arg inspection_payload)"/>
+  <param name="/config/feature_toggles/auditive_inspection_frequency" value="$(arg auditive_inspection_frequency)"/>
+  <param name="/config/feature_toggles/visual_inspection_dial"        value="$(arg visual_inspection_dial)"/>
+  <param name="/config/feature_toggles/diagnostic_mode"               value="$(arg diagnostic_mode)"/>
+  <param name="/config/feature_toggles/data_synchronization"          value="$(arg data_synchronization)"/>
+
+  <node pkg="stack_launcher" type="sequential_roslaunch_node.py" name="sequential_roslaunch" output="screen">
+    <rosparam param="launch_files" subst_value="True">
+      ['stack_launcher stack_launcher.launch stack:=post_process_config',
+       'anymal_c notify_config_loaded.launch']
+    </rosparam>
+  </node>
+
+</launch>

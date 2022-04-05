@@ -1,0 +1,82 @@
+# This file is used only in simulation for mission control center.
+
+## ANYmal 1
+nimbro_anymal_1_missionctrl_topics_ports: &nimbro_anymal_1_missionctrl_topics_ports # Use for sender on one machine and corresponding receiver on other machine
+  port:             17003 # param used by receiver, must be same as destination_port
+  destination_port: 17003 # param used by sender, must be same as port
+
+nimbro_anymal_1_missionctrl_tcp_services_ports: &nimbro_anymal_1_missionctrl_tcp_services_ports # Use for server on one machine and corresponding client on other machine
+  port:             17004 # param used by both client and server
+
+nimbro_missionctrl_anymal_1_topics_ports: &nimbro_missionctrl_anymal_1_topics_ports # Use for sender on one machine and corresponding receiver on other machine
+  port:             17005 # param used by receiver, must be same as destination_port
+  destination_port: 17005 # param used by sender, must be same as port
+
+
+## ANYmal 2
+nimbro_anymal_2_missionctrl_topics_ports: &nimbro_anymal_2_missionctrl_topics_ports # Use for sender on one machine and corresponding receiver on other machine
+  port:             17053 # param used by receiver, must be same as destination_port
+  destination_port: 17053 # param used by sender, must be same as port
+
+nimbro_anymal_2_missionctrl_tcp_services_ports: &nimbro_anymal_2_missionctrl_tcp_services_ports # Use for server on one machine and corresponding client on other machine
+  port:             17054 # param used by both client and server
+
+nimbro_missionctrl_anymal_2_topics_ports: &nimbro_missionctrl_anymal_2_topics_ports # Use for sender on one machine and corresponding receiver on other machine
+  port:             17055 # param used by receiver, must be same as destination_port
+  destination_port: 17055 # param used by sender, must be same as port
+
+
+## Simulated ANYmal - Simulated Mission Control
+nimbro_anymal_missionctrl_simulation_topics_ports: &nimbro_anymal_missionctrl_simulation_topics_ports # Use only during simulation
+  port:             17002 # param used by receiver, must be same as destination_port
+  destination_port: 17002 # param used by sender, must be same as port
+
+## ----------------------- Copying params to needed nodes, modify only above section and leave below section untouched ---------------------
+# Simulated ANYmal - Simulated Mission Control
+nimbro_anymal_missionctrl_sender_simulation:
+  <<: *nimbro_anymal_missionctrl_simulation_topics_ports
+
+nimbro_missionctrl_anymal_receiver_simulation:
+  <<: *nimbro_anymal_missionctrl_simulation_topics_ports
+
+# ANYmal 1
+## ANYmal 1 - Mission Control
+nimbro_sim_anymal_1_missionctrl_sender:
+  <<: *nimbro_anymal_1_missionctrl_topics_ports
+  # Other shared settings must be loaded via 'shared_settings.yaml'
+
+nimbro_missionctrl_anymal_1_receiver:
+  <<: *nimbro_anymal_1_missionctrl_topics_ports
+
+nimbro_sim_anymal_1_missionctrl_receiver:
+  <<: *nimbro_missionctrl_anymal_1_topics_ports
+
+nimbro_missionctrl_anymal_1_sender:
+  <<: *nimbro_missionctrl_anymal_1_topics_ports
+
+nimbro_sim_anymal_1_missionctrl_tcp_server:
+  <<: *nimbro_anymal_1_missionctrl_tcp_services_ports
+
+nimbro_missionctrl_anymal_1_tcp_client:
+  <<: *nimbro_anymal_1_missionctrl_tcp_services_ports
+
+# ANYmal 2
+## ANYmal 2 - Mission Control
+nimbro_sim_anymal_2_missionctrl_sender:
+  <<: *nimbro_anymal_2_missionctrl_topics_ports
+  # Other shared settings must be loaded via 'shared_settings.yaml'
+
+nimbro_missionctrl_anymal_2_receiver:
+  <<: *nimbro_anymal_2_missionctrl_topics_ports
+
+nimbro_sim_anymal_2_missionctrl_receiver:
+  <<: *nimbro_missionctrl_anymal_2_topics_ports
+
+nimbro_missionctrl_anymal_2_sender:
+  <<: *nimbro_missionctrl_anymal_2_topics_ports
+
+nimbro_sim_anymal_2_missionctrl_tcp_server:
+  <<: *nimbro_anymal_2_missionctrl_tcp_services_ports
+
+nimbro_missionctrl_anymal_2_tcp_client:
+  <<: *nimbro_anymal_2_missionctrl_tcp_services_ports
