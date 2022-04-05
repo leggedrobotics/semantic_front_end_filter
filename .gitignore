@@ -1,0 +1,12 @@
+# python files
+*.pyc
+
+# CPP files
+*.o
+*.so
+
+# Note bookfiles
+*.ipynb
+
+# kpconv
+kpconv/results
