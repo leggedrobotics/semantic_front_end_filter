@@ -9,11 +9,15 @@
 #
 #      Class handling Aynmal dataset.
 #      Implements a Dataset, a Sampler, and a collate_fn
+#      TODOs:
+#      - Load images from msgpack
+#      - implement feature projection utility method
+#
 #
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #      Hugues THOMAS - 11/06/2018
-#
+#       Chenyu Yang - 04/04/2022
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -109,7 +113,7 @@ class AnymalDataset(PointCloudDataset):
         if 0 < self.config.first_subsampling_dl <= 0.01:
             raise ValueError('subsampling_parameter too low (should be over 1 cm')
 
-        self.input_points, self.input_normals, self.input_labels = self.load_subsampled_clouds(orient_correction)
+        self.input_points, self.input_normals, self.input_imageses, self.input_projections, self.input_labels = self.load_subsampled_clouds(orient_correction)
 
         return
 
@@ -135,6 +139,8 @@ class AnymalDataset(PointCloudDataset):
         ti_list = [] # index list
         s_list = [] # scale list
         R_list = [] # Rotation list
+        img_list = [] # images list
+        proj_list = [] # projection list
 
         for p_i in idx_list:
 
@@ -142,6 +148,8 @@ class AnymalDataset(PointCloudDataset):
             points = self.input_points[p_i].astype(np.float32)
             features = self.input_normals[p_i].astype(np.float32)
             label = self.label_to_idx[self.input_labels[p_i]]
+            images = [img.astype(np.float32) for img in self.input_imageses[p_i]]
+            proj = self.input_projections[p_i].astype(np.float32)
 
             # Data augmentation
             points, scale, R = self.augmentation_transform(points)
@@ -153,6 +161,8 @@ class AnymalDataset(PointCloudDataset):
             ti_list += [p_i]
             s_list += [scale]
             R_list += [R]
+            img_list += [images]
+            proj_list += [proj]
 
         ###################
         # Concatenate batch
@@ -187,7 +197,7 @@ class AnymalDataset(PointCloudDataset):
                                                 stack_lengths)
 
         # Add scale and rotation for testing
-        input_list += [scales, rots, model_inds]
+        input_list += [scales, rots, model_inds, img_list, proj_list] 
 
         return input_list
 
@@ -207,7 +217,7 @@ class AnymalDataset(PointCloudDataset):
 
         if exists(filename):
             with open(filename, 'rb') as file:
-                input_points, input_features, input_labels = pickle.load(file)
+                input_points, input_features, input_imageses, input_projections, input_labels = pickle.load(file)
 
         # Else compute them from original points
         else:
@@ -225,6 +235,8 @@ class AnymalDataset(PointCloudDataset):
             # Initialize containers
             input_points = []
             input_features = []
+            input_imageses = []
+            input_projections = []
 
             # Advanced display
             N = len(names)
@@ -241,28 +253,37 @@ class AnymalDataset(PointCloudDataset):
                 with open(data_name, "rb") as data_file:
                     byte_data = data_file.read()
                 data = msgpack.unpackb(byte_data)
-                data = data["pointcloud"]
-                data = np.array(data).astype(np.float32)
-                data = data[data[:, 0]>0]
-                data = data[data[:, 1]>0]
-                data[:,:3] = data[:,:3] - data[:,:3].mean(axis=0)
-                data[:,:3] = data[:,:3]/data[:,:3].max(axis=0)
+                pc = data["pointcloud"]
+                pc = np.array(pc).astype(np.float32)
+                pc = pc[pc[:, 0]>0]
+                pc = pc[pc[:, 1]>0]
+                pc[:,:3] = pc[:,:3] - pc[:,:3].mean(axis=0)
+                pc[:,:3] = pc[:,:3]/pc[:,:3].max(axis=0)
+                pc[:,4:7]/=255. # RGB turn to range 0-1
 
                 # Subsample them
                 if self.config.first_subsampling_dl > 0:
-                    points, features = grid_subsampling(data[:, :3],
-                                                       features=data[:, 3:7],
+                    points, features = grid_subsampling(pc[:, :3],
+                                                       features=pc[:, 3:],
                                                        sampleDl=self.config.first_subsampling_dl)
                 else:
-                    points = data[:, :3]
-                    features = data[:, 3:7]
-
+                    points = pc[:, :3]
+                    features = pc[:, 3:]
+                features, projections = features[:, :4], features[:, 4:]
                 print('', end='\r')
                 print(fmt_str.format('#' * ((i * progress_n) // N), 100 * i / N), end='', flush=True)
 
                 # Add to list
                 input_points += [points]
                 input_features += [features]
+                
+                ## Stores Images
+                images = [data['images'][k] for k in ["cam3","cam4","cam5"]]
+                input_imageses += [images]
+                input_projections += [projections]
+
+
+
 
             print('', end='\r')
             print(fmt_str.format('#' * progress_n, 100), end='', flush=True)
@@ -275,6 +296,8 @@ class AnymalDataset(PointCloudDataset):
             with open(filename, 'wb') as file:
                 pickle.dump((input_points,
                              input_features,
+                             input_imageses,
+                             input_projections,
                              input_labels), file)
 
         lengths = [p.shape[0] for p in input_points]
@@ -285,7 +308,7 @@ class AnymalDataset(PointCloudDataset):
         #     input_points = [pp[:, [0, 2, 1]] for pp in input_points]
         #     input_normals = [nn[:, [0, 2, 1]] for nn in input_normals]
 
-        return input_points, input_features, input_labels
+        return input_points, input_features, input_imageses, input_projections, input_labels
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -654,17 +677,19 @@ class AnymalSampler(Sampler):
 
 class AnymalCustomBatch:
     """Custom batch definition with memory pinning for Aynmal dataset"""
-
+    __slots__ = ("points", "neighbors", "pools", "lengths", "features", "labels", 
+                    "scales", "rots", "model_inds", "images", "projections")
     def __init__(self, input_list):
 
         # Get rid of batch dimension
         input_list = input_list[0]
+        (L,) = input_list[0]
 
         # Number of layers
-        L = (len(input_list) - 5) // 4
+        # L = (len(input_list) - 5) // 4
 
         # Extract input tensors from the list of numpy array
-        ind = 0
+        ind = 1
         self.points = [torch.from_numpy(nparray) for nparray in input_list[ind:ind+L]]
         ind += L
         self.neighbors = [torch.from_numpy(nparray) for nparray in input_list[ind:ind+L]]
@@ -682,7 +707,10 @@ class AnymalCustomBatch:
         self.rots = torch.from_numpy(input_list[ind])
         ind += 1
         self.model_inds = torch.from_numpy(input_list[ind])
-
+        ind += 1
+        self.images = [[torch.from_numpy(nparray) for nparray in imageset ]for imageset in input_list[ind] ]
+        ind += 1
+        self.projections = [torch.from_numpy(nparray) for nparray in input_list[ind]]
         return
 
     def pin_memory(self):
@@ -777,7 +805,33 @@ class AnymalCustomBatch:
                 all_p_list.append(p_list)
 
         return all_p_list
-
+    def project_from_img_feature(self, imgs):
+        """
+        arg imgs: nested list of images, each image has the dim (c,x,y) c is the latent channels
+        """
+        lb = 0 
+        xs = []
+        for l, proj, imgset in zip(self.lengths[0], self.projections, imgs):
+            imgshape = imgset[0].shape
+            pc = self.points[0][lb:lb+l,:]
+            lb += l
+            assert(pc.shape[0] == proj.shape[0])
+            x = torch.zeros([pc.shape[0], imgshape[0]])
+            for i, img in enumerate(imgset):
+                tmp_fxy = proj[:, i*3: (i+1)*3]
+                flag, px, py = tmp_fxy[:,0], tmp_fxy[:,1], tmp_fxy[:,2]
+                flag = flag>0.5 # turn 0-1 into boolean
+                flag = flag & (0<=px) & (px< imgshape[2]) & (0<=py) & (py< imgshape[1])
+                px = px.to(torch.int64)
+                py = py.to(torch.int64)
+                px[~flag] = 0
+                py[~flag] = 0
+                
+                feats = img[:, py, px]
+                feats = feats.T
+                x = torch.where(flag[:,None], feats, x)
+            xs.append(x)
+        return torch.concat(xs,dim=0)
 
 def ModelNet40Collate(batch_data):
     return AnymalCustomBatch(batch_data)

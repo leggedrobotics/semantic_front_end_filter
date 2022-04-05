@@ -16,6 +16,7 @@
 
 from models.blocks import *
 import numpy as np
+from models.unet import UNet
 
 
 def p2p_fitting_regularizer(net):
@@ -394,10 +395,155 @@ class KPFCNN(nn.Module):
         return correct / total
 
 
+class IMGKPCNN(nn.Module):
+    """
+    Class defining IMGKPCNN
+    the model that have an u-net inside to extract img features,
+    and kpconv
+    """
+
+    def __init__(self, config):
+        super(IMGKPCNN, self).__init__()
+
+        #####################
+        # Network opperations
+        #####################
+
+        # Current radius of convolution and feature dimension
+        layer = 0
+        r = config.first_subsampling_dl * config.conv_radius
+        in_dim = config.in_features_dim
+        out_dim = config.first_features_dim
+        self.K = config.num_kernel_points
+
+        # Save all block operations in a list of modules
+        self.block_ops = nn.ModuleList()
+
+        # Loop over consecutive blocks
+        block_in_layer = 0
+        for block_i, block in enumerate(config.architecture):
+
+            # Check equivariance
+            if ('equivariant' in block) and (not out_dim % 3 == 0):
+                raise ValueError('Equivariant block but features dimension is not a factor of 3')
+
+            # Detect upsampling block to stop
+            if 'upsample' in block:
+                break
+
+            # Apply the good block function defining tf ops
+            self.block_ops.append(block_decider(block,
+                                                r,
+                                                in_dim,
+                                                out_dim,
+                                                layer,
+                                                config))
 
 
+            # Index of block in this layer
+            block_in_layer += 1
+
+            # Update dimension of input from output
+            if 'simple' in block:
+                in_dim = out_dim // 2
+            else:
+                in_dim = out_dim
 
 
+            # Detect change to a subsampled layer
+            if 'pool' in block or 'strided' in block:
+                # Update radius and feature dimension for next layer
+                layer += 1
+                r *= 2
+                out_dim *= 2
+                block_in_layer = 0
+
+        self.head_mlp = UnaryBlock(out_dim, 1024, False, 0)
+        self.head_softmax = UnaryBlock(1024, config.num_classes, False, 0, no_relu=True)
+
+
+        ################
+        # Image Feature Extraction
+        ################
+        self.img_extract = UNet(3, 16)
+
+        ################
+        # Network Losses
+        ################
+
+        self.criterion = torch.nn.CrossEntropyLoss()
+        self.deform_fitting_mode = config.deform_fitting_mode
+        self.deform_fitting_power = config.deform_fitting_power
+        self.deform_lr_factor = config.deform_lr_factor
+        self.repulse_extent = config.repulse_extent
+        self.output_loss = 0
+        self.reg_loss = 0
+        self.l1 = nn.L1Loss()
+
+        return
+
+    def forward(self, batch, config):
+
+        # Save all block operations in a list of modules
+        if self.img_extract is None: # use colors and intensity as features    
+            x = batch.features.clone().detach()
+        else:
+            n_img_per_pc = len(batch.images[0]) # the number of images for each point cloud group
+
+            images = [i for bi in batch.images for i in bi] # flatten the nested lists
+            images = torch.tensor(np.stack(images, axis=0))
+            img_ftrs = self.img_extract(images) # img features
+            img_ftrs = [img_ftrs[i*n_img_per_pc: (i+1)*n_img_per_pc] 
+                    for i in range(len(img_ftrs)//n_img_per_pc)]
+            x = batch.project_from_img_feature(img_ftrs)
+            print("Got featurex:", x.shape)
+
+        # Loop over consecutive blocks
+        for block_op in self.block_ops:
+            x = block_op(x, batch)
+
+        # Head of network
+        x = self.head_mlp(x, batch)
+        x = self.head_softmax(x, batch)
+
+        return x
+
+    def loss(self, outputs, labels):
+        """
+        Runs the loss on outputs of the model
+        :param outputs: logits
+        :param labels: labels
+        :return: loss
+        """
+
+        # Cross entropy loss
+        self.output_loss = self.criterion(outputs, labels)
+
+        # Regularization of deformable offsets
+        if self.deform_fitting_mode == 'point2point':
+            self.reg_loss = p2p_fitting_regularizer(self)
+        elif self.deform_fitting_mode == 'point2plane':
+            raise ValueError('point2plane fitting mode not implemented yet.')
+        else:
+            raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
+
+        # Combined loss
+        return self.output_loss + self.reg_loss
+
+    @staticmethod
+    def accuracy(outputs, labels):
+        """
+        Computes accuracy of the current batch
+        :param outputs: logits predicted by the network
+        :param labels: labels
+        :return: accuracy value
+        """
+
+        predicted = torch.argmax(outputs.data, dim=1)
+        total = labels.size(0)
+        correct = (predicted == labels).sum().item()
+
+        return correct / total
 
 
 

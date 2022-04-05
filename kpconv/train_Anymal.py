@@ -111,7 +111,7 @@ class AnymalConfig(Config):
     aggregation_mode = 'sum'
 
     # Choice of input features
-    in_features_dim = 5
+    in_features_dim = 16
 
     # Can the network learn modulations
     modulated = True

@@ -448,7 +448,8 @@ class PointCloudDataset(Dataset):
         # Save deform layers
 
         # list of network inputs
-        li = input_points + input_neighbors + input_pools + input_stack_lengths
+        L = len(input_points)
+        li = [(L,)] + input_points + input_neighbors + input_pools + input_stack_lengths
         li += [stacked_features, labels]
 
         return li
