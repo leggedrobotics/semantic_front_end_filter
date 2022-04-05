@@ -1,0 +1,165 @@
+art_planner_subt:
+  planner:
+    name: "lazy_prm_star_min_update"
+    elevation_layer: "elevation"                  # Layer name which has elevation information.
+  robot:
+    torso:
+      length: 1.27                                # [m] Length.
+      width: 0.65                                 # [m] Width.
+      height: 0.3                                 # [m] Height.
+      offset:                                     # [m] Torso center offset relative to base_frame.
+        x: 0.0
+        y: 0.0
+        z: 0.04
+    feet:
+      offset:                                     # [m] Reachability box offset relative to base_frame.
+        x: 0.362                                  # Sign of value does not matter.
+        y: 0.225                                  # Sign of value does not matter.
+        z: -0.525
+      reach:                                      # [m] Reachability of foot box size.
+        x: 0.4
+        y: 0.3
+        z: 0.15
+motion_control_manager:
+  controller:
+    simulation: true
+controlmanager:
+  simulation: true
+darpa_locomotion_mission_bt:
+  global_planner:
+    control_mode: walk                              # Path follower mode that is used if local planner is disabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is disabled
+  local_planner:
+    control_mode: walk_precise                      # Path follower mode that is used if local planner is enabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is enabled
+  local_guidance_recovery_homing_mode: walk_precise
+  reverse:
+    local_guidance_traversability_mode: walk_precise
+    local_guidance_wifi_mode: walk_precise
+  wifi_beacon_deployment:
+    beacon_carrier: true
+  clients:
+    clear_and_initialize_elevation_map:
+      service: /elevation_mapping/clear_map
+elevation_mapping:
+  # Only used for sim (not the ..._cupy parameters)
+  length_in_x: 8.0
+  length_in_y: 8.0
+  map_frame_id: odom
+  resolution: 0.04
+  input_sources:
+    input_front:
+      topic: /robot_self_filter/bpearl_front/point_cloud
+      sensor_processor: &pointcloud_processor
+        ignore_points_above: .inf
+        ignore_points_below: -.inf
+        type: laser
+        cutoff_min_depth: 0.1
+        cutoff_max_depth: 30.0
+        min_radius: 0.018
+        beam_angle: 0.0006
+        beam_constant: 0.0015
+    input_rear:
+      topic: /robot_self_filter/bpearl_rear/point_cloud
+      sensor_processor: *pointcloud_processor
+load_anymal_description:
+  custom_parameters:
+    interface_hatch: true
+    perception_head: true
+    bpearl_front: true
+    bpearl_rear: true
+    rsl_base: true
+    simulate_wide_angle_camera: false
+    simulate_depth_camera: false
+    simulate_perception_head_color_cameras: true
+    simulate_lidar: true
+    simulation: true
+gbplanner_pci_anymal_ros_node:
+  control_mode: walk_precise
+  stand_mode: stand
+mission_manager:
+  global_planner:
+    control_mode: walk                              # Path follower mode that is used if local planner is disabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is disabled
+  local_guidance_recovery_homing_mode: walk_precise
+  local_planner:
+    control_mode: walk_precise                      # Path follower mode that is used if local planner is enabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is enabled
+monitor_network_llpc:
+  simulation: true
+monitor_network_op:
+  simulation: true
+on_demand_elevation_map:
+  subscribers:
+    input:
+      topic: /todo_marcot_put_elevation_map_topic_sim # todo (marcot)
+      queue_size: 1
+on_demand_lidar1:
+  subscribers:
+    input:
+      topic: /lidar/point_cloud
+      queue_size: 1
+path_planning_and_following:
+  simulation: false
+point_cloud_odometry:
+  publishers:
+    robot_pose_in_map:
+      enable: false
+rqt_motion_control:
+  simulation: true
+rqt_darpa_supervision_plugin: # These parameters are read by the corresponding rqt plugin, do not remove them.
+  default_local_guidance_modes: # Associate a mode to the default mode based on the client
+    user: "walk"
+    user_local_planner: "walk_precise"
+  subscribers:
+    mission_manager_homing_timer:
+      topic: "/darpa_locomotion_mission_bt/homing_timer"
+bounding_box_tool:
+  bounding_box_world_frame_id: "map"
+waypoint_interactive_marker:
+  world_frame_id: map
+stack_launcher:
+  stacks:
+    artifact_reporting_subt: # Inspection relevant parameter.
+      nodes:
+        bayesian_artifact_filter:
+          enabled: false
+        bluetooth_gas_detector:
+          enabled: false
+    autonomy_subt:
+      stacks:
+        safety_check_subt:
+          enabled: false
+    post_process_config:
+      nodes:
+        load_dodgeball_description:
+          enabled: true
+state_estimator:
+  simulation: true
+system_behavior_plugins:
+  start_up:
+    simulation: true
+use_sim_time: true
+# Inspection relevant parameters.
+inspection_head:
+  simulation: true
+image_to_map:
+  cam_name:
+    - cam3_sensor_frame_helper
+    - cam4_sensor_frame_helper
+    - cam5_sensor_frame_helper
+    - cam6_sensor_frame_helper
+    - inspection_payload_camera
+    - inspection_payload_thermal_camera
+gbplanner_node:
+  GeofenceParams:
+   AreaList: []
+  MapAnnotationParams:
+    alphasenseCam3:
+      frame_id:       cam3_sensor_frame_helper
+    alphasenseCam4:
+      frame_id:       cam4_sensor_frame_helper
+    alphasenseCam5:
+      frame_id:       cam5_sensor_frame_helper
+    alphasenseCam6:
+      frame_id:       cam6_sensor_frame_helper

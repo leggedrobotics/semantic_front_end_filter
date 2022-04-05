@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <arg name="setup_subt"   default="sim_subt_lite"           doc="SubT Configuration setup. Options: real, sim_subt, sim_subt_lite, sim_subt_ignition_gazebo."/>
+
+  <!-- Simulation -->
+  <include file="$(find anymal_c_subt)/launch/sim.launch" pass_all_args="true"/>
+
+</launch>

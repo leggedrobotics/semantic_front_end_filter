@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- Main settings with rosbag name and rosparam dumped file -->
+  <arg name="bagfile"                               default=""  doc="Absolute path of rosgas to play. Multiple rosbags can be inserted with space separation, they are played in sequence."/>
+  <arg name="dumped_rosparameters"                  default=""  doc="Absolute path of dumped rosparameters."/>
+  <arg name="path_map_darpa_tf_file"                default=""  doc="Absolute path of dumped map-darpa TF transformation as txt file."/>
+  <!-- rviz configuration path, used only if  run_visualization is true -->
+  <arg name="run_visualization"                     default="true"/>
+  <arg name="rviz_config_path"                      default="$(dirname)/../config/ui/replay/config.rviz"/>
+  <!-- Other settings -->
+  <arg name="publish_rate_multiplier"               default="1.0"/>
+  <arg name="seconds_into_the_bag"                  default="0.0"/>
+  <arg name="inspection_payload"                    default="disabled"/>
+
+  <!-- Common replay stack -->
+  <include file="$(dirname)/replay_common.launch"  pass_all_args="true"/>
+
+</launch>

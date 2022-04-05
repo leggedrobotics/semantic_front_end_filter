@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>anymal_c_subt</name>
+  <version>1.0.0</version>
+  <description>SubT's ANYmal C robot configuration package.</description>
+
+  <license>Proprietary</license>
+
+  <maintainer email="marcot@ethz.ch">Marco Tranzatto</maintainer>
+  <author email="tsounisv@ethz.ch">Vassilios Tsounis</author>
+  <author email="rdiethelm@anybotics.com">Remo Diethelm</author>
+  <author email="marcot@ethz.ch">Marco Tranzatto</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>anymal_c</exec_depend>
+  <exec_depend>anymal_c_rsl</exec_depend>
+  <exec_depend>stack_launcher</exec_depend>
+
+</package>

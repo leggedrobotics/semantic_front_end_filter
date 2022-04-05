@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: anymal_c_subt
+Description: Description of anymal_c_subt
+Version: 1.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

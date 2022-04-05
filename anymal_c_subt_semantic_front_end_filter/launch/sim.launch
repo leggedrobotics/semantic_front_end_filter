@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- Configuration -->
+  <arg name="sim_stack"                   default="sim_subt_mission"   doc="Simulation stack. Options: sim_subt_mission, sim_subt_navigation, sim_subt_mission_control."/>
+  <arg name="environment_data_package"    default="darpa_subt_worlds"/>
+  <arg name="environment_data_path"       default="$(eval find (environment_data_package) if environment_data_package != '' else '')" doc="Absolute path to the environment data folder."/>
+  <arg name="environment_config"          default="niosh_mine_left"/>
+  <arg name="setup"                       value="real"                 doc="Configuration setup. Options: real, sim. Note: Use real since we don't need the ANYbotics sim config"/>
+  <arg name="setup_subt"                  default="sim_subt"           doc="SubT Configuration setup. Options: real, sim_subt, sim_subt_lite, sim_subt_ignition_gazebo."/>
+
+  <!-- Feature toggles -->
+  <arg name="inspection_payload"            default="disabled"         doc="Inspection payload. Options: enabled, disabled"/>
+  <arg name="state_estimator_module"        default="simulated"/>
+  <arg name="slam_module"                   default="simulated"/>
+  <arg name="point_cloud_odometry_module"   default="simulated"/>
+  <arg name="trekker"                       default="enabled"         doc="Use a learning-based controller for walking. Options: disabled, enabled."/>
+  <arg name="subt_simulation"               value="navigation_sim" if="$(eval sim_stack == 'sim_subt_navigation')"/>
+  <arg name="mission_control_network"       value="sim" if="$(eval sim_stack == 'sim_subt_mission_control')"/>
+  <arg name="mission_control_network"       value="sim_control_center" if="$(eval sim_stack == 'sim_anymal_1_subt_mission_control' or sim_stack == 'sim_anymal_2_subt_mission_control')"/>
+  <arg name="mission_autonomy"              value="sim" if="$(eval sim_stack == 'sim_subt_mission' or sim_stack == 'sim_subt_inspection_mission')"/>
+
+  <!-- Load the configuration -->
+  <include file="$(find anymal_c_subt)/launch/load_config.launch"  pass_all_args="true"/>
+
+  <!-- Simulation stack -->
+  <include file="$(find stack_launcher)/launch/stack_launcher.launch">
+    <arg name="stack"         value="$(arg sim_stack)"/>
+    <arg name="trigger_param" value="/config_loaded"/>
+  </include>
+
+</launch>

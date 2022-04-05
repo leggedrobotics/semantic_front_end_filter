@@ -1,0 +1,44 @@
+gbplanner_node:
+  update_map_every_n_sec: 0.5
+  update_mesh_every_n_sec: 0.5
+ping_monitor_mission_control:
+  pingers: # pingers must be replicated here because params in list (entities with '-' in yaml file) cannot be overlayed
+    - mark_initial_ping: false
+      topic: /pinger_anymal_to_baserouter/ping
+      tracked_frame: base_subt
+    - mark_initial_ping: false # Markers created onbaord ANYmal
+      topic: /pinger_anymal_to_dx2_alpha/ping
+      tracked_frame: dx2-alpha
+    - mark_initial_ping: false # Markers created onbaord ANYmal
+      topic: /pinger_anymal_to_dx2_beta/ping
+      tracked_frame: dx2-beta
+    - mark_initial_ping: false # Markers created onbaord ANYmal
+      topic: /pinger_anymal_to_dx2_gamma/ping
+      tracked_frame: dx2-alpha
+    - mark_initial_ping: false # Markers created onbaord ANYmal
+      topic: /pinger_anymal_to_dx2_delta/ping
+      tracked_frame: dx2-beta
+stack_launcher:
+  nodes:
+    gbplanner:
+      roslaunch:
+        remap_args:
+          occupied_space:
+            from: /gbplanner_node/occupied_nodes
+            to: /gbplanner_replay/occupied_nodes
+  stacks:
+    replay_basic_subt:
+      nodes:
+        state_estimator:
+          enabled: false # switch to true if you want to run S.E. offline
+    replay_common_subt:
+      stacks:
+        replay_bpearl_subt:
+          enabled: true # switch to true if you want to reconstruct and filter bpearl data
+        lidar_cloud_common_subt:
+          enabled: true # switch to true if you want to reconstruct lidar (velodyne) data
+        replay_global_planner_subt:
+          enabled: false # switch to true if you want to reconstruct occupied nodes from gbplanner
+state_estimator:
+  standalone: true
+use_sim_time: true
