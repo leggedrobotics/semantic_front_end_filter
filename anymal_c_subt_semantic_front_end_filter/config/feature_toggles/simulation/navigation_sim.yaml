@@ -1,0 +1,4 @@
+gbplanner_pci_anymal_ros_node:
+  use_action_server_path_manager: true # gbplanner sends path directly to local guidance
+rqt_darpa_supervision_plugin:
+  follow_path_with_state_machine: false # send path to local guidance as there is no state machine in navigatio_sim

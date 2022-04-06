@@ -1,0 +1,33 @@
+/use_sim_time: true # needed for terminal that runs mission control UI
+
+network_address_mission_control: &network_address_mission_control
+  destination_addr: localhost # used for topics
+  server: localhost # used for services
+
+network_address_base_router: &network_address_base_router
+  destination_addr: localhost
+
+network_address_anymal: &network_address_anymal
+  destination_addr: localhost # used for topics
+  server: localhost # used for services
+
+nimbro_anymal_missionctrl_sender:
+  <<: *network_address_mission_control
+
+nimbro_anymal_missionctrl_sender_simulation:
+  <<: *network_address_mission_control
+
+nimbro_missionctrl_anymal_tcp_client:
+  <<: *network_address_anymal
+
+nimbro_missionctrl_anymal_sender:
+  <<: *network_address_anymal
+
+nimbro_robot_transfolder_missionctrl_tcp_client:
+  <<: *network_address_mission_control
+
+pinger_missionctrl_to_anymal:
+  <<: *network_address_anymal
+
+pinger_anymal_to_baserouter:
+  <<: *network_address_base_router

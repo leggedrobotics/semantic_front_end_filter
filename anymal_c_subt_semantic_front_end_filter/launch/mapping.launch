@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+
+  <!-- ARGS Maplab -->
+  <arg name="run_maplab"                                    default="true"/>
+  <arg name="maplab_sensor_calibration_file"/>
+  <arg name="maplab_imu_to_camera_time_offset_ns"/>
+  <arg name="maplab_robot_name"/>
+  <arg name="maplab_image_topic_suffix"                     default=""/>
+  <arg name="maplab_use_clahe"                              default="false"/>
+  <arg name="maplab_lidar_topic"                            default="/point_cloud_filter/lidar/point_cloud_filtered"/>
+
+  <!-- ARGS Transpointer -->
+  <arg name="run_transpointer"                              default="true"/>
+  <arg name="transpointer_topic_in"                         default="/point_cloud_filter/lidar/point_cloud_filtered_throttled"/>
+
+  <!-- MAPLAB -->
+  <group if="$(arg run_maplab)">
+    <include file="$(find darpa_subt_launch)/launch/robots/robot.launch">
+      <arg name="maplab_robot_name"                         value="$(arg maplab_robot_name)" />
+      <arg name="maplab_sensor_calibration_file"            value="$(arg maplab_sensor_calibration_file)" />
+      <arg name="maplab_imu_to_camera_time_offset_ns"       value="$(arg maplab_imu_to_camera_time_offset_ns)" />
+      <arg name="maplab_image_topic_suffix"                 value="$(arg maplab_image_topic_suffix)" />
+      <arg name="maplab_use_clahe"                          value="$(arg maplab_use_clahe)" />
+      <arg name="maplab_lidar_topic"                        value="$(arg maplab_lidar_topic)" />
+    </include>
+  </group>
+
+  <!-- TRANSPOINTER -->
+  <group if="$(arg run_transpointer)">
+    <include file="$(find transpointer)/launch/transpointer.launch">
+      <arg name="robot_name"                                value="$(arg maplab_robot_name)"/>
+      <arg name="pointcloud_topic_in"                       value="$(arg transpointer_topic_in)"/>
+    </include>
+    <!-- Odometry in darpa frame -->
+    <include file="$(find darpa_robot_msg_interface)/launch/darpa_robot_msg_interface.launch">
+      <arg name="robot_name"                                value="$(arg maplab_robot_name)"/>
+    </include>
+  </group>
+
+</launch>
