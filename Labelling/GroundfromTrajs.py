@@ -359,6 +359,7 @@ class GFT:
                 self.Confidence[localTest[0] + xGround, localTest[1] + yGround] = np.exp(-10 * (MSET.T)[0])
 
         self.GPMap = np.true_divide(self.GPMap, GPMapCounter + occArray)
+        self.GPMap = np.nan_to_num(self.GPMap, nan=self.meanHeight)
         # visualizeArray(self.Confidence)
         # visualizeArray(self.GPMap)
 
