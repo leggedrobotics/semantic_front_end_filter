@@ -50,6 +50,7 @@ from utils.config import bcolors
 from glob import glob
 import msgpack
 import msgpack_numpy as m
+from scipy.spatial.transform import Rotation as R
 m.patch()
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -255,10 +256,15 @@ class AnymalDataset(PointCloudDataset):
                 data = msgpack.unpackb(byte_data)
                 pc = data["pointcloud"]
                 pc = np.array(pc).astype(np.float32)
-                pc = pc[pc[:, 0]>0]
-                pc = pc[pc[:, 1]>0]
-                pc[:,:3] = pc[:,:3] - pc[:,:3].mean(axis=0)
-                pc[:,:3] = pc[:,:3]/pc[:,:3].max(axis=0)
+                pos = data["pose"]["map"][:3]
+                pc[:,:3] = pc[:,:3] - pos
+                
+                yaw = R.from_quat(data["pose"]['map'][-4:]).as_euler("zyx")[0]
+                pc[:,:3] = R.from_euler("z", yaw).apply(pc[:,:3])
+                pc = pc[  (pc[:,0]>0.)
+                         &(pc[:,0]<10.)
+                         &(abs(pc[:,1])<5.) ]
+                pc[:,:3] = pc[:,:3]/5
                 pc[:,4:7]/=255. # RGB turn to range 0-1
 
                 # Subsample them

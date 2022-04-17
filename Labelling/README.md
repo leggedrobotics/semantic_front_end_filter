@@ -40,6 +40,10 @@ Visualize session depends on `msgpack-c`.
    roslaunch anymal_c_subt_semantic_front_end_filter replay_with_map.launch bagfile:='...' dumped_rosparameters:='...' path_map_darpa_tf_file:=~/SADocker/anymal_docker/anymal-darpa/map_darpa_transformation.txt robot:=chimera map_file:='...'
    ```
 
+### Get Point Cloud from a rosbag
+
+Similar to `extractFeetTrajsFromRosbag.py`, run `python3 extractPointCloudFromRosbag.py`. It outputs a `msgpack` for each tuple of point clould, images, pos, and etc information.
+
 ### Use of Grid Map
 GetGroundfromTrajs.py provides a class **GFT**, which allows you to generate a grid map from FeetTrajs.msgpack or load a grid map from GroundMap.msgpack. 
 
