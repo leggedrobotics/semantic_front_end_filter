@@ -94,7 +94,7 @@ def raycast_normal(
 
 
 class DIFG:
-    def __init__(self, ground_map_path, camera_calibration_path = None, cfg = None):
+    def __init__(self, ground_map_path, camera_calibration_path = None, cam_id=None, cfg = None):
         with open(ground_map_path, "rb") as data_file:
             data = data_file.read()
             ground_dict = msgpack.unpackb(data)
@@ -121,7 +121,7 @@ class DIFG:
         
         
         if(camera_calibration_path != None):
-            self.camera = Camera(camera_calibration_path,0,cfg)
+            self.camera = Camera(camera_calibration_path, cam_id, cfg)
             K = self.camera.camera_matrix
         else:
             fx,fy,cx,cy = 300,300,320,240
@@ -193,15 +193,12 @@ class DIFG:
             distances = wp_to_torch(distances)
             return distances
         
-    def getDImage(self, transition, rotation):
+    def getDImage(self, transition, rotation, ratation_is_matrix = False):
         H_map_cam = np.eye(4)
 
-        # H_map_cam[:3,3] =  np.array( [[410.51799114,  82.08771105,  -1.37993082]]) # position over one of the trianlge vertices
         H_map_cam[:3,3] =  np.array( [transition])
-
-        H_map_cam[:3,:3] = Rotation.from_euler('xyz', rotation, degrees=True).as_matrix() # looking down
+        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
         H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
-        # H_map_cam[:3,:3] = R.from_euler('xyz', [-90.059, 30, -120.744], degrees=True).as_matrix() # looking down
 
 
         R = torch.from_numpy( H_map_cam ).to(device)[:3,:3]
@@ -215,15 +212,18 @@ class DIFG:
         dis = self.get_distance(start_points, directions)
 
         dis = dis.reshape(self.W,self.H).cpu()
-        # To get nice colors
-        dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/5
-        dis = dis/dis.max()*255
-        plt.imshow(dis.T)
-        plt.show()
+        if((dis==0).all()):
+            pass
+        else:
+            # To get nice colors
+            dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/5
+            dis = dis/dis.max()*255
+        return dis.T
 
 def main():
     d = DIFG('./Example_Files/GroundMap.msgpack')
-    d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
-
+    dis = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
+    plt.imshow(dis)
+    plt.show()
 if __name__ == '__main__':
     main()

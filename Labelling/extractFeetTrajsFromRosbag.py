@@ -176,7 +176,11 @@ def extractFeetTrajs(file_name, out_dir, cfg, raisim_objects):
     for topic, msg, t in bag.read_messages(topics=[STATE_TOPIC], start_time=latestTFstamp):
         # if(tf_buffer.canTransform('msf_body_imu_map', TF_BASE, t)):
         # tf = tf_buffer.lookup_transform_core('msf_body_imu_map', TF_BASE, t)
-        tf = tf_buffer.lookup_transform_core('map', TF_BASE, t)
+        try:
+            tf = tf_buffer.lookup_transform_core('map', TF_BASE, t)
+        except Exception as e:
+            print(e)
+            continue
         basePose = msg_to_pose(tf)
         # Update Pose & Get Feet Trajs
         if(basePose != []):

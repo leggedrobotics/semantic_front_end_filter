@@ -60,10 +60,10 @@ class Camera:
         self.tvec = - np.matmul(R, self.pose[0])
         self.rvec = cv2.Rodrigues(R)[0]
 
-    def project_point(self, point_position):
+    def project_point(self, point_positions):
         # R = self.rotation[:3, :3].transpose()
         # T = - np.matmul(R, self.translation)
-        result = cv2.projectPoints(point_position,
+        result = cv2.projectPoints(point_positions,
                                    self.rvec,
                                    self.tvec,
                                    self.camera_matrix,
