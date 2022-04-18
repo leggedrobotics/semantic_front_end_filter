@@ -123,10 +123,11 @@ class DIFG:
         if(camera_calibration_path != None):
             self.camera = Camera(camera_calibration_path, cam_id, cfg)
             K = self.camera.camera_matrix
+            self.W,self.H = self.camera.image_width,self.camera.image_height
         else:
             fx,fy,cx,cy = 300,300,320,240
             K = np.array( [[fx, 0, cx],[0, fy, cy], [0,0,1]] )
-        self.W,self.H = 640,480
+            self.W,self.H = 640,480
         pixel_cor = np.mgrid[0:self.W,0:self.H]
         pixel_cor_hom = np.concatenate( [ pixel_cor, np.ones_like(pixel_cor[None,0,:,:])], axis=0 )
 
