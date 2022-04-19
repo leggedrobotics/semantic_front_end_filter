@@ -213,12 +213,6 @@ class DIFG:
         dis = self.get_distance(start_points, directions)
 
         dis = dis.reshape(self.W,self.H).cpu()
-        if((dis==0).all()):
-            pass
-        else:
-            # To get nice colors
-            dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/5
-            dis = dis/dis.max()*255
         return dis.T
 
 def main():
