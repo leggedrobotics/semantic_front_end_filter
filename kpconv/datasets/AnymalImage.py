@@ -21,6 +21,7 @@ class AnymalImageDataset(Dataset):
         names = [n for en in expnames for n in glob(os.path.join(msgpack_dir, en, '*datum*.msgpack'))]
         self.images = []
         self.depth = []
+        self.scale = scale
         for data_name in names:
             with open(data_name, "rb") as data_file:
                 byte_data = data_file.read()
@@ -53,16 +54,20 @@ class AnymalImageDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        img = Image.fromarray((self.images[idx]*255).astype(np.uint8))
-        depth = Image.fromarray((self.depth[idx]*255).astype(np.uint8))
-        assert img.size[:2] == depth.size[:2], \
-            f'Image and depth should be the same size, but are {img.size} and {depth.size}'
+        # img = Image.fromarray((self.images[idx]).astype(np.uint8))
+        # depth = Image.fromarray((self.depth[idx]*255).astype(np.uint8))
+        # assert img.size[:2] == depth.size[:2], \
+        #     f'Image and depth should be the same size, but are {img.size} and {depth.size}'
 
-        img = self.preprocess(img, self.scale, is_mask=False)
-        depth = self.preprocess(depth, self.scale, is_mask=True)
+        # img = self.preprocess(img, self.scale, is_mask=False)
+        # depth = self.preprocess(depth, self.scale, is_mask=True)
+
+        img = self.images[idx]/255
+        img = np.moveaxis(img, 2, 0)
+        depth = self.depth[idx]
 
         return {
             'image': torch.as_tensor(img.copy()).float().contiguous(),
-            'mask': torch.as_tensor(mask.copy()).long().contiguous()
+            'depth': torch.as_tensor(depth.copy()).float().contiguous()
         }
 
