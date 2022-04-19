@@ -32,7 +32,7 @@ class AnymalImageDataset(Dataset):
                     self.depth.append(np.array(data["images"]["cam4depth"])[0])
 
     def __len__(self):
-        return len(self.ids)
+        return len(self.images)
 
     @staticmethod
     def preprocess(pil_img, scale, is_mask):

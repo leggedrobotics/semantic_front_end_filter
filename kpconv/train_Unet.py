@@ -11,13 +11,12 @@ from torch import optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
-from utils.unet_data_loading import BasicDataset, CarvanaDataset
+from datasets.AnymalImage import AnymalImageDataset
 from utils.unet_dice_score import dice_loss
 from utils.unet_evaluate import evaluate
 from models.unet import UNet
 
-dir_img = Path('/Data/carvana/imgs/')
-dir_mask = Path('/Data/carvana/masks/')
+msgpack_dir = Path('../../../Data/anymal')
 dir_checkpoint = Path('./checkpoints/')
 
 
@@ -31,10 +30,7 @@ def train_net(net,
               img_scale: float = 0.5,
               amp: bool = False):
     # 1. Create dataset
-    try:
-        dataset = CarvanaDataset(dir_img, dir_mask, img_scale)
-    except (AssertionError, RuntimeError):
-        dataset = BasicDataset(dir_img, dir_mask, img_scale)
+    dataset = AnymalImageDataset(msgpack_dir=msgpack_dir)
 
     # 2. Split into train / validation partitions
     n_val = int(len(dataset) * val_percent)
@@ -68,7 +64,7 @@ def train_net(net,
     optimizer = optim.RMSprop(net.parameters(), lr=learning_rate, weight_decay=1e-8, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2)  # goal: maximize Dice score
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
     global_step = 0
 
     # 5. Begin training
@@ -78,7 +74,8 @@ def train_net(net,
         with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
                 images = batch['image']
-                true_masks = batch['mask']
+                depth = batch['depth']
+                depth = depth[None,...]
 
                 assert images.shape[1] == net.n_inChannels, \
                     f'Network has been defined with {net.n_inChannels} input channels, ' \
@@ -86,14 +83,19 @@ def train_net(net,
                     'the images are loaded correctly.'
 
                 images = images.to(device=device, dtype=torch.float32)
-                true_masks = true_masks.to(device=device, dtype=torch.long)
+                depth = depth.to(device=device, dtype=torch.float32)
+                
 
                 with torch.cuda.amp.autocast(enabled=amp):
-                    masks_pred = net(images)
-                    loss = criterion(masks_pred, true_masks) \
-                           + dice_loss(F.softmax(masks_pred, dim=1).float(),
-                                       F.one_hot(true_masks, net.n_outChannels).permute(0, 3, 1, 2).float(),
-                                       multiclass=True)
+                    depth_pred = net(images)
+                    depth_pred_mask = (depth==0)
+                    depth_pred[depth_pred_mask] = depth[depth_pred_mask]
+                    loss = criterion(depth_pred, depth)
+                    # loss = criterion(masks_pred, true_masks) \
+                    #        + dice_loss(F.softmax(masks_pred, dim=1).float(),
+                    #                    F.one_hot(true_masks, net.n_outChannels).permute(0, 3, 1, 2).float(),
+                    #                    multiclass=True)
+
 
                 optimizer.zero_grad(set_to_none=True)
                 grad_scaler.scale(loss).backward()
@@ -169,7 +171,7 @@ if __name__ == '__main__':
     # Change here to adapt to your data
     # n_inChannels=3 for RGB images
     # n_outChannels is the number of probabilities you want to get per pixel
-    net = UNet(n_inChannels=3, n_outChannels=2, bilinear=args.bilinear)
+    net = UNet(n_inChannels=3, n_outChannels=1, bilinear=args.bilinear)
 
     logging.info(f'Network:\n'
                  f'\t{net.n_inChannels} input channels\n'
