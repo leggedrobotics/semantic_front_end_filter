@@ -10,7 +10,7 @@
 --n_bins 256
 --norm=linear
 --w_chamfer 0.1
---data_path /media/chenyu/T7/Data/extract_trajectories
+--data_path extract_trajectories
 --gt_path ../dataset/kitti/gts
 --filenames_file ./train_test_inputs/kitti_eigen_train_files_with_gt.txt
 --input_height 352

@@ -81,6 +81,8 @@ class DataLoadPreprocess(Dataset):
         #         self.filenames = f.readlines()
         self.filenames = []
         import os
+        if("TMPDIR" in os.environ.keys()):
+            args.data_path = os.path.join(os.environ["TMPDIR"], args.data_path)
         print("data_path",args.data_path)
         for root, dirs, files in os.walk(args.data_path):
             for file in files:
