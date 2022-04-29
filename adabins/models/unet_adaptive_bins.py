@@ -123,7 +123,15 @@ class UnetAdaptiveBins(nn.Module):
         basemodel_name = 'tf_efficientnet_b5_ap'
 
         print('Loading base model ()...'.format(basemodel_name), end='')
-        basemodel = torch.hub.load('rwightman/gen-efficientnet-pytorch', basemodel_name, pretrained=True)
+        try:
+            basemodel = torch.load("models/%s.pth"%basemodel_name)
+        except Exception as e:
+            basemodel = torch.hub.load('rwightman/gen-efficientnet-pytorch', basemodel_name, pretrained=True)
+            torch.save(basemodel,"models/%s.pth"%basemodel_name)
+            # NOTE: No internet connection on euler nodes, execute `python3 download_and_save_basemodel.py` to prepare tf_efficientnet_b5_ap.pth
+                
+
+
         print('Done.')
 
         # Remove last layer
