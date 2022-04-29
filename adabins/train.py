@@ -21,6 +21,8 @@ from dataloader import DepthDataLoader
 from loss import SILogLoss, BinsChamferLoss
 from utils import RunningAverage, colorize
 
+import time
+
 # os.environ['WANDB_MODE'] = 'dryrun'
 PROJECT = "MDE-AdaBins"
 logging = True
@@ -170,12 +172,15 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
     # max_iter = len(train_loader) * epochs
     for epoch in range(args.epoch, epochs):
+        time_core = 0.
+        time_total = -time.time()
         ################################# Train loop ##########################################################
         # if should_log: wandb.log({"Epoch": epoch}, step=step)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
                              total=len(train_loader)) if is_rank_zero(
                 args) else enumerate(train_loader):
 
+            time_core -= time.time()
             optimizer.zero_grad()
 
             img = batch['image'].to(device)
@@ -203,6 +208,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             step += 1
             scheduler.step()
 
+            time_core += time.time()
             ########################################################################################################
 
             if should_write and step % args.validate_every == 0:
@@ -221,7 +227,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     # wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_latest.pt",
                                              root=os.path.join(root, "checkpoints"))
-
+                                            
+                    print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
+                    time_total = -time.time()
                 if metrics['abs_rel'] < best_loss and should_write:
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_best.pt",
                                              root=os.path.join(root, "checkpoints"))
