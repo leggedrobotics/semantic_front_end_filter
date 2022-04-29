@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime as dt
 
 import numpy as np
+from scipy import ndimage # this has to happend before import torch on euler
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -230,6 +231,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                                             
                     print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                     time_total = -time.time()
+                    time_core = 0.
                 if metrics['abs_rel'] < best_loss and should_write:
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_best.pt",
                                              root=os.path.join(root, "checkpoints"))
