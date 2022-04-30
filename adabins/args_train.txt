@@ -1,5 +1,6 @@
 --bs 1
 --dataset kitti
+--load_pretrained
 --lr 0.000357
 --wd 0.1
 --div_factor 25

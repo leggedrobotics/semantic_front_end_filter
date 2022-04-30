@@ -14,3 +14,4 @@ __pycache__
 kpconv/results
 
 *.pth
+*.pt
