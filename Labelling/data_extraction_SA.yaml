@@ -1,6 +1,6 @@
 #bagfile: /home/jolee/nav_data/bags/processed/2021-10-10-16-36-47_anymal-chimera_mission_2021-10-13-05-13-06_0.bag
-bagfile: /home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0.bag
-outdir: /home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/
+bagfile: /home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_10/mission1/Recontruct_2022-04-18-19-40-09_0.bag 
+outdir: /home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_10/mission1/
 calibration: /ros/catkin_ws/src/mnt/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense/
 
 save_proprioception: False

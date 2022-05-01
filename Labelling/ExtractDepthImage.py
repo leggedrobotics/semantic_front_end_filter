@@ -3,6 +3,7 @@ from mimetypes import init
 
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 import msgpack
 import trimesh
 import numpy as np
@@ -46,6 +47,7 @@ def create_height_field(height_field, voxel_size=0.1, center_point=np.array([0, 
 
     return trimesh.util.concatenate([meshes])
 
+print('Initializing...')
 wp.init()
 
 @wp.kernel
@@ -95,6 +97,7 @@ def raycast_normal(
 
 class DIFG:
     def __init__(self, ground_map_path, camera_calibration_path = None, cfg = None):
+        print("Initializing Map...")
         with open(ground_map_path, "rb") as data_file:
             data = data_file.read()
             ground_dict = msgpack.unpackb(data)
@@ -132,6 +135,8 @@ class DIFG:
 
         ray_dir = (np.linalg.inv(K) @ (pixel_cor_hom.reshape(3,-1))).T
         self.ray_dir = ray_dir/ np.linalg.norm(ray_dir, axis=1)[:,None]
+
+        print('Finish Initialization')
         # https://i.stack.imgur.com/AGwu9.jpg  
         
 
@@ -198,8 +203,7 @@ class DIFG:
 
         # H_map_cam[:3,3] =  np.array( [[410.51799114,  82.08771105,  -1.37993082]]) # position over one of the trianlge vertices
         H_map_cam[:3,3] =  np.array( [transition])
-
-        H_map_cam[:3,:3] = Rotation.from_euler('xyz', rotation, degrees=True).as_matrix() # looking down
+        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
         H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
         # H_map_cam[:3,:3] = R.from_euler('xyz', [-90.059, 30, -120.744], degrees=True).as_matrix() # looking down
 
@@ -216,14 +220,36 @@ class DIFG:
 
         dis = dis.reshape(self.W,self.H).cpu()
         # To get nice colors
-        dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/5
-        dis = dis/dis.max()*255
-        plt.imshow(dis.T)
+        if(sum(sum(dis))!=0):
+            dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/10
+        # dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/5
+        
+            dis = (dis - dis.min())/(dis.max()-dis.min())*255
+        self.currentImage = dis.T
+        # plt.imshow(dis.T)
+        # plt.show()
+        return dis.T
+
+    def show(self):
+        plt.imshow(self.currentImage)
         plt.show()
+    
+    def close(self):
+        plt.clf()
+
 
 def main():
     d = DIFG('./Example_Files/GroundMap.msgpack')
     d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
+
+    listener = tf.TransformListener()
+    rate = rospy.Rate(1.0)
+    while not rospy.is_shutdown():
+        try:
+            (trans,rot) = listener.lookupTransform('/map', '/cam0_sensor_frame', rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+        rate.sleep()
 
 if __name__ == '__main__':
     main()
