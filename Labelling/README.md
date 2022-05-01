@@ -14,6 +14,15 @@ Visualize session depends on `msgpack-c`.
 
 -Add rospackage `anymal_c_subt_semantic_front_end_filter` in this repo to your catkin worksapce.
 
+## Dataset generation
+
+1. Use `replay_and_record.launch` to get the re-record rosbag.
+2. Run `python3 extractFeetTrajsFromRosbag.py`
+3. Run `python3 extractPointCloudFromRosbag.py`. 
+   1. It automatically calls `GroundfromTrajs.py` `ExtractDepthImage.py`
+   2. It outputs a `msgpack` for each tuple of point clould, images, depth image, pos, and other information.
+
+
 ## Usage & Examples
 ### Get grid map from a rosbag
 

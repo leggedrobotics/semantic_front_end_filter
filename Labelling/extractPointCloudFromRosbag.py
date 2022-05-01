@@ -23,7 +23,6 @@ import msgpack
 import msgpack_numpy as m
 
 import math
-import raisimpy
 import time
 
 import collections
@@ -39,6 +38,9 @@ m.patch()
 import pandas as pd
 import subprocess
 import yaml
+
+from ExtractDepthImage import DIFG
+from GroundfromTrajs import GFT
 
 
 # https://stackoverflow.com/questions/41493282/in-python-pandas-how-can-i-re-sample-and-interpolate-a-dataframe
@@ -107,13 +109,6 @@ def resample_dataid_ffill(data, resampled_idx, tolerance):
         dfs.append(df)
     return pd.concat(dfs, axis=1, keys=data.data_id.keys())
 
-def ros_pos_to_raisim_gc(pose, joint_positions):
-    q = np.zeros(19)
-    q[:3] = pose[:3]
-    q[3] = pose[6]
-    q[4:7] = pose[3:6]
-    q[7:] = joint_positions
-    return q
 
 class Data:
     def __init__(self):
@@ -139,10 +134,21 @@ class DataBuffer:
             self.data_id[name] = [0]
 
 
-def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
+def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
     # Make sure output directory exists.
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
+
+    # load ground surface estimator
+    GroundMap_filepath = os.path.join(out_dir, "GroundMap.msgpack")
+    if not os.path.exists(GroundMap_filepath):
+        ## if the map file not exist, then generate it
+        FeetTrajs_filepath = os.path.join(out_dir, "FeetTrajs.msgpack")
+        assert os.path.exists(FeetTrajs_filepath) 
+        gft = GFT(FeetTrajsFile = FeetTrajs_filepath)
+        gft.save(out_dir, GPMap=True)
+    depth_img_cam = DIFG(GroundMap_filepath, cfg['calibration'], 'cam4', cfg)
+    
 
     # Load parameters
     ELEVATION_MAP_TOPIC = cfg['ELEVATION_MAP_TOPIC']
@@ -296,12 +302,24 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
             # RGB images.
             if CAM_PREFIX in topic:
                 success, cam_id = getImageId(topic, CAM_NAMES)
-                img = rgb_msg_to_image(msg, cameras[cam_id].is_debayered, cameras[cam_id].rb_swap, ("compressed" in topic))
-
-                if success:
-                    image_data.append(msg.header.stamp.to_sec(), img, cam_id)
-                else:
+                map_frame_id = "map"
+                if(not success):
                     print('Unknown RGB image topic: ' + topic)
+                    continue
+                if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)[0]): continue
+
+                img = rgb_msg_to_image(msg, cameras[cam_id].is_debayered, cameras[cam_id].rb_swap, ("compressed" in topic))
+                image_data.append(msg.header.stamp.to_sec(), img, cam_id)
+
+                tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)
+                pose = msg_to_pose(tf)
+                position = np.array(pose[:3])
+                euler = np.array(euler_from_quaternion(pose[3:]))
+
+                d_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
+                d_img = d_img[...,None].numpy()
+                image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
+                
 
             # Elevation map
             if ELEVATION_MAP_TOPIC in topic:
@@ -309,7 +327,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
                 map_data.append(msg.info.header.stamp.to_sec(), grid_map, 'elevation_map')
 
             if POINT_CLOUD_SUFFIX in topic:
-                map_frame_id = "msf_body_imu_map"
+                map_frame_id = "map"
                 if not (tf_buffer.can_transform_core(map_frame_id, msg.header.frame_id,  msg.header.stamp)[0]): continue
                 tf = tf_buffer.lookup_transform_core(map_frame_id, msg.header.frame_id,  msg.header.stamp)
                 pose = msg_to_pose(tf)
@@ -469,55 +487,11 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
         datum_idx = 0
         for df_id, df in enumerate(list_of_dfs):
             print('segment:', df_id + 1, "/", len(list_of_dfs), ", len:", len(df.index))
-            trajectory_info = dict()
-            trajectory_info['foot_positions'] = []
-            trajectory_info['body_contacts'] = []
 
-            # Get local maps & collision detection using RaiSim
-            for time_idx, map_idx in enumerate(np.array(df['map'])):
-                map_idx = int(map_idx)
-                elev_map = map_data.data[map_key][map_idx]
-                pose_ref = elev_map.frame_id
-                pose = np.array(df['pose'][pose_ref].iloc[time_idx])
-
-                if raisim_objects['terrain'] is not None:
-                    raisim_objects['world'].removeObject(raisim_objects['terrain'])
-                raisim_objects['terrain'] = elev_map.getRaisimMap(raisim_objects['world'])
-
-                q = ros_pos_to_raisim_gc(pose, df['state']['joint_position'].iloc[time_idx])
-
-                raisim_objects['anymal'].setGeneralizedCoordinate(q)
-                raisim_objects['world'].integrate1()
-                num_non_foot_contacts = 0
-
-                foot_positions = []
-
-                # get foot positions
-                # TODO: filter out feet in contact using foot contact state
-                for foot_idx in raisim_objects['foot_indices']:
-                    foot_positions.append(raisim_objects['anymal'].getFramePosition(foot_idx))
-
-                # body collision points
-                body_collision_points = []
-                for contact in raisim_objects['anymal'].getContacts():
-                    if contact.getlocalBodyIndex() not in [3, 6, 9, 12]:
-                        num_non_foot_contacts += 1
-                        body_collision_points.append(contact.get_position())
-
-                trajectory_info['foot_positions'].append(foot_positions)
-                if len(body_collision_points):
-                    trajectory_info['body_contacts'].append(body_collision_points)
-
-            trajectory_info['foot_positions'] = np.array(trajectory_info['foot_positions'])
-
-            if len(trajectory_info['body_contacts']):
-                trajectory_info['body_contacts'] = np.array(trajectory_info['body_contacts'])
-
-            
             ### Project the pointclouds to get its position in images
             pointcloudinfo = dict()
             pointcloudinfo["pc"] = []
-            pointcloudinfo["field"] = [("xzy",3), ("i",1),("rgb",3)] + [(c,3) for c in CAM_NAMES]
+            pointcloudinfo["field"] = [("xyz",3), ("i",1),("rgb",3)] + [(c,3) for c in CAM_NAMES]
             for time_idx, map_idx in enumerate(np.array(df['map'])):
                 cloudpoints = []
                 map_idx = int(map_idx)
@@ -536,29 +510,30 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
                         assert image.shape[1] == cameras[cam_id].image_width  
                         assert image.shape[0] == cameras[cam_id].image_height  
                         imgs.append(image)
-                    for p in cloud:
-                        p = np.array(p)
-                        img_pos = []
-                        rgb = np.zeros(3)
-                        for cam_id,image in zip(CAM_NAMES, imgs):
-                            proj_point, proj_jac = cameras[cam_id].project_point(p[:3])
-                            proj_point = np.reshape(proj_point, [-1])
-                            camera_heading = cameras[cam_id].pose[1][:3, 2]
-                            point_dir = p[:3] - cameras[cam_id].pose[0]
-                            visible = np.sum(camera_heading * point_dir) > 1.0
-                            img_pos.append(np.hstack([visible, proj_point]))
-                            if(visible 
-                                    and 0.0 <= proj_point[0] < cameras[cam_id].image_width 
-                                    and 0.0 <= proj_point[1] < cameras[cam_id].image_height
-                                ):
-                                proj_point_ind = proj_point.astype(int)
-                                rgb = image[proj_point_ind[1], proj_point_ind[0], :]
-                        p = np.hstack([p, rgb]+img_pos)
-                        cloudpoints.append(p)
+
+                    img_pos = []
+                    rgb = np.zeros([cloud.shape[0], 3])
+                    for cam_id,image in zip(CAM_NAMES, imgs):
+                        
+                        proj_point, proj_jac = cameras[cam_id].project_point(cloud[:,:3].astype(np.float32))                        
+                        proj_point = np.reshape(proj_point, [-1, 2])
+                        camera_heading = cameras[cam_id].pose[1][:3, 2]
+                        point_dir = cloud[:, :3] - cameras[cam_id].pose[0]
+                        visible = np.dot(point_dir, camera_heading) > 1.0
+                        img_pos.append(np.hstack([visible[:,None], proj_point]))
+                        visible = (visible & (0.0 <= proj_point[:,0]) 
+                                & (proj_point[:,0] < cameras[cam_id].image_width)
+                                & (0.0 <= proj_point[:, 1])
+                                & (proj_point[:, 1] < cameras[cam_id].image_height))
+                        proj_point_ind = proj_point.astype(int)
+                        rgb[visible,:] = image[proj_point_ind[visible, 1], proj_point_ind[visible, 0], : ]
+                    cloud = np.hstack([cloud, rgb]+img_pos)
+                    cloudpoints.append(cloud)
+                cloudpoints = np.vstack(cloudpoints)
                 pointcloudinfo["pc"].append(cloudpoints)
                 print("pc prograss: %d/%d, pc size %d"%(time_idx,len(df['map']),len(cloudpoints)))
-            ### Extract Image patches & save
-            print("Extract image patches & save per patch")
+
+            ### save point cloud & save, write `save_dict`
             for time_idx, map_idx in enumerate(np.array(df['map'])):
 
                 save_dict = dict()
@@ -568,8 +543,6 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
 
                 save_dict['images'] = {}
                 save_dict['map'] = None
-                save_dict['image_patches'] = []
-                save_dict['image_patches_loc'] = []
 
                 save_dict['pointcloud'] = pointcloudinfo['pc'][time_idx]
 
@@ -597,167 +570,25 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras, raisim_objects):
                 local_map = elev_map.getLocalMap(pose[:3], yaw, local_map_shape)
                 save_dict['map'] = local_map
 
-                # Collision detection using Raisim + Perspective projection
-                if raisim_objects['terrain'] is not None:
-                    raisim_objects['world'].removeObject(raisim_objects['terrain'])
-                raisim_objects['terrain'] = elev_map.getRaisimMap(raisim_objects['world'])
+                # Save to msg pack
+                _name = "traj_" + str(traj_idx) + "_datum_" + str(datum_idx)
+                out_file = os.path.join(out_dir, _name)
+                out_file += '.msgpack'
+                print(out_file)
 
-                q = ros_pos_to_raisim_gc(pose, df['state']['joint_position'].iloc[time_idx])
-                raisim_objects['anymal'].setGeneralizedCoordinate(q)
-                raisim_objects['world'].integrate1()
+                datum_idx += 1
 
-                foot_positions_distance = trajectory_info['foot_positions'].copy()
-                foot_positions_distance = np.linalg.norm(foot_positions_distance - pose[:3], axis=-1)
-
-                idx = foot_positions_distance < cfg['foot_projection_range']
-                foot_positions_in_fov = trajectory_info['foot_positions'][idx]
-
-                objs = []
-                projected_points = {}
-                for cam_id in CAM_NAMES:
-                    projected_points[cam_id] = []
-                    cameras[cam_id].update_pose_from_base_pose(pose)
-                    cyl = raisim_objects['world'].addCylinder(0.05, 0.1, 0.1, collision_group = 0)
-                    cyl.setPose(cameras[cam_id].pose[0], cameras[cam_id].pose[1][:3, :3])
-                    objs.append(cyl)
-
-                    for j in range(foot_positions_in_fov.shape[0]):
-                        camera_heading = cameras[cam_id].pose[1][:3, 2]
-                        visible = True
-
-                        ray_N = 1
-                        angs = np.random.uniform(-1.0, 1.0, [ray_N, 3])
-
-                        mean_dist = 0.0
-                        dists = []
-
-                        test_value = None
-                        for ray_id in range(ray_N):
-                            point_dir = foot_positions_in_fov[j] + 0.03 * angs[ray_id] - cameras[cam_id].pose[0]
-
-                            # When the camera is not facing the object
-                            test_value = np.sum(camera_heading * point_dir)
-                            if np.sum(camera_heading * point_dir) < 1.0:
-                                visible = False
-                                break
-                            else:
-                                dist = np.linalg.norm(point_dir)
-                                ray_col_list = raisim_objects['world'].rayTest(cameras[cam_id].pose[0], point_dir, dist,
-                                                                               True)
-                                if ray_col_list.size() > 0:
-                                    col_pos = ray_col_list.at(0).getPosition()
-                                    # box = raisim_objects['world'].addBox(0.05, 0.05, 0.05, 0.1, collision_group=0)
-                                    # box.setPosition(col_pos)
-                                    # box.setAppearance("blue")
-                                    # objs.append(box)
-
-                                    dist = np.linalg.norm(col_pos - foot_positions_in_fov[j])
-                                    dists.append(dist)
-                                    mean_dist += dist
-
-                        mean_dist /= ray_N
-
-                        if mean_dist > cfg['ray_col_margin']:
-                            visible = False
-
-                        if visible:
-                            # project point
-                            proj_point, proj_jac = cameras[cam_id].project_point(foot_positions_in_fov[j])
-                            proj_point = np.reshape(proj_point, [-1])
-
-                            if 0.0 <= proj_point[0] < cameras[cam_id].image_width \
-                                    and 0.0 <= proj_point[1] < cameras[cam_id].image_height:
-                                proj_point = proj_point.astype(int)
-                                projected_points[cam_id].append((foot_positions_in_fov[j], proj_point, test_value))
-                            else:
-                                visible = False
-
-                        if cfg['visualize']:
-                            if not visible:
-                                sphere = raisim_objects['world'].addSphere(0.03, 0.1, collision_group=0)
-                                sphere.setAppearance("green")
-                                sphere.setPosition(foot_positions_in_fov[j])
-                                objs.append(sphere)
-                            else:
-                                sphere = raisim_objects['world'].addSphere(0.075, 0.1, collision_group=0)
-                                sphere.setAppearance("red")
-                                sphere.setPosition(foot_positions_in_fov[j])
-                                objs.append(sphere)
-
-                    image_idx = int(df['img'][cam_id].iloc[time_idx][0])
-                    image = np.moveaxis(image_data.data[cam_id][int(image_idx)], 2, 0)
-
-                    if cfg['visualize']:
-                        image = np.moveaxis(image, 0, 2)
-
-                    patch_id = 0
-                    print("num_patches_[", cam_id, "]: ", len(projected_points[cam_id]))
-                    for pos_world, pos_img, debug in projected_points[cam_id]:
-                        if cfg['visualize']:
-                            w = int(cfg['image_patch_shape'][0] / 2)
-                            h = int(cfg['image_patch_shape'][1] / 2)
-                            image = cv2.rectangle(img=image,
-                                                  pt1=(pos_img[0] - w, pos_img[1] - h),
-                                                  pt2=(pos_img[0] + w, pos_img[1] + h),
-                                                  color=(255, 0, 0), thickness=3)
-
-                        def project_edge(mid, width, lim):
-                            start = mid - int(width / 2)
-                            end = start + width
-                            if start < 0:
-                                print("start_out")
-                                start = 0
-                            if end >= lim - 1:
-                                start = lim - width - 1
-                                print("end_out")
-
-                            end = start + width
-
-                            return (start, end)
-
-                        patch_x = project_edge(pos_img[1], cfg['image_patch_shape'][0], cameras[cam_id].image_height)
-                        patch_y = project_edge(pos_img[0], cfg['image_patch_shape'][1], cameras[cam_id].image_width)
-
-                        if cfg['visualize']:
-                            patch = image[patch_x[0]:patch_x[1], patch_y[0]:patch_y[1]]
-                            description = str(patch_x[0]) + ", " + str(patch_y[0])
-                            # cv2.imshow(str(patch_id) + "_" + description + "_" + str(debug), patch)
-                        else:
-                            patch = image[:, patch_x[0]:patch_x[1], patch_y[0]:patch_y[1]]
-
-                        save_dict['image_patches_loc'].append(np.array(pos_world, dtype=np.float32))  # TODO: include meta info
-                        save_dict['image_patches'].append(np.array(patch, dtype=np.float32))  # TODO: include meta info
-                        patch_id += 1
-
-                    if cfg['visualize']:
-                        cv2.imshow(cam_id, image)
-
-                if cfg['visualize']:
-                    map_local = cv2.resize(local_map[0], (500, 500), interpolation=cv2.INTER_NEAREST)
-                    # cv2.imshow('map_local', (map_local - np.min(map_local)) / (np.max(map_local) - np.min(map_local)))
-                    print("show images")
-                    cv2.waitKey(0)
-                    for i, obj in enumerate(objs):
-                        raisim_objects['world'].removeObject(obj)
-
-                if not (cfg['skip_no_patch'] and (len(save_dict['image_patches']) == 0)):
-                    _name = "traj_" + str(traj_idx) + "_datum_" + str(datum_idx)
-                    out_file = os.path.join(out_dir, _name)
-                    out_file += '.msgpack'
-                    print(out_file)
-    
-                    datum_idx += 1
-    
-                    with open(out_file, "wb") as outfile:
-                        file_dat = msgpack.packb(save_dict)
-                        outfile.write(file_dat)
+                with open(out_file, "wb") as outfile:
+                    file_dat = msgpack.packb(save_dict)
+                    outfile.write(file_dat)
 
     print('Complete.')
 
 
 def main():
     # Load cfg
-    cfg_path = os.path.dirname(os.path.realpath(__file__)) + '/../../cfg/data_extraction_SA.yaml'
+    cfg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)) , 'data_extraction_SA.yaml')
+    print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
     args = parser.parse_args()
@@ -768,7 +599,8 @@ def main():
     bag_file_path = cfg['bagfile']
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
-
+    print("camera_calibration_path :",camera_calibration_path)
+    
     isdir = os.path.isdir(bag_file_path)
 
     # Load camera info
@@ -778,25 +610,7 @@ def main():
                                  cam_id,
                                  cfg)
 
-    # SETUP ANYMAL SIMULATION FOR COLLISION DETECTION
-    import raisimpy as raisim
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    urdf_path = dir_path + '/../../rsc/robot/chimera/urdf/anymal_minimal.urdf'  # TODO: load from sim2real repo
-    raisim_objects = {}
-    raisim_objects['world'] = raisim.World()
-    raisim_objects['anymal'] = raisim_objects['world'].addArticulatedSystem(urdf_path)
-    raisim_objects['terrain'] = None
 
-    raisim_objects['foot_indices'] = []
-    raisim_objects['foot_indices'].append(raisim_objects['anymal'].getFrameIdxByName("LF_shank_fixed_LF_FOOT"))
-    raisim_objects['foot_indices'].append(raisim_objects['anymal'].getFrameIdxByName("RF_shank_fixed_RF_FOOT"))
-    raisim_objects['foot_indices'].append(raisim_objects['anymal'].getFrameIdxByName("LH_shank_fixed_LH_FOOT"))
-    raisim_objects['foot_indices'].append(raisim_objects['anymal'].getFrameIdxByName("RH_shank_fixed_RH_FOOT"))
-
-    # launch raisim server (for visualization)
-    if cfg['visualize']:
-        raisim_objects['server'] = raisim.RaisimServer(raisim_objects['world'])
-        raisim_objects['server'].launchServer(8080)
 
     # Get all bag files
     bagfiles = []
@@ -814,7 +628,7 @@ def main():
         # Get file basename for subfolder.
         basename = os.path.splitext(os.path.basename(bagfile))[0]
         # print(basename)
-        extractAndSyncTrajs(bagfile, os.path.join(output_path, basename), cfg, cameras, raisim_objects)
+        extractAndSyncTrajs(bagfile, os.path.join(output_path, basename), cfg, cameras)
 
     print("DONE!")
 

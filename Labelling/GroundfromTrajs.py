@@ -4,6 +4,7 @@ from turtle import color
 from cv2 import mean
 import msgpack
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import math
 import numpy
@@ -366,8 +367,10 @@ class GFT:
                 self.Confidence[localTest[0] + xGround, localTest[1] + yGround] = (MSET.T)
 
         self.GPMap = np.true_divide(self.GPMap, GPMapCounter + occArray)
+
         self.Confidence[self.Confidence==0] = self.Confidence.max() + (self.Confidence.max() - self.Confidence.min())
         # self.Confidence = 1 - (self.Confidence - self.Confidence.min()) / (self.Confidence.max() - self.Confidence.min())
+
         # self.GPMap = np.nan_to_num(self.GPMap, nan=self.meanHeight)
         # visualizeArray(self.Confidence)
         # visualizeArray(self.GPMap)
