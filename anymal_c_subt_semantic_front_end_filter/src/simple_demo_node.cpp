@@ -28,6 +28,8 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "grid_map_simple_demo");
   ros::NodeHandle nh("~");
   ros::Publisher publisher = nh.advertise<grid_map_msgs::GridMap>("grid_map", 1, true);
+  ros::Publisher publisher_cofi = nh.advertise<grid_map_msgs::GridMap>("grid_map_confidence", 1, true);
+  ros::Publisher publisher_var = nh.advertise<grid_map_msgs::GridMap>("grid_map_variance", 1, true);
   
   // Get file path
   // ros::NodeHandle nh;
@@ -59,21 +61,35 @@ int main(int argc, char** argv)
   GridMap map({"elevation"});
   map.setFrameId("map");
   Position gmPosition((gm.xRealRange[1] + gm.xRealRange[0])/2. ,(gm.yRealRange[1] + gm.yRealRange[0])/2. );
-  
-  // Position gmPosition(0 ,100);
-
   std::cout<<gmPosition<<std::endl;
-  // map.setPosition(gmPosition);
-  // map.move(gmPosition);
-
-  // map.setGeometry(Length(1.2, 2.0), 0.03);
   map.setGeometry(Length(gm.xRealRange[1] - gm.xRealRange[0], gm.yRealRange[1] - gm.yRealRange[0]), gm.res);
   ROS_INFO("Created map with size %f x %f m (%i x %i cells).",
     map.getLength().x(), map.getLength().y(),
     map.getSize()(0), map.getSize()(1));
   map.setPosition(gmPosition);
-  // Work with grid map in a loop.
+
+  // Confidence
+  GridMap confidence({"elevation"});
+  confidence.setFrameId("map");
+  confidence.setGeometry(Length(gm.xRealRange[1] - gm.xRealRange[0], gm.yRealRange[1] - gm.yRealRange[0]), gm.res);
+  ROS_INFO("Created confidence with size %f x %f m (%i x %i cells).",
+    confidence.getLength().x(), confidence.getLength().y(),
+    confidence.getSize()(0), confidence.getSize()(1));
+  confidence.setPosition(gmPosition);
+  // Variance
+  GridMap variance({"elevation"});
+  variance.setFrameId("map");
+  variance.setGeometry(Length(gm.xRealRange[1] - gm.xRealRange[0], gm.yRealRange[1] - gm.yRealRange[0]), gm.res);
+  ROS_INFO("Created variance with size %f x %f m (%i x %i cells).",
+    variance.getLength().x(), variance.getLength().y(),
+    variance.getSize()(0), variance.getSize()(1));
+  variance.setPosition(gmPosition);
+  
+  // Work with grid map and grid map confidence in a loop.
   ros::Rate rate(0.1);
+
+
+
   while (nh.ok()) {
 
     // Add data to grid map.
@@ -97,11 +113,37 @@ int main(int argc, char** argv)
       }
     }
 
+    double confidenceMin = std::numeric_limits<double>::max();
+    double confidenceMax = std::numeric_limits<double>::min();
+    for(const auto& row : gm.Confidence)
+    {
+      double minElemInRow = *std::min_element(row.begin(), row.end());
+      double maxElemInRow = *std::max_element(row.begin(), row.end());
+      confidenceMin = std::min(confidenceMin , minElemInRow);
+      confidenceMax = std::max(confidenceMax , maxElemInRow);
+    }
+    for (GridMapIterator it(confidence); !it.isPastEnd(); ++it) {
+      Position position;
+      confidence.getPosition(*it, position);
+      double grid_x = floor(position.x()/gm.res)-gm.xNormal;
+      double grid_y = floor(position.y()/gm.res)-gm.yNormal;
+      if(grid_x >=0 && grid_x < gm.GroundArray.size() && grid_y >=0 && grid_y < gm.GroundArray[0].size()){
+          variance.at("elevation", *it) = gm.Confidence[grid_x][grid_y];
+          confidence.at("elevation", *it) = 1 - (gm.Confidence[grid_x][grid_y] - confidenceMin)/(confidenceMax - confidenceMin);
+      }
+    }
+    
+
     // Publish grid map.
     map.setTimestamp(time.toNSec());
-    grid_map_msgs::GridMap message;
+    confidence.setTimestamp(time.toNSec());
+    grid_map_msgs::GridMap message, message_cofi, message_var;
+    GridMapRosConverter::toMessage(confidence, message_cofi);
     GridMapRosConverter::toMessage(map, message);
+    GridMapRosConverter::toMessage(variance, message_var);
     publisher.publish(message);
+    publisher_cofi.publish(message_cofi);
+    publisher_var.publish(message_var);
     ROS_INFO_THROTTLE(1.0, "Grid map (timestamp %f) published.", message.info.header.stamp.toSec());
 
     // Wait for next cycle.

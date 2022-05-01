@@ -220,11 +220,6 @@ class DIFG:
 
         dis = dis.reshape(self.W,self.H).cpu()
         # To get nice colors
-        if(sum(sum(dis))!=0):
-            dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/10
-        # dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/5
-        
-            dis = (dis - dis.min())/(dis.max()-dis.min())*255
         self.currentImage = dis.T
         # plt.imshow(dis.T)
         # plt.show()

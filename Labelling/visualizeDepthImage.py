@@ -26,7 +26,9 @@ while not rospy.is_shutdown():
         euler = tf.transformations.euler_from_quaternion(rot)
         # print(euler)
         DImage = d.getDImage(transition=trans, rotation=euler)
-
+        if(sum(sum(DImage))!=0):
+            DImage[DImage==0] = DImage[DImage!=0].min()- (DImage[DImage!=0].max()-DImage[DImage!=0].min())/10
+            DImage = (DImage - DImage.min())/(DImage.max()-DImage.min())*255
         # imageCV = np.zeros((DImage.shape[0], DImage.shape[1], 3))
         # imageCV[:, :, 0] = DImage*64/255
         # imageCV[:, :, 1] = DImage*200/255
