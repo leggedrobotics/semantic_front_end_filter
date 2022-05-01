@@ -96,7 +96,7 @@ def raycast_normal(
 
 
 class DIFG:
-    def __init__(self, ground_map_path, camera_calibration_path = None, cfg = None):
+    def __init__(self, ground_map_path, camera_calibration_path = None, cam_id=None, cfg = None):
         print("Initializing Map...")
         with open(ground_map_path, "rb") as data_file:
             data = data_file.read()
@@ -124,12 +124,13 @@ class DIFG:
         
         
         if(camera_calibration_path != None):
-            self.camera = Camera(camera_calibration_path,0,cfg)
+            self.camera = Camera(camera_calibration_path, cam_id, cfg)
             K = self.camera.camera_matrix
+            self.W,self.H = self.camera.image_width,self.camera.image_height
         else:
             fx,fy,cx,cy = 300,300,320,240
             K = np.array( [[fx, 0, cx],[0, fy, cy], [0,0,1]] )
-        self.W,self.H = 640,480
+            self.W,self.H = 640,480
         pixel_cor = np.mgrid[0:self.W,0:self.H]
         pixel_cor_hom = np.concatenate( [ pixel_cor, np.ones_like(pixel_cor[None,0,:,:])], axis=0 )
 
@@ -198,14 +199,14 @@ class DIFG:
             distances = wp_to_torch(distances)
             return distances
         
-    def getDImage(self, transition, rotation):
+    def getDImage(self, transition, rotation, ratation_is_matrix = False):
         H_map_cam = np.eye(4)
 
-        # H_map_cam[:3,3] =  np.array( [[410.51799114,  82.08771105,  -1.37993082]]) # position over one of the trianlge vertices
         H_map_cam[:3,3] =  np.array( [transition])
         H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
+#         H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
+
         H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
-        # H_map_cam[:3,:3] = R.from_euler('xyz', [-90.059, 30, -120.744], degrees=True).as_matrix() # looking down
 
 
         R = torch.from_numpy( H_map_cam ).to(device)[:3,:3]
@@ -219,6 +220,7 @@ class DIFG:
         dis = self.get_distance(start_points, directions)
 
         dis = dis.reshape(self.W,self.H).cpu()
+
         # To get nice colors
         if(sum(sum(dis))!=0):
             dis[dis==0] = dis[dis!=0].min()- (dis[dis!=0].max()-dis[dis!=0].min())/10
@@ -240,8 +242,9 @@ class DIFG:
 
 def main():
     d = DIFG('./Example_Files/GroundMap.msgpack')
-    d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
-
+    dis = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
+#     plt.imshow(dis)
+#     plt.show()
     listener = tf.TransformListener()
     rate = rospy.Rate(1.0)
     while not rospy.is_shutdown():
@@ -251,5 +254,6 @@ def main():
             continue
         rate.sleep()
 
+        
 if __name__ == '__main__':
     main()
