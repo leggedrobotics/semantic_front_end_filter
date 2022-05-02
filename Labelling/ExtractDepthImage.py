@@ -291,7 +291,7 @@ class DIFG:
         y[y!=0] = np.floor(y[y!=0]/self.ground_dict["res"] - self.ground_dict["yNormal"])
         y = y.astype(int) 
 
-        dis = dis.reshape(self.W,self.H).cpu()
+        dis = dis.reshape(self.W,self.H).cpu().numpy()
         if (return_variance):
             variance = np.array(self.ground_dict["Confidence"])
             variance = variance[x, y]
@@ -302,7 +302,7 @@ class DIFG:
             return dis.T
 
 def main():
-    d = DIFG('./Example_Files/GroundMap.msgpack')
+    d = DIFG('./Labelling/Example_Files/GroundMap.msgpack')
     dis, variance = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
     plt.imshow(variance)
     plt.show()
