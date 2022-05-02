@@ -1,4 +1,6 @@
 from mimetypes import init
+from statistics import variance
+from turtle import position
 
 
 import numpy as np
@@ -90,7 +92,31 @@ def raycast_normal(
     if wp.mesh_query_ray(mesh, ray_origin[tid], ray_dir, 1.0e6, t, u, v, sign, n, f):
         height[tid] = t
 
+@wp.kernel
+def raycast_for_variance(
+    mesh: wp.uint64,
+    ray_origin: wp.array(dtype=wp.vec3),
+    ray_dir: wp.array(dtype=wp.vec3),
+    height: wp.array(dtype=wp.float32),
+    x: wp.array(dtype=wp.float32),
+    y: wp.array(dtype=wp.float32),
+):
 
+    tid = wp.tid()
+
+    t = float(0.0)  # hit distance along ray
+    u = float(0.0)  # hit face barycentric u
+    v = float(0.0)  # hit face barycentric v
+    sign = float(0.0)  # hit face sign
+    n = wp.vec3()  # hit face normal
+    f = int(0)  # hit face index
+    # ray cast against the mesh wp.vec3(0.0, 0.0, -1.0)
+    if wp.mesh_query_ray(mesh, ray_origin[tid], ray_dir[tid], 1.0e6, t, u, v, sign, n, f):
+        height[tid] = t
+        position = ray_dir[tid]*t + ray_origin[tid]
+        if(t!=0):
+            x[tid] = position[0]
+            y[tid] = position[1]
 
 
 class DIFG:
@@ -99,8 +125,8 @@ class DIFG:
             data = data_file.read()
             ground_dict = msgpack.unpackb(data)
 
-            ground_dict["yRealRange"], ground_dict["xRealRange"]
-        
+            print(ground_dict["yRealRange"], ground_dict["xRealRange"])
+            self.ground_dict = ground_dict        
         height_field = np.array( ground_dict["GPMap"] )
         center_point = np.array( [ground_dict["xRealRange"][0],ground_dict["yRealRange"][0],0])
         
@@ -193,8 +219,52 @@ class DIFG:
             wp.synchronize()
             distances = wp_to_torch(distances)
             return distances
+    
+    def get_positions(self, start_points, directions=None):
+        """Raycasts environment mesh.
+        If no direction is provide raycasts z down (0,0,-1) for all rays.
+
+        Args:
+            start_points (torch.Tensor): origin of the rays
+            directions (torch.Tensor): optionally directions of rays
+        Returns:
+            [torch.Tensor]: ray lengts in meter
+        """
+        ray_origin = wp.types.array(
+            ptr=start_points.data_ptr(),
+            dtype=wp.vec3,
+            length=start_points.shape[0],
+            copy=False,
+            owner=False,
+            requires_grad=False,
+            device=start_points.device.type,
+        )
+        ray_origin.tensor = start_points
+        n = len(start_points)
+        distances = wp.zeros(n, dtype=wp.float32, device=self.wp_device)
+        y = wp.zeros(n, dtype=wp.float32, device=self.wp_device)
+        x = wp.zeros(n, dtype=wp.float32, device=self.wp_device)
+
+        ray_dir = wp.types.array(
+            ptr=directions.data_ptr(),
+            dtype=wp.vec3,
+            length=directions.shape[0],
+            copy=False,
+            owner=False,
+            requires_grad=False,
+            device=directions.device.type,
+        )
+        ray_dir.tensor = directions
+        kernel = raycast_for_variance
+        inputs = [self.wp_mesh.id, ray_origin, ray_dir, distances, x, y]
+
+        wp.launch(kernel=kernel, dim=n, inputs=inputs, device=self.wp_device)
+        wp.synchronize()
+        x = wp_to_torch(x)
+        y = wp_to_torch(y)
+        return x, y
         
-    def getDImage(self, transition, rotation, ratation_is_matrix = False):
+    def getDImage(self, transition, rotation, ratation_is_matrix = False, return_variance = True):
         H_map_cam = np.eye(4)
 
         H_map_cam[:3,3] =  np.array( [transition])
@@ -211,14 +281,30 @@ class DIFG:
         start_points = start_points[None,:].repeat(self.ray_dir.shape[0],1).type(torch.float32)
 
         dis = self.get_distance(start_points, directions)
+        x, y = self.get_positions(start_points, directions)
+
+        x = x.reshape(self.W, self.H).cpu().numpy()
+        y = y.reshape(self.W, self.H).cpu().numpy()
+
+        x[x!=0] = np.floor(x[x!=0]/self.ground_dict["res"] - self.ground_dict["xNormal"])
+        x = x.astype(int)
+        y[y!=0] = np.floor(y[y!=0]/self.ground_dict["res"] - self.ground_dict["yNormal"])
+        y = y.astype(int) 
 
         dis = dis.reshape(self.W,self.H).cpu()
-        return dis.T
+        if (return_variance):
+            variance = np.array(self.ground_dict["Confidence"])
+            variance = variance[x, y]
+            variance[variance==0]=variance.max()+1/10*(variance.max() - variance.min())
+            return dis.T, variance.T
+
+        else:
+            return dis.T
 
 def main():
     d = DIFG('./Example_Files/GroundMap.msgpack')
-    dis = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
-    plt.imshow(dis)
+    dis, variance = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
+    plt.imshow(variance)
     plt.show()
 if __name__ == '__main__':
     main()

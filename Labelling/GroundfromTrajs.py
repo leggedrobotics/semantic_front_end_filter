@@ -11,7 +11,7 @@ from pandas import value_counts
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 from numpy import asarray as ar, ndarray
-from torch import zero_
+from torch import true_divide, zero_
 import os
 
 # Class GFT provides utility functions to work with ground map extracted from feet trajctories. 
@@ -367,7 +367,7 @@ class GFT:
                 zz = testY.T+prior
                 self.GPMap[localTest[0] + xGround, localTest[1] + yGround] += zz[0]
                 GPMapCounter[localTest[0] + xGround, localTest[1] + yGround] += 1
-                self.Confidence[localTest[0] + xGround, localTest[1] + yGround] = np.exp(-10 * (MSET.T)[0])
+                self.Confidence[localTest[0] + xGround, localTest[1] + yGround] = MSET.T
 
         self.GPMap = np.true_divide(self.GPMap, GPMapCounter + occArray)
         # self.GPMap = np.nan_to_num(self.GPMap, nan=self.meanHeight)
