@@ -150,7 +150,7 @@ class GFT:
             return intarray
 
 
-    def getGroundFromContact(self, ContactArray):
+    def getGroundFromContact(self, ContactArray, padding = True):
         """Get grid map of ground from Contact points. For each grid, calculate the mean of the contacts height. """
         self.res = 0.1
         self.xRealRange = (ContactArray[:, 0].min(), ContactArray[:, 0].max())
@@ -176,6 +176,16 @@ class GFT:
         GroundArray = np.nan_to_num(GroundArray)
         nonZero = np.where(GroundArray[:,:]!=0)
         self.meanHeight = (GroundArray[nonZero[0], nonZero[1]]).mean()
+
+        if(padding):
+            pad_width = 20
+            GroundArray = np.pad(GroundArray, pad_width=pad_width, mode="constant", constant_values=0)
+            self.xlength += 2*pad_width
+            self.ylength += 2*pad_width
+            self.xNormal -= pad_width
+            self.yNormal -= pad_width
+            self.xRealRange = (self.xRealRange[0] - 20*self.res, self.xRealRange[1] + 20*self.res)
+            self.yRealRange = (self.yRealRange[0] - 20*self.res, self.yRealRange[1] + 20*self.res)
 
         return GroundArray
 
@@ -443,17 +453,17 @@ def main():
     # gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/FeetTrajs.msgpack')
     dir_path = os.path.dirname(os.path.realpath(__file__))
     
-    # gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0/FeetTrajs.msgpack', InitializeGP = True)
+    gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0/FeetTrajs.msgpack', InitializeGP = True)
     # print(gft.getHeight(30.842474971923533,462.984496350972, method="GP"))
     # gft.save('/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0')
-    # gft.save(dir_path+"/Example_Files", GPMap=True)
+    gft.save(dir_path+"/Example_Files", GPMap=True)
     
-    gft2 = GFT(GroundMapFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/GroundMap.msgpack')
+    # gft2 = GFT(GroundMapFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/GroundMap.msgpack')
     # print(gft2.getHeight(34.842474971923533, 461.984496350972, method="GP", visualize=True))
     # gft.visualizeContacts3D()
     # gft.visualizeOneFootTraj3D()
     # gft.conver2GPMap()
-    gft2.visualizeGPMap()
+    # gft2.visualizeGPMap()
 
     # print(gft2.getHeight(x, y, method="GP"))
 
