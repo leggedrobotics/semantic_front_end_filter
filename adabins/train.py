@@ -196,8 +196,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             mask = (depth > args.min_depth) & (depth < args.max_depth)
             l_dense = criterion_ueff(pred, depth, mask=mask.to(torch.bool), interpolate=True)
             mask0 = depth < 1e-9 # the mask of places with on label
-            depth[mask0] = depth[~mask0].min()/2
-            l_dense += 0.05 * criterion_ueff(pred, depth, mask=mask0.to(torch.bool), interpolate=True)
+            pc_image = batch["pc_image"].to(device)
+            mask0 = mask0 & (pc_image > 1e-9) # pc image have label
+            l_dense += 1 * criterion_ueff(pred, pc_image, mask=mask0.to(torch.bool), interpolate=True)
 
             if args.w_chamfer > 0:
                 l_chamfer = criterion_bins(bin_edges, depth)
