@@ -24,7 +24,10 @@ class RosVisulizer:
         from sensor_msgs import point_cloud2
         from sensor_msgs.msg import PointCloud2, PointField
         from std_msgs.msg import Header
+        import rosgraph
+        assert rosgraph.is_master_online()
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
+        # if(rospy.)
         rospy.init_node('ros_visulizer', anonymous=True)
         
         
@@ -42,7 +45,7 @@ class RosVisulizer:
         rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
         return [x, y, z, rgb]
 
-    def publish_point_cloud(self, pc):
+    def publish_point_cloud(self, pc, img=None):
         """
         the Pc's field is x,y,z, i, r,g,b, [camflag, projx, projy]x3
         thanks to example at https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
@@ -64,9 +67,29 @@ class RosVisulizer:
 
         pc = np.array(pc)
         pc[:, :3] -= pc[:, :3].mean(axis=0)
-        pc[:, 4:7] /=256.
+        # pc[:, 4:7] /=256.
+        if img is None:
+            colors = pc[:, 4:7] /256.
+        else: # get colors by projecting points to img
+            colors = np.zeros_like(pc[:, 4:7])
+            imgshape = img.shape
+            print("imgshape :",imgshape)
+            assert(len(imgshape)==3 and (imgshape[0] in [1,3]))
+            tmp_fxy = pc[:, 7+ 1*3: 7 + (1+1)*3]
+            flag, px, py = tmp_fxy[:,0], tmp_fxy[:,1], tmp_fxy[:,2]
+            flag = flag>0.5 # turn 0-1 into boolean
+            flag = flag & (0<=px) & (px< imgshape[2]) & (0<=py) & (py< imgshape[1])
+            print("flag.sum :",flag.sum())
+            px[~flag] = 0
+            py[~flag] = 0
+            px = px.astype(np.int32)
+            py = py.astype(np.int32)
+            feats = img[:, py, px]
+            feats = feats.T
+            colors = np.where(flag[:,None], feats, colors)
+            print("colors.max :",colors.max())
         cloud = point_cloud2.create_cloud(header, fields, 
-            [self.buildPoint(*p[:3], *p[4:7]) for p in pc])
+            [self.buildPoint(*p[:3], *c) for p,c in zip(pc, colors)])
 
         self.pub.publish(cloud)
         
@@ -144,14 +167,20 @@ def showPointCloudsOnGraph(pc, images):
     
     pc = np.array(pc)
     imgs = [img.copy() for img in images]
-    
+    ### Color the points differently to verify that the projection is indeed correct.
+    print("pc max and min", pc[:,:3].min(axis=0), pc[:,:3].max(axis=0))
+    # pc = pc[pc[:,2]<-0.5]
     for p in pc:
+        # s = max(0, min(1,(p[2] +1.55)/(1+1.55)))
+        # s = max(0, min(1, (p[0]+p[1] -7.5)/1))
+        # c = [int(255-255*s), int(255*s),  int(255-255*s) ]
+        c = [0,255,0]
         for i in range(N):
             assert (abs(p[7+3*i])<1e-6 or abs(p[7+3*i]-1)<1e-6)
             if(p[7+3*i]>0.5):
                 if(0<=int(p[7+3*i+1])<imgs[i].shape[2] and  
                    0<= int(p[7+3*i+2])<imgs[i].shape[1]):
-                    imgs[i][:,int(p[7+3*i+2]), int(p[7+3*i+1])] = [0,255,0]
+                    imgs[i][:,int(p[7+3*i+2]), int(p[7+3*i+1])] = c
 
     for i, (image) in enumerate(imgs):
         image_size = str(image.shape)
@@ -216,7 +245,18 @@ def main():
 
         fig3 =showPointCloudsOnGraph(pc, [img_dict[k] for k in ["cam3","cam4","cam5"]])
         if(rosv_ok):
-            rosv.publish_point_cloud(data['pointcloud'])
+            # rosv.publish_point_cloud(data['pointcloud'])
+            img = img_dict["cam4depth"].copy()
+            img[img>10] = 0
+            flags = (img!=0)
+            img[flags] = img[flags]/ img.max()
+            img = (img*255).astype(np.uint8)
+            print("max,min :",img.max(),img.min())
+            im_color = cv2.applyColorMap(img[0], cv2.COLORMAP_JET)
+            im_color = np.moveaxis(im_color, 2, 0)
+            print("im_color :",im_color.shape)
+            
+            rosv.publish_point_cloud(data['pointcloud'], im_color)
 
         plt.show()
 
