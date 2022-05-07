@@ -293,7 +293,6 @@ class DIFG:
         x = x.reshape(self.W, self.H).cpu().numpy()
         y = y.reshape(self.W, self.H).cpu().numpy()
 
-<<<<<<< HEAD
         x[x!=0] = np.floor(x[x!=0]/self.ground_dict["res"] - self.ground_dict["xNormal"])
         x = x.astype(int)
         y[y!=0] = np.floor(y[y!=0]/self.ground_dict["res"] - self.ground_dict["yNormal"])
@@ -308,15 +307,6 @@ class DIFG:
 
         else:
             return dis.T
-=======
-        dis = dis.reshape(self.W,self.H).cpu()
-
-        # To get nice colors
-        self.currentImage = dis.T
-        # plt.imshow(dis.T)
-        # plt.show()
-        return dis.T
->>>>>>> devs/Anqiao
 
     def show(self):
         plt.imshow(self.currentImage)
@@ -327,26 +317,9 @@ class DIFG:
 
 
 def main():
-<<<<<<< HEAD
     d = DIFG('./Labelling/Example_Files/GroundMap.msgpack')
     dis, variance = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
     plt.imshow(variance)
     plt.show()
-=======
-    d = DIFG('./Example_Files/GroundMap.msgpack')
-    dis = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
-#     plt.imshow(dis)
-#     plt.show()
-    listener = tf.TransformListener()
-    rate = rospy.Rate(1.0)
-    while not rospy.is_shutdown():
-        try:
-            (trans,rot) = listener.lookupTransform('/map', '/cam0_sensor_frame', rospy.Time(0))
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            continue
-        rate.sleep()
-
-        
->>>>>>> devs/Anqiao
 if __name__ == '__main__':
     main()
