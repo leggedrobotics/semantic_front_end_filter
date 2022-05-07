@@ -5,6 +5,7 @@ from turtle import position
 
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 import msgpack
 import trimesh
 import numpy as np
@@ -48,6 +49,7 @@ def create_height_field(height_field, voxel_size=0.1, center_point=np.array([0, 
 
     return trimesh.util.concatenate([meshes])
 
+print('Initializing...')
 wp.init()
 
 @wp.kernel
@@ -121,6 +123,7 @@ def raycast_for_variance(
 
 class DIFG:
     def __init__(self, ground_map_path, camera_calibration_path = None, cam_id=None, cfg = None):
+        print("Initializing Map...")
         with open(ground_map_path, "rb") as data_file:
             data = data_file.read()
             ground_dict = msgpack.unpackb(data)
@@ -159,6 +162,8 @@ class DIFG:
 
         ray_dir = (np.linalg.inv(K) @ (pixel_cor_hom.reshape(3,-1))).T
         self.ray_dir = ray_dir/ np.linalg.norm(ray_dir, axis=1)[:,None]
+
+        print('Finish Initialization')
         # https://i.stack.imgur.com/AGwu9.jpg  
         
 
@@ -268,7 +273,9 @@ class DIFG:
         H_map_cam = np.eye(4)
 
         H_map_cam[:3,3] =  np.array( [transition])
-        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
+        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
+#         H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
+
         H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
 
 
@@ -286,6 +293,7 @@ class DIFG:
         x = x.reshape(self.W, self.H).cpu().numpy()
         y = y.reshape(self.W, self.H).cpu().numpy()
 
+<<<<<<< HEAD
         x[x!=0] = np.floor(x[x!=0]/self.ground_dict["res"] - self.ground_dict["xNormal"])
         x = x.astype(int)
         y[y!=0] = np.floor(y[y!=0]/self.ground_dict["res"] - self.ground_dict["yNormal"])
@@ -300,11 +308,45 @@ class DIFG:
 
         else:
             return dis.T
+=======
+        dis = dis.reshape(self.W,self.H).cpu()
+
+        # To get nice colors
+        self.currentImage = dis.T
+        # plt.imshow(dis.T)
+        # plt.show()
+        return dis.T
+>>>>>>> devs/Anqiao
+
+    def show(self):
+        plt.imshow(self.currentImage)
+        plt.show()
+    
+    def close(self):
+        plt.clf()
+
 
 def main():
+<<<<<<< HEAD
     d = DIFG('./Labelling/Example_Files/GroundMap.msgpack')
     dis, variance = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
     plt.imshow(variance)
     plt.show()
+=======
+    d = DIFG('./Example_Files/GroundMap.msgpack')
+    dis = d.getDImage(transition=[119.193, 429.133, -1], rotation=[-90, 0, -90])    
+#     plt.imshow(dis)
+#     plt.show()
+    listener = tf.TransformListener()
+    rate = rospy.Rate(1.0)
+    while not rospy.is_shutdown():
+        try:
+            (trans,rot) = listener.lookupTransform('/map', '/cam0_sensor_frame', rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+        rate.sleep()
+
+        
+>>>>>>> devs/Anqiao
 if __name__ == '__main__':
     main()

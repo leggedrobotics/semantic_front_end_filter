@@ -1,4 +1,5 @@
 from cProfile import label
+from cmath import nan
 from turtle import color
 from cv2 import mean
 import msgpack
@@ -358,8 +359,13 @@ class GFT:
                 trainX = np.stack([localTrain[0], localTrain[1]]).T
                 trainY = (LocalArray[localTrain[0], localTrain[1]] - prior).reshape(-1, 1)
 
-                kernel = C(1.0, (1e-3, 1e3)) * RBF([5,5], (1e-2, 1e2))
+                kernel = C(1.0, (1e-3, 1e3)) * RBF([5,5], length_scale_bounds=(1e-2, 1e2))
+                # kernel = C(1.0, (1e-3, 1e3)) * RBF([3,3], length_scale_bounds="fixed")
+                # kernel =  C(1.0, (1e-3, 1e3)) * RBF([3,3], length_scale_bounds="fixed")
+
+
                 gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=15)
+                # print(gp.kernel.get_params())
                 gp.fit(trainX, trainY)
 
                 testX = np.stack([localTest[0], localTest[1]]).T
@@ -370,6 +376,10 @@ class GFT:
                 self.Confidence[localTest[0] + xGround, localTest[1] + yGround] = MSET.T
 
         self.GPMap = np.true_divide(self.GPMap, GPMapCounter + occArray)
+
+        self.Confidence[self.Confidence==0] = self.Confidence.max() + (self.Confidence.max() - self.Confidence.min())
+        # self.Confidence = 1 - (self.Confidence - self.Confidence.min()) / (self.Confidence.max() - self.Confidence.min())
+
         # self.GPMap = np.nan_to_num(self.GPMap, nan=self.meanHeight)
         # visualizeArray(self.Confidence)
         # visualizeArray(self.GPMap)
@@ -449,7 +459,7 @@ def main():
     # y = np.array([462, 462])
     # x = 20
     # y = 400
-    # gft = GFT(FeetTrajsFile = '/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/testRefMap/Reconstruct_2022-03-26-10-41-08_0/FeetTrajs.msgpack')
+    # gft = GFT(FeetTrajsFile = '/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_10/mission1/Recontruct_2022-04-18-19-40-09_0/FeetTrajs.msgpack')
     # gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/FeetTrajs.msgpack')
     dir_path = os.path.dirname(os.path.realpath(__file__))
     

@@ -1,4 +1,3 @@
-from statistics import variance
 from ExtractDepthImage import DIFG
 import tf
 import rospy
@@ -13,6 +12,7 @@ d = DIFG('/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/GroundM
 rospy.init_node('DI_tf_listener')
 image_pub = rospy.Publisher("depth_image",Image)
 var_pub = rospy.Publisher("variance_of_depth_image", Image)
+
 bridge = CvBridge()
 
 listener = tf.TransformListener()
@@ -32,7 +32,7 @@ while not rospy.is_shutdown():
             DImage[DImage==0] = DImage[DImage!=0].min()- (DImage[DImage!=0].max()-DImage[DImage!=0].min())/10
             DImage = (DImage - DImage.min())/(DImage.max()-DImage.min())*255
         
-        print(varianceDI.min(), varianceDI.max())
+        # print(varianceDI.min(), varianceDI.max())
         varianceDI = ((varianceDI - varianceDI.min())/(varianceDI.max() - varianceDI.min()))*255
         # imageCV = np.zeros((DImage.shape[0], DImage.shape[1], 3))
         # imageCV[:, :, 0] = DImage*64/255
@@ -41,13 +41,13 @@ while not rospy.is_shutdown():
 
         # image_message = bridge.cv2_to_imgmsg(imageCV, encoding="passthrough")
         imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_JET)
-        imageVar = cv2.applyColorMap(varianceDI.astype(np.uint8), cv2.COLORMAP_PARULA)
-        
+        imageVar = cv2.applyColorMap(varianceDI.astype(np.uint8), cv2.COLORMAP_PARULA)    
         print("Publishing")
 
         # image_pub.publish(bridge.cv2_to_imgmsg(DImage.numpy().astype(np.uint8), "mono8"))
         image_pub.publish(bridge.cv2_to_imgmsg(imageCV, "bgr8"))
         var_pub.publish(bridge.cv2_to_imgmsg(imageVar, "bgr8"))
+
 
 
     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
