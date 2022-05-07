@@ -121,6 +121,23 @@ class DataLoadPreprocess(Dataset):
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
 
+
+            pc_image = np.zeros_like(depth_gt)
+            pos = data["pose"]["map"][:3]
+            pc = data["pointcloud"]
+            pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
+
+            imgshape = pc_image.shape[:-1] 
+            pc_proj_mask = pc[:, 10] > 0.5 # the point is on the graph
+            pc_proj_loc = pc[:, 11:13] # the x,y pos of point on image
+            pc_proj_mask = (pc_proj_mask & (pc_proj_loc[:, 0]<imgshape[1])
+                                        & (pc_proj_loc[:, 0]>=0)
+                                        &  (pc_proj_loc[:, 1]<imgshape[0])
+                                        &  (pc_proj_loc[:, 1]>=0))
+            pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
+            pc_distance = pc_distance[pc_proj_mask]
+            pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
+
             # if self.args.do_kb_crop is True:
             #     height = image.height
             #     width = image.width
@@ -141,6 +158,8 @@ class DataLoadPreprocess(Dataset):
 
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
+            pc_image = np.asarray(pc_image, dtype=np.float32)
+            
             # print("shapes", image.shape, depth_gt.shape)
             # depth_gt = np.expand_dims(depth_gt, axis=2)
 
@@ -150,9 +169,9 @@ class DataLoadPreprocess(Dataset):
             # else:
             #     depth_gt = depth_gt / 256.0
 
-            image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
-            image, depth_gt = self.train_preprocess(image, depth_gt)
-            sample = {'image': image.copy(), 'depth': depth_gt.copy(), 'focal': focal}
+            image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width, pc_image)
+            image, depth_gt, pc_image = self.train_preprocess(image, depth_gt, pc_image)
+            sample = {'image': image.copy(), 'depth': depth_gt.copy(), 'pc_image': pc_image.copy(), 'focal': focal}
 
         else:
             # if self.mode == 'online_eval':
@@ -217,7 +236,7 @@ class DataLoadPreprocess(Dataset):
         result = image.rotate(angle, resample=flag)
         return result
 
-    def random_crop(self, img, depth, height, width):
+    def random_crop(self, img, depth, height, width, *args):
         assert img.shape[0] >= height
         assert img.shape[1] >= width
         assert img.shape[0] == depth.shape[0]
@@ -226,21 +245,25 @@ class DataLoadPreprocess(Dataset):
         y = random.randint(0, img.shape[0] - height)
         img = img[y:y + height, x:x + width, :]
         depth = depth[y:y + height, x:x + width, :]
-        return img, depth
+        # the args are other images to be cropped to the same size
+        retargs = [i[y:y + height, x:x + width, :] for i in args]
+        return img, depth, *retargs
 
-    def train_preprocess(self, image, depth_gt):
+    def train_preprocess(self, image, depth_gt, *args):
         # Random flipping
         do_flip = random.random()
+        retargs = args
         if do_flip > 0.5:
             image = (image[:, ::-1, :]).copy()
             depth_gt = (depth_gt[:, ::-1, :]).copy()
-
+            retargs = [(i[:, ::-1, :]).copy() for i in args]
+        
         # Random gamma, brightness, color augmentation
         do_augment = random.random()
         if do_augment > 0.5:
             image = self.augment_image(image)
 
-        return image, depth_gt
+        return image, depth_gt, *retargs
 
     def augment_image(self, image):
         # gamma augmentation
@@ -283,7 +306,9 @@ class ToTensor(object):
         depth = sample['depth']
         if self.mode == 'train':
             depth = self.to_tensor(depth)
-            return {'image': image, 'depth': depth, 'focal': focal}
+            pc_image = sample['pc_image']
+            pc_image = self.to_tensor(pc_image)
+            return {'image': image, 'depth': depth, "pc_image":pc_image, 'focal': focal}
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
