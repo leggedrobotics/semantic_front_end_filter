@@ -150,7 +150,7 @@ class DataLoadPreprocess(Dataset):
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
             pc_image = np.asarray(pc_image, dtype=np.float32)
             
-            image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width, pc_image)
+            image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, pc_image)
             image, depth_gt, pc_image = self.train_preprocess(image, depth_gt, pc_image)
             image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
             depth_gt_mean = depth_gt[:, :, 0:1]
@@ -202,8 +202,8 @@ class DataLoadPreprocess(Dataset):
                     depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
 
 
-            if self.args.do_kb_crop is True:
-                image, depth_gt_mean = image, depth_gt_mean
+            if self.args.trainconfig.do_kb_crop is True:
+                image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
                 sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
                         #   'image_path': sample_path.split()[0], 'depth_path': sample_path.split()[1]}
@@ -255,10 +255,7 @@ class DataLoadPreprocess(Dataset):
         image_aug = image ** gamma
 
         # brightness augmentation
-        if self.args.dataset == 'nyu':
-            brightness = random.uniform(0.75, 1.25)
-        else:
-            brightness = random.uniform(0.9, 1.1)
+        brightness = random.uniform(0.9, 1.1)
         image_aug = image_aug * brightness
 
         # color augmentation

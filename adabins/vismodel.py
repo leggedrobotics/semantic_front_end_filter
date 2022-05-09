@@ -3,6 +3,7 @@
 
 from train import *
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 
 test_loader = None
 train_loader = None
@@ -35,7 +36,13 @@ def vis_one(loader = "test"):
         axs[plot_ind//3, plot_ind%3].set_title(f"Pred_model{i}")
     print("pred range:",pred.max(), pred.min())
     
-
+def vis_network_structure():
+    data_loader = DepthDataLoader(args, 'train').data
+    writer = SummaryWriter('.visulization/tmpvis')
+    sample = next(iter(data_loader))
+    model = model_list[0]
+    writer.add_graph(model, sample["image"])
+    writer.close()
 
 
 if __name__=="__main__":
@@ -49,11 +56,12 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     
-    model_list = [models.UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.norm) for i in checkpoint_paths]
+    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+                                            norm=args.modelconfig.norm) for i in checkpoint_paths]
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
     model_list = [l[0] for l in loads]
 
     vis_one("train")
     plt.show()
+    vis_network_structure()

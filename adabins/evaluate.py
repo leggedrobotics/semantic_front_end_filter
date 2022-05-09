@@ -91,14 +91,10 @@ def eval(model, test_loader, args, gpus=None, ):
             final[np.isnan(final)] = args.min_depth
 
             if args.save_dir is not None:
-                if args.dataset == 'nyu':
-                    impath = f"{batch['image_path'][0].replace('/', '__').replace('.jpg', '')}"
-                    factor = 1000
-                else:
-                    dpath = batch['image_path'][0].split('/')
-                    impath = dpath[1] + "_" + dpath[-1]
-                    impath = impath.split('.')[0]
-                    factor = 256
+                dpath = batch['image_path'][0].split('/')
+                impath = dpath[1] + "_" + dpath[-1]
+                impath = impath.split('.')[0]
+                factor = 256
 
                 # rgb_path = os.path.join(rgb_dir, f"{impath}.png")
                 # tf.ToPILImage()(denormalize(image.squeeze().unsqueeze(0).cpu()).squeeze()).save(rgb_path)
@@ -116,20 +112,18 @@ def eval(model, test_loader, args, gpus=None, ):
             gt = gt.squeeze().cpu().numpy()
             valid_mask = np.logical_and(gt > args.min_depth, gt < args.max_depth)
 
-            if args.garg_crop or args.eigen_crop:
+            if args.evalconfig.garg_crop or args.eigen_crop:
                 gt_height, gt_width = gt.shape
                 eval_mask = np.zeros(valid_mask.shape)
 
-                if args.garg_crop:
+                if args.evalconfig.garg_crop:
                     eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
                     int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
 
                 elif args.eigen_crop:
-                    if args.dataset == 'kitti':
-                        eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
-                        int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                    else:
-                        eval_mask[45:471, 41:601] = 1
+                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
+                    int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
+                    
             valid_mask = np.logical_and(valid_mask, eval_mask)
             #             gt = gt[valid_mask]
             #             final = final[valid_mask]
@@ -207,7 +201,7 @@ if __name__ == '__main__':
     args.distributed = False
     device = torch.device('cuda:{}'.format(args.gpu))
     test = DepthDataLoader(args, 'online_eval').data
-    model = UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    model = UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                    norm='linear').to(device)
     model = model_io.load_checkpoint(args.checkpoint_path, model)[0]
     model = model.eval()
