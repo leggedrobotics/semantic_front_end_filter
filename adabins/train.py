@@ -19,7 +19,7 @@ import model_io
 import models
 import utils
 from dataloader import DepthDataLoader
-from loss import SILogLoss, BinsChamferLoss
+from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 
 import time
@@ -77,7 +77,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                           norm=args.norm)
 
     ## Load pretrained kitti
-    model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
+    # model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
 
     ################################################################################################
 
@@ -137,9 +137,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
     train_loader = DepthDataLoader(args, 'train').data
     test_loader = DepthDataLoader(args, 'online_eval').data
-
+    
     ###################################### losses ##############################################
-    criterion_ueff = SILogLoss()
+    # criterion_ueff = SILogLoss()
+    criterion_ueff = UncertaintyLoss()
     criterion_bins = BinsChamferLoss() if args.chamfer else None
     ################################################################################################
 
@@ -189,16 +190,17 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
+            depth_var = batch['depth_variance'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
             bin_edges, pred = model(img)
             mask = (depth > args.min_depth) & (depth < args.max_depth)
-            l_dense = criterion_ueff(pred, depth, mask=mask.to(torch.bool), interpolate=True)
+            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
             mask0 = depth < 1e-9 # the mask of places with on label
             pc_image = batch["pc_image"].to(device)
             mask0 = mask0 & (pc_image > 1e-9) # pc image have label
-            l_dense += 1 * criterion_ueff(pred, pc_image, mask=mask0.to(torch.bool), interpolate=True)
+            l_dense += 1 * criterion_ueff(pred, pc_image,depth_var, mask=mask0.to(torch.bool), interpolate=True)
 
             if args.w_chamfer > 0:
                 l_chamfer = criterion_bins(bin_edges, depth)
