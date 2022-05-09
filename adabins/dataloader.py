@@ -168,10 +168,13 @@ class DataLoadPreprocess(Dataset):
             #     depth_gt = depth_gt / 1000.0
             # else:
             #     depth_gt = depth_gt / 256.0
-
             image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width, pc_image)
             image, depth_gt, pc_image = self.train_preprocess(image, depth_gt, pc_image)
-            sample = {'image': image.copy(), 'depth': depth_gt.copy(), 'pc_image': pc_image.copy(), 'focal': focal}
+            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
+            depth_gt_mean = depth_gt[:, :, 0:1]
+            depth_gt_variance = depth_gt[:, :, 1:]
+            pc_image = pc_image[:, :, 0:1]
+            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance}
 
         else:
             # if self.mode == 'online_eval':
@@ -188,6 +191,29 @@ class DataLoadPreprocess(Dataset):
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
             image = np.asarray(image, dtype=np.float32) / 255.0
+            
+            #  pc image
+            pc_image = np.zeros_like(depth_gt)
+            pos = data["pose"]["map"][:3]
+            pc = data["pointcloud"]
+            pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
+
+            imgshape = pc_image.shape[:-1] 
+            pc_proj_mask = pc[:, 10] > 0.5 # the point is on the graph
+            pc_proj_loc = pc[:, 11:13] # the x,y pos of point on image
+            pc_proj_mask = (pc_proj_mask & (pc_proj_loc[:, 0]<imgshape[1])
+                                        & (pc_proj_loc[:, 0]>=0)
+                                        &  (pc_proj_loc[:, 1]<imgshape[0])
+                                        &  (pc_proj_loc[:, 1]>=0))
+            pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
+            pc_distance = pc_distance[pc_proj_mask]
+            pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
+
+            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
+            depth_gt_mean = depth_gt[:, :, 0:1]
+            depth_gt_variance = depth_gt[:, :, 1:]
+            pc_image = pc_image[:, :, 0:1]
+            pc_image = np.asarray(pc_image, dtype=np.float32)
 
             if self.mode == 'online_eval':
                 # gt_path = self.args.gt_path_eval
@@ -201,7 +227,7 @@ class DataLoadPreprocess(Dataset):
                     # print('Missing gt for {}'.format(image_path))
 
                 # if has_valid_depth:
-                    depth_gt = np.asarray(depth_gt, dtype=np.float32)
+                    depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
                     # depth_gt = np.expand_dims(depth_gt, axis=2)
                     # if self.args.dataset == 'nyu':
                     #     depth_gt = depth_gt / 1000.0
@@ -221,9 +247,9 @@ class DataLoadPreprocess(Dataset):
                 # image, depth_gt = self.train_preprocess(image, depth_gt)
                 image,depth_gt = image,depth_gt
             if self.mode == 'online_eval':
-                sample = {'image': image.copy(), 'depth': depth_gt.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
+                sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
                         #   'image_path': sample_path.split()[0], 'depth_path': sample_path.split()[1]}
-                          'image_path': sample_path, 'depth_path': sample_path}
+                          'image_path': sample_path, 'depth_path': sample_path, 'depth_variance': depth_gt_variance.copy()}
             else:
                 sample = {'image': image.copy(), 'focal': focal}
 
@@ -293,7 +319,7 @@ class DataLoadPreprocess(Dataset):
 class ToTensor(object):
     def __init__(self, mode):
         self.mode = mode
-        self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406, 0.406], std=[0.229, 0.224, 0.225, 0.225])
 
     def __call__(self, sample):
         image, focal = sample['image'], sample['focal']
@@ -304,15 +330,17 @@ class ToTensor(object):
             return {'image': image, 'focal': focal}
 
         depth = sample['depth']
+        depth_variance = sample['depth_variance']
         if self.mode == 'train':
             depth = self.to_tensor(depth)
+            depth_variance = self.to_tensor(depth_variance)
             pc_image = sample['pc_image']
             pc_image = self.to_tensor(pc_image)
-            return {'image': image, 'depth': depth, "pc_image":pc_image, 'focal': focal}
+            return {'image': image, 'depth': depth, "pc_image":pc_image, 'focal': focal, "depth_variance": depth_variance}
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'image_path': sample['image_path'], 'depth_path': sample['depth_path']}
+                    'image_path': sample['image_path'], 'depth_path': sample['depth_path'], "depth_variance": depth_variance}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):
@@ -320,7 +348,7 @@ class ToTensor(object):
                 'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
 
         if isinstance(pic, np.ndarray):
-            img = torch.from_numpy(pic.transpose((2, 0, 1)))
+            img = torch.from_numpy(pic.transpose((2, 0, 1)).copy())
             return img
 
         # handle PIL Image

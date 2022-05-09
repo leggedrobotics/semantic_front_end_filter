@@ -24,7 +24,28 @@ class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
         Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
         return 10 * torch.sqrt(Dg)
 
+class UncertaintyLoss(nn.Module):  # Add variance to loss
+    def __init__(self):
+        super(UncertaintyLoss, self).__init__()
+        self.name = 'SILog'
 
+    def forward(self, input, target, target_variance, mask=None, interpolate=True):
+        if interpolate:
+            input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+
+        if mask is not None:
+            input = input[mask]
+            target = target[mask]
+            target_variance = target_variance[mask]
+        # g = (torch.log(input) - torch.log(target))/target_variance + target_variance
+        # n, c, h, w = g.shape
+        # norm = 1/(h*w)
+        # Dg = norm * torch.sum(g**2) - (0.85/(norm**2)) * (torch.sum(g))**2
+
+        # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
+
+        Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance + 0.5*target_variance)
+        return Dg
 class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins paper
     def __init__(self):
         super().__init__()

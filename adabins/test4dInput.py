@@ -3,6 +3,7 @@
 
 from train import *
 import matplotlib.pyplot as plt
+import geffnet
 args = parse_args("@args_train.txt")
 args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_001/"
 
@@ -11,7 +12,13 @@ model = models.UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth
                                           norm=args.norm)
 model,opt,epoch = model_io.load_checkpoint("./checkpoints/AdaBins_kitti.pt" ,model)
 
+orginal_first_layer_weight = model.encoder.original_model.conv_stem.weight
+model.encoder.original_model.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+with torch.no_grad():
+    model.encoder.original_model.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
+    # model.encoder.original_model.conv_stem.weight[:, 3, :, :] = torch.zeros([48, 3, 3])
 
+    
 sample = next(iter(test_loader))
 
 
@@ -26,7 +33,10 @@ depth = sample["depth"][0].numpy()
 axs[1].imshow(depth)
 axs[1].set_title("Label")
 
-bins, images = model(sample["image"])
+FDimage = torch.zeros([1, 4, 540, 720])
+FDimage[:, 0:3, :, :] = sample["image"]
+FDimage[:, 3, :, :] = sample["image"][:, 0, :, :] 
+bins, images = model(FDimage)
 pred = images[0].detach().numpy()
 axs[2].imshow(pred[0])
 axs[2].set_title("Pred")
