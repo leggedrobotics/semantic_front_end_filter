@@ -319,7 +319,7 @@ class DataLoadPreprocess(Dataset):
 class ToTensor(object):
     def __init__(self, mode):
         self.mode = mode
-        self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406, 0.406], std=[0.229, 0.224, 0.225, 0.225])
+        self.normalize = transforms.Normalize(mean=[0.387, 0.394, 0.404, 0.120], std=[0.322, 0.32, 0.30,  1.17])
 
     def __call__(self, sample):
         image, focal = sample['image'], sample['focal']
