@@ -100,3 +100,5 @@ class TrainConfig:
     validate_every: int = 100
     same_lr: bool = False
     use_right: bool = False # if set, will randomly use right images when train on KITTI
+    pc_image_label_W: float = 0.05
+    pc_min_depth_label_W: float = 0

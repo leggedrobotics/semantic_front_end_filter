@@ -24,6 +24,7 @@ from utils import RunningAverage, colorize
 from simple_parsing import ArgumentParser
 from cfg import TrainConfig, ModelConfig
 from experimentSaver import ConfigurationSaver
+from torch.utils.tensorboard import SummaryWriter
 import time
 
 # os.environ['WANDB_MODE'] = 'dryrun'
@@ -177,8 +178,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         ################################# Train loop ##########################################################
         # if should_log: wandb.log({"Epoch": epoch}, step=step)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
-                             total=len(train_loader)) if is_rank_zero(
-                args) else enumerate(train_loader):
+                             total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
             time_core -= time.time()
             optimizer.zero_grad()
@@ -193,9 +193,12 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             mask = (depth > args.min_depth) & (depth < args.max_depth)
             l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
             mask0 = depth < 1e-9 # the mask of places with on label
+            negativedepth = torch.zeros_like(depth)
+            negativedepth[mask0] = depth[~mask0].min()/2
+            l_dense += args.trainconfig.pc_min_depth_label_W * criterion_ueff(pred, negativedepth, depth_var, mask=mask0.to(torch.bool), interpolate=True)
             pc_image = batch["pc_image"].to(device)
-            mask0 = mask0 & (pc_image > 1e-9) # pc image have label
-            l_dense += 1 * criterion_ueff(pred, pc_image,depth_var, mask=mask0.to(torch.bool), interpolate=True)
+            maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+            l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)
 
             if args.trainconfig.w_chamfer > 0:
                 l_chamfer = criterion_bins(bin_edges, depth)
@@ -221,7 +224,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, epoch, epochs, device)
-
+                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     # wandb.log({
@@ -312,6 +315,7 @@ parser.add_argument("--distributed", default=False, action="store_true", help="U
 parser.add_argument("--root", default=".", type=str,
                     help="Root folder to save data in")
 parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
+parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
 parser.add_argument("--workers", default=11, type=int, help="Number of workers for data loading")
 
@@ -372,7 +376,8 @@ if __name__ == '__main__':
                             args=args,
                             dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
                                 ModelConfig(**vars(args.modelconfig))])
-
+                
+    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
 
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size
