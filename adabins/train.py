@@ -260,14 +260,16 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
                 args) else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
+            depth_var = batch['depth_variance'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
+            depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
             bins, pred = model(img)
 
             mask = depth > args.min_depth
-            l_dense = criterion_ueff(pred, depth, mask=mask.to(torch.bool), interpolate=True)
+            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
             val_si.append(l_dense.item())
 
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
