@@ -43,8 +43,10 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
         # Dg = norm * torch.sum(g**2) - (0.85/(norm**2)) * (torch.sum(g))**2
 
         # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
-
-        Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance + 0.5*target_variance)
+        if(target_variance.numel() !=0):
+            Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance + 0.5*target_variance)
+        else:
+            Dg = 0
         return Dg
 class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins paper
     def __init__(self):
