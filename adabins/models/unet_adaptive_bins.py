@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import geffnet
 from .miniViT import mViT
 
 
@@ -129,11 +130,16 @@ class UnetAdaptiveBins(nn.Module):
             basemodel = torch.hub.load('rwightman/gen-efficientnet-pytorch', basemodel_name, pretrained=True)
             torch.save(basemodel,"models/%s.pth"%basemodel_name)
             # NOTE: No internet connection on euler nodes, execute `python3 download_and_save_basemodel.py` to prepare tf_efficientnet_b5_ap.pth
-                
+       
+
 
 
         print('Done.')
-
+        # Change first layer to 4 channel
+        orginal_first_layer_weight = basemodel.conv_stem.weight
+        basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+        with torch.no_grad():
+            basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
         # Remove last layer
         print('Removing last two layers (global_pool & classifier).')
         basemodel.global_pool = nn.Identity()
