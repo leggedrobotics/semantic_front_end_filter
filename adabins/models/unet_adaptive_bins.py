@@ -138,7 +138,6 @@ class UnetAdaptiveBins(nn.Module):
         basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
         with torch.no_grad():
             basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
-            basemodel.conv_stem.weight[:, 3, :, :] = torch.zeros([48, 3, 3])
 
         # Remove last layer
         print('Removing last two layers (global_pool & classifier).')

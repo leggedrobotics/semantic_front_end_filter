@@ -44,7 +44,7 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
 
         # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
         if(target_variance.numel() !=0):
-            Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance + 0.5*target_variance)
+            Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
         else:
             Dg = 0
         return Dg

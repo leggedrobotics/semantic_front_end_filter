@@ -174,7 +174,7 @@ class DataLoadPreprocess(Dataset):
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
             pc_image = pc_image[:, :, 0:1]
-            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance}
+            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance.copy()}
 
         else:
             # if self.mode == 'online_eval':
@@ -348,7 +348,7 @@ class ToTensor(object):
                 'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
 
         if isinstance(pic, np.ndarray):
-            img = torch.from_numpy(pic.transpose((2, 0, 1)).copy())
+            img = torch.from_numpy(pic.transpose((2, 0, 1)))
             return img
 
         # handle PIL Image

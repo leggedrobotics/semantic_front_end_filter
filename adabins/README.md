@@ -25,6 +25,8 @@ module load gcc/8.2.0 python/3.8.5
 ```bash
 # After loading python/3.8.5 on euler
 python3 -m pip install --user msgpack-numpy
+python3 -m pip install --user geffnet
+python3 -m pip install --user simple-parsing
 ```
 
 this will install the package `msgpack-numpy` to your `$HOME/.local/lib/python3.8/site-packages` 
