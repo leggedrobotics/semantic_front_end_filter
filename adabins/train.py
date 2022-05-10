@@ -24,7 +24,7 @@ from utils import RunningAverage, colorize
 from simple_parsing import ArgumentParser
 from cfg import TrainConfig, ModelConfig
 from experimentSaver import ConfigurationSaver
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 import time
 
 # os.environ['WANDB_MODE'] = 'dryrun'
@@ -224,7 +224,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, epoch, epochs, device)
-                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
+                # [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     # wandb.log({
@@ -377,7 +377,7 @@ if __name__ == '__main__':
                             dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
                                 ModelConfig(**vars(args.modelconfig))])
                 
-    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+    # writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
 
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size
