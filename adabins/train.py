@@ -12,8 +12,12 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
+from torch.utils.tensorboard import SummaryWriter
 # import wandb
 from tqdm import tqdm
+from simple_parsing import ArgumentParser
+from cfg import TrainConfig, ModelConfig
+from experimentSaver import ConfigurationSaver
 
 import model_io
 import models
@@ -21,10 +25,6 @@ import utils
 from dataloader import DepthDataLoader
 from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
-from simple_parsing import ArgumentParser
-from cfg import TrainConfig, ModelConfig
-from experimentSaver import ConfigurationSaver
-# from torch.utils.tensorboard import SummaryWriter
 import time
 
 # os.environ['WANDB_MODE'] = 'dryrun'
@@ -193,9 +193,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             mask = (depth > args.min_depth) & (depth < args.max_depth)
             l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
             mask0 = depth < 1e-9 # the mask of places with on label
-            negativedepth = torch.zeros_like(depth)
-            negativedepth[mask0] = depth[~mask0].min()/2
-            l_dense += args.trainconfig.pc_min_depth_label_W * criterion_ueff(pred, negativedepth, depth_var, mask=mask0.to(torch.bool), interpolate=True)
+            if((~mask0).any()):
+                negativedepth = torch.zeros_like(depth)
+                negativedepth[mask0] = depth[~mask0].min()
+                l_dense += args.trainconfig.pc_min_depth_label_W * criterion_ueff(pred, negativedepth, depth_var, mask=mask0.to(torch.bool), interpolate=True)
             pc_image = batch["pc_image"].to(device)
             maskpc = mask0 & (pc_image > 1e-9) # pc image have label
             l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)
@@ -254,8 +255,7 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
         val_si = RunningAverage()
         # val_bins = RunningAverage()
         metrics = utils.RunningAverageDict()
-        for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if is_rank_zero(
-                args) else test_loader:
+        for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
             depth_var = batch['depth_variance'].to(device)
@@ -377,7 +377,7 @@ if __name__ == '__main__':
                             dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
                                 ModelConfig(**vars(args.modelconfig))])
                 
-    # writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
 
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size

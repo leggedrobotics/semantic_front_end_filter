@@ -9,9 +9,9 @@ class ModelConfig:
     input_width: int =  704
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
     min_depth: float = 0.001
-    max_depth: float =  80
+    max_depth: float =  40
     min_depth_eval: float = 1e-3
-    max_depth_eval: float = 80
+    max_depth_eval: float = 40
 
 @dataclass
 class TrainConfig:
@@ -82,7 +82,7 @@ class TrainConfig:
                             action='store_true')
         ('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
  """
-    bs: int = 1
+    bs: int = 8
     dataset: str = "anymal"
     lr: float =  0.000357
     wd: float =  0.1
