@@ -465,8 +465,8 @@ def main():
     
     gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0/FeetTrajs.msgpack', InitializeGP = True)
     # print(gft.getHeight(30.842474971923533,462.984496350972, method="GP"))
-    # gft.save('/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0')
-    gft.save(dir_path+"/Example_Files", GPMap=True)
+    gft.save('/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0')
+    # gft.save(dir_path+"/Example_Files", GPMap=True)
     
     # gft2 = GFT(GroundMapFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/GroundMap.msgpack')
     # print(gft2.getHeight(34.842474971923533, 461.984496350972, method="GP", visualize=True))

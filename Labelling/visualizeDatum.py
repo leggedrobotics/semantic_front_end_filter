@@ -55,7 +55,7 @@ class RosVisulizer:
         from std_msgs.msg import Header
 
         header = Header()
-        header.frame_id = "msf_body_imu_map"
+        header.frame_id = "map"
         
         fields = [
           PointField('x', 0, PointField.FLOAT32, 1),
@@ -109,6 +109,8 @@ def showImages(images):
         else:
             image = np.moveaxis(image, 0, 2)
         if(image.shape[2]==1): # depth maps
+            image=image[:,:,0]
+        elif(image.shape[2]==2): # depth maps
             image=image[:,:,0]
         else:
             image = image/256
@@ -165,6 +167,7 @@ def showPointCloudsOnGraph(pc, images):
     N = len(images)
     fig, axs = plt.subplots(1, N, figsize=(20, 6))
     
+    print(len(pc))
     pc = np.array(pc)
     imgs = [img.copy() for img in images]
     ### Color the points differently to verify that the projection is indeed correct.
@@ -192,6 +195,40 @@ def showPointCloudsOnGraph(pc, images):
         axs[i].axes.yaxis.set_ticklabels([])
     return fig
 
+def showPointCloudswithColor(pc, images):
+    N = len(images)
+    fig, axs = plt.subplots(1, N, figsize=(20, 6))
+    
+    print(len(pc))
+    pc = np.array(pc)
+    imgs = [img.copy() for img in images]
+    masks = [img.copy() for img in images]
+    masks = [mask.fill(False) for mask in masks]
+    ### Color the points differently to verify that the projection is indeed correct.
+    print("pc max and min", pc[:,:3].min(axis=0), pc[:,:3].max(axis=0))
+    # pc = pc[pc[:,2]<-0.5]
+    for p in pc:
+        # s = max(0, min(1,(p[2] +1.55)/(1+1.55)))
+        # s = max(0, min(1, (p[0]+p[1] -7.5)/1))
+        # c = [int(255-255*s), int(255*s),  int(255-255*s) ]
+        c = [0,255,0]
+        for i in range(N):
+            assert (abs(p[7+3*i])<1e-6 or abs(p[7+3*i]-1)<1e-6)
+            if(p[7+3*i]>0.5):
+                if(0<=int(p[7+3*i+1])<imgs[i].shape[2] and  
+                   0<= int(p[7+3*i+2])<imgs[i].shape[1]):
+                    masks[i][:, int(p[7+3*i+2]), int(p[7+3*i+1])] = True
+
+    for i, (image) in enumerate(imgs):
+        image = image(masks[i])
+        image_size = str(image.shape)
+        image = np.moveaxis(image, 0, 2)
+        image = image/256.
+        axs[i].imshow(image)
+        axs[i].set_title(image_size, fontsize=8)
+        axs[i].xaxis.set_ticklabels([])
+        axs[i].axes.yaxis.set_ticklabels([])
+    return fig
 
 def main():
     import time
@@ -256,7 +293,7 @@ def main():
             im_color = np.moveaxis(im_color, 2, 0)
             print("im_color :",im_color.shape)
             
-            rosv.publish_point_cloud(data['pointcloud'], im_color)
+            rosv.publish_point_cloud(data['pointcloud'])
 
         plt.show()
 

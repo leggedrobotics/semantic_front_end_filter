@@ -110,6 +110,11 @@ def resample_dataid_ffill(data, resampled_idx, tolerance):
     return pd.concat(dfs, axis=1, keys=data.data_id.keys())
 
 
+def fuse_filter(data_list, index, fuse_step):
+    print(range(max(0, math.ceil(index - fuse_step/2)), min(math.floor(index + fuse_step/2 +0.1), len(data_list))))
+    indices = list(range(max(0, math.ceil(index - fuse_step/2)), min(math.ceil(index + fuse_step/2), len(data_list))))
+    return np.concatenate([data_list[index] for index in indices], axis=0)
+
 class Data:
     def __init__(self):
         self.images = []
@@ -240,6 +245,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
     for cam_id in cfg['CAM_NAMES']:
         cameras[cam_id].update_static_tf(
             tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
+        print(cam_id, cameras[cam_id].tf_base_to_sensor)
 
     for topic, msg, t in bag.read_messages(topics=['/tf'], end_time=time_stamps_sequences[0][0]):
         for transform in msg.transforms:
@@ -272,6 +278,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         if cfg['save_proprioception']:
             proprio_data = DataBuffer()
 
+        # contain point cloud massage of other frames
         for topic, msg, t in bag.read_messages(topics=img_topics + state_topics + pointcloud_topics, start_time=start_time,
                                                end_time=end_time):
 
@@ -316,8 +323,8 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 position = np.array(pose[:3])
                 euler = np.array(euler_from_quaternion(pose[3:]))
 
-                d_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
-                d_img = d_img[...,None].numpy()
+                d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
+                d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
                 image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
                 
 
@@ -337,6 +344,8 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     print('Unknown point cloud topic: ' + topic)
                     continue
                 pointcloud_data.append(msg.header.stamp.to_sec(), pc_array,  cam_id)
+
+                msg_lastframe = msg
 
         # Update poses & commands
         for i, stamp in enumerate(command_data.indices['base']):
@@ -496,10 +505,11 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 cloudpoints = []
                 map_idx = int(map_idx)
                 elev_map = map_data.data[map_key][map_idx]
-                pose = np.array(df['pose'][elev_map.frame_id].iloc[time_idx])
+                pose = np.array(df['pose']["map"].iloc[time_idx])
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 1)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
@@ -565,7 +575,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 # Save local map
                 map_idx = int(map_idx)
                 elev_map = map_data.data[map_key][map_idx]
-                pose = np.array(df['pose'][elev_map.frame_id].iloc[time_idx])
+                pose = np.array(df['pose']["map"].iloc[time_idx])
                 yaw = euler_from_quaternion(pose[3:])[2]
                 local_map = elev_map.getLocalMap(pose[:3], yaw, local_map_shape)
                 save_dict['map'] = local_map
@@ -609,7 +619,7 @@ def main():
         cameras[cam_id] = Camera(camera_calibration_path,
                                  cam_id,
                                  cfg)
-
+        # print(cam_id, cameras[cam_id].tf_base_to_sensor)
 
 
     # Get all bag files
