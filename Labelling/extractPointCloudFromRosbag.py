@@ -345,8 +345,6 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     continue
                 pointcloud_data.append(msg.header.stamp.to_sec(), pc_array,  cam_id)
 
-                msg_lastframe = msg
-
         # Update poses & commands
         for i, stamp in enumerate(command_data.indices['base']):
             stamp_ros = rospy.Time.from_sec(stamp)
@@ -509,7 +507,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
-                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 1)
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 10)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
