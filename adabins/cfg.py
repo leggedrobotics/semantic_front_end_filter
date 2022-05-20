@@ -90,6 +90,7 @@ class TrainConfig:
  """
     bs: int = 8
     dataset: str = "anymal"
+    slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
     lr: float =  0.000357
     wd: float =  0.1
     div_factor: int =  25

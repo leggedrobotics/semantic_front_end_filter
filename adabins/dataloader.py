@@ -110,19 +110,19 @@ class DataLoadPreprocess(Dataset):
         # focal = float(sample_path.split()[2])
         focal = 0
 
-        if self.mode == 'train':
-            # image_path = os.path.join(self.args.data_path, remove_leading_slash(sample_path.split()[3]))
-            # depth_path = os.path.join(self.args.gt_path, remove_leading_slash(sample_path.split()[4]))
-            # image = Image.open(image_path)
-            # depth_gt = Image.open(depth_path)
-            with open(sample_path, "rb") as data_file:
-                byte_data = data_file.read()
-                data = msgpack.unpackb(byte_data)
+        with open(sample_path, "rb") as data_file:
+            byte_data = data_file.read()
+            data = msgpack.unpackb(byte_data)
+        if(self.args.trainconfig.slim_dataset):
+            image = Image.fromarray(np.moveaxis(data["image"].astype(np.uint8), 0, 2))
+            depth_gt = np.moveaxis(data["depth_var"],0,2)
+            pc_image = data["pc_image"]
+        else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
 
 
-            pc_image = np.zeros_like(depth_gt)
+            pc_image = np.zeros_like(depth_gt[:,:,:1])
             pos = data["pose"]["map"][:3]
             pc = data["pointcloud"]
             pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
@@ -137,6 +137,8 @@ class DataLoadPreprocess(Dataset):
             pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
             pc_distance = pc_distance[pc_proj_mask]
             pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
+
+        if self.mode == 'train':
 
             # if self.args.do_kb_crop is True:
             #       .....
@@ -152,49 +154,16 @@ class DataLoadPreprocess(Dataset):
             
             image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, pc_image)
             image, depth_gt, pc_image = self.train_preprocess(image, depth_gt, pc_image)
-            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
-            pc_image = pc_image[:, :, 0:1]
+            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
             sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance.copy()}
 
         else:
-            # if self.mode == 'online_eval':
-            #     data_path = self.args.data_path_eval
-            # else:
-            #     data_path = self.args.data_path
-
-            # image_path = os.path.join(data_path, remove_leading_slash(sample_path.split()[0]))
-            # image = np.asarray(Image.open(image_path), dtype=np.float32) / 255.0
-
-            with open(sample_path, "rb") as data_file:
-                byte_data = data_file.read()
-                data = msgpack.unpackb(byte_data)
-            image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
-            depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
             image = np.asarray(image, dtype=np.float32) / 255.0
-            
-            #  pc image
-            pc_image = np.zeros_like(depth_gt)
-            pos = data["pose"]["map"][:3]
-            pc = data["pointcloud"]
-            pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
-
-            imgshape = pc_image.shape[:-1] 
-            pc_proj_mask = pc[:, 10] > 0.5 # the point is on the graph
-            pc_proj_loc = pc[:, 11:13] # the x,y pos of point on image
-            pc_proj_mask = (pc_proj_mask & (pc_proj_loc[:, 0]<imgshape[1])
-                                        & (pc_proj_loc[:, 0]>=0)
-                                        &  (pc_proj_loc[:, 1]<imgshape[0])
-                                        &  (pc_proj_loc[:, 1]>=0))
-            pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
-            pc_distance = pc_distance[pc_proj_mask]
-            pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
-
             image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
-            pc_image = pc_image[:, :, 0:1]
             pc_image = np.asarray(pc_image, dtype=np.float32)
 
             if self.mode == 'online_eval':
