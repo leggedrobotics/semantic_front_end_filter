@@ -221,7 +221,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, epoch, epochs, device)
-                # [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
+                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     # wandb.log({
