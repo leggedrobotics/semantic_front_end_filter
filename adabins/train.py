@@ -191,12 +191,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     continue
             bin_edges, pred = model(img)
             mask = (depth > args.min_depth) & (depth < args.max_depth)
-            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+            l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
             mask0 = depth < 1e-9 # the mask of places with on label
-            if((~mask0).any()):
-                negativedepth = torch.zeros_like(depth)
-                negativedepth[mask0] = depth[~mask0].min()
-                l_dense += args.trainconfig.pc_min_depth_label_W * criterion_ueff(pred, negativedepth, depth_var, mask=mask0.to(torch.bool), interpolate=True)
             pc_image = batch["pc_image"].to(device)
             maskpc = mask0 & (pc_image > 1e-9) # pc image have label
             l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)

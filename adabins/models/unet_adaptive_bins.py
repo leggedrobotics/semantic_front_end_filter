@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torchvision import transforms
 import geffnet
 from .miniViT import mViT
 
@@ -76,7 +76,8 @@ class Encoder(nn.Module):
 
 
 class UnetAdaptiveBins(nn.Module):
-    def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear'):
+    def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear',
+                    output_norm_mean = 0, output_norm_std = 1.):
         super(UnetAdaptiveBins, self).__init__()
         self.num_classes = n_bins
         self.min_val = min_val
@@ -89,6 +90,7 @@ class UnetAdaptiveBins(nn.Module):
         self.decoder = DecoderBN(num_classes=128)
         self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
                                       nn.Softmax(dim=1))
+        self.normalize = transforms.Normalize(mean=[-output_norm_mean/output_norm_std], std=[1/output_norm_std])
 
     def forward(self, x, **kwargs):
         unet_out = self.decoder(self.encoder(x), **kwargs)
@@ -108,7 +110,8 @@ class UnetAdaptiveBins(nn.Module):
         centers = centers.view(n, dout, 1, 1)
 
         pred = torch.sum(out * centers, dim=1, keepdim=True)
-
+        
+        pred = self.normalize(pred)
         return bin_edges, pred
 
     def get_1x_lr_params(self):  # lr/10 learning rate

@@ -12,6 +12,12 @@ class ModelConfig:
     max_depth: float =  40
     min_depth_eval: float = 1e-3
     max_depth_eval: float = 40
+    # normalize_output Assume the output of the network is a normalized one, 
+    # Use the following param to scale it back
+    # i.e. re-mornalized by -m/s, 1/s
+    # One way to configure this values is to keep it same with the normalize in class `ToTensor`
+    normalize_output_mean: float = 0.120
+    normalize_output_std: float = 1.17
 
 @dataclass
 class TrainConfig:
@@ -100,5 +106,5 @@ class TrainConfig:
     validate_every: int = 100
     same_lr: bool = False
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 0.05
-    pc_min_depth_label_W: float = 0
+    pc_image_label_W: float = 0.5
+    traj_label_W: float = 1

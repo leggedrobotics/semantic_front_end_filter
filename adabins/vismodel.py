@@ -19,8 +19,9 @@ def vis_one(loader = "test"):
     # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
     inputimg.max(), inputimg.min()
     inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
-    fig, axs = plt.subplots(1, 4,figsize=(20, 5))
-    axs = axs[None,...]
+    fig, axs = plt.subplots(3, 4,figsize=(20, 15))
+    if(axs.ndim==1):
+        axs = axs[None,...]
     axs[0,0].imshow(inputimg)
     axs[0,0].set_title("Input")
 
