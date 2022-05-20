@@ -509,7 +509,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
-                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 1)
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 10)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
@@ -601,12 +601,15 @@ def main():
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
+    parser.add_argument('--bag_path', default='', help = 'bag file path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    bag_file_path = cfg['bagfile']
+    # bag_file_path = cfg['bagfile']
+    bag_file_path = args.bag_path
+    print("Extracting file: " + bag_file_path)
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
     print("camera_calibration_path :",camera_calibration_path)
