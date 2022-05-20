@@ -108,7 +108,7 @@ def showImages(images):
             image = image[0]
         else:
             image = np.moveaxis(image, 0, 2)
-        if(image.shape[2]==1): # depth maps
+        if(image.shape[2]==2): # depth maps and covariance map
             image=image[:,:,0]
         elif(image.shape[2]==2): # depth maps
             image=image[:,:,0]

@@ -5,12 +5,15 @@ from termios import VMIN
 from train import *
 import matplotlib.pyplot as plt
 args = parse_args("@args_train.txt")
-args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories/"
+
+args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_001/"
 
 test_loader = DepthDataLoader(args, 'online_eval').data
 model = models.UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                           norm=args.norm)
+
 model,opt,epoch = model_io.load_checkpoint("/media/anqiao/Semantic/Data/checkpoints/UnetAdaptiveBins_13-May_08-25-ReduceBinsto20_best.pt" ,model)
+
 
 
 sample = next(iter(test_loader))
