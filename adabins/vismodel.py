@@ -24,6 +24,7 @@ def vis_one(loader = "test"):
         axs = axs[None,...]
     axs[0,0].imshow(inputimg)
     axs[0,0].set_title("Input")
+    fig.suptitle(sample["path"])
 
     print(sample["depth"].shape)
     depth = sample["depth"][0][0].numpy()
@@ -31,14 +32,25 @@ def vis_one(loader = "test"):
     axs[0,1].imshow(depth)
     axs[0,1].set_title("Label")
 
-    for i, model in enumerate(model_list):
+    pc_img = sample["pc_image"][0][0].numpy()
+    print(pc_img.shape)
+    axs[0,2].imshow(pc_img)
+    axs[0,2].set_title("pc_label")
+
+    pc_diff = pc_img - depth
+    pc_diff[depth<1e-9] = 0
+    pc_diff[pc_img<1e-9] = 0
+    axs[0,3].imshow(pc_diff,vmin = -5, vmax=5)
+    axs[0,3].set_title("pc - traj")
+
+    for i, (model, name) in enumerate(zip(model_list,names_list)):
         # bins, images = model(sample["image"][:,:3,...])
         bins, images = model(sample["image"])
         pred = images[0].detach().numpy()
-        plot_ind = 2+2*i
+        plot_ind = 4+2*i
         axs[plot_ind//4, plot_ind%4].imshow(pred[0])
-        axs[plot_ind//4, plot_ind%4].set_title(f"Pred_model{i}")
-        plot_ind = 3+2*i
+        axs[plot_ind//4, plot_ind%4].set_title(f"pred_model_{name}")
+        plot_ind = 5+2*i
         pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
         pred = pred[0][0].numpy()
         print("pred shape:", pred.shape)
@@ -64,8 +76,9 @@ def vis_network_structure():
 
 if __name__=="__main__":
     parser.add_argument("--models", default="")
+    parser.add_argument("--names", default="")
     args = parse_args()
-    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_002/"
+    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
 
     try:
         # checkpoint_paths = sys.argv[1:]
@@ -78,6 +91,7 @@ if __name__=="__main__":
     
     model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                             norm=args.modelconfig.norm) for i in checkpoint_paths]
+    names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
     model_list = [l[0] for l in loads]

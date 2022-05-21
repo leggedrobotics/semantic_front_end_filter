@@ -157,7 +157,10 @@ class DataLoadPreprocess(Dataset):
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
             image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
-            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance.copy()}
+            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 
+                'pc_image': pc_image.copy(), 'focal': focal, 
+                'depth_variance': depth_gt_variance.copy(),
+                'path': sample_path}
 
         else:
             image = np.asarray(image, dtype=np.float32) / 255.0
@@ -175,8 +178,7 @@ class DataLoadPreprocess(Dataset):
                 image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
                 sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
-                        #   'image_path': sample_path.split()[0], 'depth_path': sample_path.split()[1]}
-                          'image_path': sample_path, 'depth_path': sample_path, 'depth_variance': depth_gt_variance.copy()}
+                          'path': sample_path,  'depth_variance': depth_gt_variance.copy(), 'pc_image': pc_image.copy()}
             else:
                 sample = {'image': image.copy(), 'focal': focal}
 
@@ -260,12 +262,13 @@ class ToTensor(object):
             depth_variance = self.to_tensor(depth_variance)
             pc_image = sample['pc_image']
             pc_image = self.to_tensor(pc_image)
-            return {'image': image, 'depth': depth, "pc_image":pc_image, 'focal': focal, "depth_variance": depth_variance}
+            return {'image': image, 'depth': depth, "pc_image":pc_image, 
+                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path']}
         else:
             depth = self.to_tensor(depth)
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'image_path': sample['image_path'], 'depth_path': sample['depth_path'], "depth_variance": depth_variance}
+                    'path': sample['path'],  "depth_variance": depth_variance}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

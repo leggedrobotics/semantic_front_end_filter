@@ -31,7 +31,10 @@ def filter_msg_pack(input_path, output_path):
     pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
     pc_distance = pc_distance[pc_proj_mask]
     pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
-
+    if(np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)<10 ):
+        print("%s is filtered out as it only have %d nonzero value"%(input_path, 
+            np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)) )
+        return
 
     with open(output_path, "wb") as out_file:
         file_dat = msgpack.packb({
