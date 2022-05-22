@@ -30,12 +30,12 @@ def vis_one(loader = "test"):
     depth = sample["depth"][0][0].numpy()
     print(depth.shape)
     axs[0,1].imshow(depth)
-    axs[0,1].set_title("Label")
+    axs[0,1].set_title("traj label")
 
     pc_img = sample["pc_image"][0][0].numpy()
     print(pc_img.shape)
     axs[0,2].imshow(pc_img)
-    axs[0,2].set_title("pc_label")
+    axs[0,2].set_title("pc label")
 
     pc_diff = pc_img - depth
     pc_diff[depth<1e-9] = 0
