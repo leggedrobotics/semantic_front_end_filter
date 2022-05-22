@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torchvision import transforms
+import geffnet
 from .miniViT import mViT
 
 
@@ -75,7 +76,8 @@ class Encoder(nn.Module):
 
 
 class UnetAdaptiveBins(nn.Module):
-    def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear'):
+    def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear',
+                    output_norm_mean = 0, output_norm_std = 1.):
         super(UnetAdaptiveBins, self).__init__()
         self.num_classes = n_bins
         self.min_val = min_val
@@ -88,6 +90,7 @@ class UnetAdaptiveBins(nn.Module):
         self.decoder = DecoderBN(num_classes=128)
         self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
                                       nn.Softmax(dim=1))
+        self.normalize = transforms.Normalize(mean=[-output_norm_mean/output_norm_std], std=[1/output_norm_std])
 
     def forward(self, x, **kwargs):
         unet_out = self.decoder(self.encoder(x), **kwargs)
@@ -107,7 +110,8 @@ class UnetAdaptiveBins(nn.Module):
         centers = centers.view(n, dout, 1, 1)
 
         pred = torch.sum(out * centers, dim=1, keepdim=True)
-
+        
+        pred = self.normalize(pred)
         return bin_edges, pred
 
     def get_1x_lr_params(self):  # lr/10 learning rate
@@ -128,11 +132,15 @@ class UnetAdaptiveBins(nn.Module):
         except Exception as e:
             basemodel = torch.hub.load('rwightman/gen-efficientnet-pytorch', basemodel_name, pretrained=True)
             torch.save(basemodel,"models/%s.pth"%basemodel_name)
-            # NOTE: No internet connection on euler nodes, execute `python3 download_and_save_basemodel.py` to prepare tf_efficientnet_b5_ap.pth
-                
+            # NOTE: No internet connection on euler nodes, execute `python3 download_and_save_basemodel.py` to prepare tf_efficientnet_b5_ap.p
 
 
         print('Done.')
+        # Change first layer to 4 channel
+        orginal_first_layer_weight = basemodel.conv_stem.weight
+        basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+        with torch.no_grad():
+            basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
 
         # Remove last layer
         print('Removing last two layers (global_pool & classifier).')

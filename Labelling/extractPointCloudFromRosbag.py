@@ -316,8 +316,8 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 position = np.array(pose[:3])
                 euler = np.array(euler_from_quaternion(pose[3:]))
 
-                d_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
-                d_img = d_img[...,None].numpy()
+                d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
+                d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
                 image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
                 
 

@@ -12,16 +12,19 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
+from torch.utils.tensorboard import SummaryWriter
 # import wandb
 from tqdm import tqdm
+from simple_parsing import ArgumentParser
+from cfg import TrainConfig, ModelConfig
+from experimentSaver import ConfigurationSaver
 
 import model_io
 import models
 import utils
 from dataloader import DepthDataLoader
-from loss import SILogLoss, BinsChamferLoss
+from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
-
 import time
 
 # os.environ['WANDB_MODE'] = 'dryrun'
@@ -73,11 +76,11 @@ def main_worker(gpu, ngpus_per_node, args):
 
     ###################################### Load model ##############################################
 
-    model = models.UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.norm)
+    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+                                          norm=args.modelconfig.norm)
 
     ## Load pretrained kitti
-    model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
+    # model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
 
     ################################################################################################
 
@@ -110,7 +113,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     args.epoch = 0
     args.last_epoch = -1
-    train(model, args, epochs=args.epochs, lr=args.lr, device=args.gpu, root=args.root,
+    train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
 
 
@@ -123,30 +126,24 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     ###################################### Logging setup #########################################
     print(f"Training {experiment_name}")
 
-    run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{args.bs}-tep{epochs}-lr{lr}-wd{args.wd}-{uuid.uuid4()}"
-    name = f"{experiment_name}_{run_id}"
     should_write = ((not args.distributed) or args.rank == 0)
     should_log = should_write and logging
-    if should_log:
-        tags = args.tags.split(',') if args.tags != '' else None
-        if args.dataset != 'nyu':
-            PROJECT = PROJECT + f"-{args.dataset}"
-        # wandb.init(project=PROJECT, name=name, config=args, dir=args.root, tags=tags, notes=args.notes)
-        # wandb.watch(model)
+
     ################################################################################################
 
     train_loader = DepthDataLoader(args, 'train').data
     test_loader = DepthDataLoader(args, 'online_eval').data
-
+    
     ###################################### losses ##############################################
-    criterion_ueff = SILogLoss()
+    # criterion_ueff = SILogLoss()
+    criterion_ueff = UncertaintyLoss()
     criterion_bins = BinsChamferLoss() if args.chamfer else None
     ################################################################################################
 
     model.train()
 
     ###################################### Optimizer ################################################
-    if args.same_lr:
+    if args.trainconfig.same_lr:
         print("Using same LR")
         params = model.parameters()
     else:
@@ -155,7 +152,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         params = [{"params": m.get_1x_lr_params(), "lr": lr / 10},
                   {"params": m.get_10x_lr_params(), "lr": lr}]
 
-    optimizer = optim.AdamW(params, weight_decay=args.wd, lr=args.lr)
+    optimizer = optim.AdamW(params, weight_decay=args.trainconfig.wd, lr=args.trainconfig.lr)
     if optimizer_state_dict is not None:
         optimizer.load_state_dict(optimizer_state_dict)
     ################################################################################################
@@ -168,8 +165,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, lr, epochs=epochs, steps_per_epoch=len(train_loader),
                                               cycle_momentum=True,
                                               base_momentum=0.85, max_momentum=0.95, last_epoch=args.last_epoch,
-                                              div_factor=args.div_factor,
-                                              final_div_factor=args.final_div_factor)
+                                              div_factor=args.trainconfig.div_factor,
+                                              final_div_factor=args.trainconfig.final_div_factor)
     if args.resume != '' and scheduler is not None:
         scheduler.step(args.epoch + 1)
     ################################################################################################
@@ -181,27 +178,31 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         ################################# Train loop ##########################################################
         # if should_log: wandb.log({"Epoch": epoch}, step=step)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
-                             total=len(train_loader)) if is_rank_zero(
-                args) else enumerate(train_loader):
+                             total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
             time_core -= time.time()
             optimizer.zero_grad()
 
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
+            depth_var = batch['depth_variance'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
             bin_edges, pred = model(img)
             mask = (depth > args.min_depth) & (depth < args.max_depth)
-            l_dense = criterion_ueff(pred, depth, mask=mask.to(torch.bool), interpolate=True)
+            l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+            mask0 = depth < 1e-9 # the mask of places with on label
+            pc_image = batch["pc_image"].to(device)
+            maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+            l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)
 
-            if args.w_chamfer > 0:
+            if args.trainconfig.w_chamfer > 0:
                 l_chamfer = criterion_bins(bin_edges, depth)
             else:
                 l_chamfer = torch.Tensor([0]).to(img.device)
 
-            loss = l_dense + args.w_chamfer * l_chamfer
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
@@ -215,12 +216,12 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             time_core += time.time()
             ########################################################################################################
 
-            if should_write and step % args.validate_every == 0:
+            if should_write and step % args.trainconfig.validate_every == 0:
 
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, epoch, epochs, device)
-
+                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     # wandb.log({
@@ -229,15 +230,15 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     # }, step=step)
 
                     # wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_latest.pt",
-                                             root=os.path.join(root, "checkpoints"))
+                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                                             root=saver.data_dir)
                                             
                     print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                     time_total = -time.time()
                     time_core = 0.
                 if metrics['abs_rel'] < best_loss and should_write:
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_best.pt",
-                                             root=os.path.join(root, "checkpoints"))
+                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
+                                             root=saver.data_dir)
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
@@ -250,18 +251,19 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
         val_si = RunningAverage()
         # val_bins = RunningAverage()
         metrics = utils.RunningAverageDict()
-        for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if is_rank_zero(
-                args) else test_loader:
+        for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
+            depth_var = batch['depth_variance'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
+            depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
             bins, pred = model(img)
 
             mask = depth > args.min_depth
-            l_dense = criterion_ueff(pred, depth, mask=mask.to(torch.bool), interpolate=True)
+            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
             val_si.append(l_dense.item())
 
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
@@ -274,20 +276,19 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
 
             gt_depth = depth.squeeze().cpu().numpy()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
-            if args.garg_crop or args.eigen_crop:
+            if args.trainconfig.garg_crop or args.trainconfig.eigen_crop:
                 gt_height, gt_width = gt_depth.shape
                 eval_mask = np.zeros(valid_mask.shape)
 
-                if args.garg_crop:
+                if args.trainconfig.garg_crop:
                     eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
                     int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
 
                 elif args.eigen_crop:
-                    if args.dataset == 'kitti':
-                        eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
-                        int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                    else:
-                        eval_mask[45:471, 41:601] = 1
+
+                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
+                    int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
+                    
             valid_mask = np.logical_and(valid_mask, eval_mask)
             metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
 
@@ -303,86 +304,33 @@ def convert_arg_line_to_args(arg_line):
 
 
 # Arguments
-parser = argparse.ArgumentParser(description='Training script. Default values of all arguments are recommended for reproducibility', fromfile_prefix_chars='@',
-                                    conflict_handler='resolve')
-parser.convert_arg_line_to_args = convert_arg_line_to_args
-parser.add_argument('--epochs', default=25, type=int, help='number of total epochs to run')
-parser.add_argument('--n-bins', '--n_bins', default=80, type=int,
-                    help='number of bins/buckets to divide depth range into')
-parser.add_argument('--lr', '--learning-rate', default=0.000357, type=float, help='max learning rate')
-parser.add_argument('--wd', '--weight-decay', default=0.1, type=float, help='weight decay')
-parser.add_argument('--w_chamfer', '--w-chamfer', default=0.1, type=float, help="weight value for chamfer loss")
-parser.add_argument('--div-factor', '--div_factor', default=25, type=float, help="Initial div factor for lr")
-parser.add_argument('--final-div-factor', '--final_div_factor', default=100, type=float,
-                    help="final div factor for lr")
-
-parser.add_argument('--bs', default=16, type=int, help='batch size')
-parser.add_argument('--validate-every', '--validate_every', default=100, type=int, help='validation period')
+parser = ArgumentParser()
 parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
 parser.add_argument("--name", default="UnetAdaptiveBins")
-parser.add_argument("--norm", default="linear", type=str, help="Type of norm/competition for bin-widths",
-                    choices=['linear', 'softmax', 'sigmoid'])
-parser.add_argument("--same-lr", '--same_lr', default=False, action="store_true",
-                    help="Use same LR for all param groups")
 parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
 parser.add_argument("--root", default=".", type=str,
                     help="Root folder to save data in")
 parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
-parser.add_argument("--load_pretrained", action="store_true", default=False, help="Load pretrained weights of kitti dataset")
-
-parser.add_argument("--notes", default='', type=str, help="Wandb notes")
-parser.add_argument("--tags", default='sweep', type=str, help="Wandb tags")
+parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
 parser.add_argument("--workers", default=11, type=int, help="Number of workers for data loading")
-parser.add_argument("--dataset", default='nyu', type=str, help="Dataset to train on")
 
-parser.add_argument("--data_path", default='../dataset/nyu/sync/', type=str,
-                    help="path to dataset")
-parser.add_argument("--gt_path", default='../dataset/nyu/sync/', type=str,
-                    help="path to dataset")
+parser.add_arguments(TrainConfig, dest="trainconfig")
+parser.add_arguments(ModelConfig, dest="modelconfig")
 
-parser.add_argument('--filenames_file',
-                    default="./train_test_inputs/nyudepthv2_train_files_with_gt.txt",
-                    type=str, help='path to the filenames text file')
-
-parser.add_argument('--input_height', type=int, help='input height', default=416)
-parser.add_argument('--input_width', type=int, help='input width', default=544)
-parser.add_argument('--max_depth', type=float, help='maximum depth in estimation', default=10)
-parser.add_argument('--min_depth', type=float, help='minimum depth in estimation', default=1e-3)
-
-parser.add_argument('--do_random_rotate', default=True,
-                    help='if set, will perform random rotation for augmentation',
-                    action='store_true')
-parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
-parser.add_argument('--do_kb_crop', help='if set, crop input images as kitti benchmark images', action='store_true')
-parser.add_argument('--use_right', help='if set, will randomly use right images when train on KITTI',
-                    action='store_true')
-
-parser.add_argument('--data_path_eval',
-                    default="../dataset/nyu/official_splits/test/",
-                    type=str, help='path to the data for online evaluation')
-parser.add_argument('--gt_path_eval', default="../dataset/nyu/official_splits/test/",
-                    type=str, help='path to the groundtruth data for online evaluation')
-parser.add_argument('--filenames_file_eval',
-                    default="./train_test_inputs/nyudepthv2_test_files_with_gt.txt",
-                    type=str, help='path to the filenames text file for online evaluation')
-
-parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=1e-3)
-parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=10)
-parser.add_argument('--eigen_crop', default=True, help='if set, crops according to Eigen NIPS14',
-                    action='store_true')
-parser.add_argument('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
-
-def parse_args(arg_filename_with_prefix = None):
-    if(arg_filename_with_prefix is not None):
-        args = parser.parse_args([arg_filename_with_prefix])
-    else:
-        args = parser.parse_args()
-
-    args.batch_size = args.bs
+def parse_args():
+    
+    args = parser.parse_args()
+    args.batch_size = args.trainconfig.bs
     args.num_threads = args.workers
     args.mode = 'train'
-    args.chamfer = args.w_chamfer > 0
+    args.data_path = args.trainconfig.data_path
+    args.min_depth = args.modelconfig.min_depth
+    args.max_depth = args.modelconfig.max_depth
+    args.min_depth_eval = args.modelconfig.min_depth_eval
+    args.max_depth_eval = args.modelconfig.max_depth_eval
+
+    args.chamfer = args.trainconfig.w_chamfer > 0
     if args.root != "." and not os.path.isdir(args.root):
         os.makedirs(args.root)
 
@@ -413,16 +361,20 @@ def parse_args(arg_filename_with_prefix = None):
     return args
 if __name__ == '__main__':
 
-    if sys.argv.__len__() == 2:
-        arg_filename_with_prefix = '@' + sys.argv[1]
-    else:
-        arg_filename_with_prefix = None
-
-    args = parse_args(arg_filename_with_prefix)
+    args = parse_args()
     ngpus_per_node = torch.cuda.device_count()
     args.num_workers = args.workers
     args.ngpus_per_node = ngpus_per_node
-        
+    
+    saver_dir = os.path.join(args.root,"checkpoints")
+    saver = ConfigurationSaver(log_dir=saver_dir,
+                            save_items=[os.path.realpath(__file__)],
+                            args=args,
+                            dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
+                                ModelConfig(**vars(args.modelconfig))])
+                
+    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))

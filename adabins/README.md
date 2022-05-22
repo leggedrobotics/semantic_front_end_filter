@@ -25,6 +25,8 @@ module load gcc/8.2.0 python/3.8.5
 ```bash
 # After loading python/3.8.5 on euler
 python3 -m pip install --user msgpack-numpy
+python3 -m pip install --user geffnet
+python3 -m pip install --user simple-parsing
 ```
 
 this will install the package `msgpack-numpy` to your `$HOME/.local/lib/python3.8/site-packages` 
@@ -39,8 +41,12 @@ Save the following script into a file "run_train_adabins.sh"
 #!/usr/bin/env bash
 tar -xf extract_trajectories.tar -C $TMPDIR
 cd semantic_front_end_filter/adabins/
-python3 train.py  args_train.txt
+python3 train.py  "$@"
 ```
+
+> The `"$@"` means passing the command arguments calling the bash inside.
+
+
 
 **submit jobs onto cluster**
 
@@ -51,13 +57,26 @@ bsub -n 32 \
 -R "select[gpu_mtotal0>=9000]" \
 -R "rusage[scratch=200]" \
 -R "select[gpu_driver>=470]" \
-bash ./run_train_adabins.sh
+bash ./run_train_adabins.sh "$@"
 ```
 
 - `-W` specifies the time
 - `-n` specifies the number of cores
 - `mem=xxx` the total memory is `n*mem`
 - `scratch=200` is the space in `$TMPDIR`
+
+
+### Command line arguments
+
+Please have a look at `cfg.py` to see what command lines are avaliable
+
+Some command line that often used are:
+- "bs": batch size
+- "validate_every"
+- "pc_image_label_W"
+- "traj_label_W"
+- "normalize_output_mean"
+- "normalize_output_std"
 
 ## Evaluation on local Machine
 
