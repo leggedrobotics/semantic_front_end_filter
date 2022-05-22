@@ -267,8 +267,10 @@ class ToTensor(object):
         else:
             depth = self.to_tensor(depth)
             has_valid_depth = sample['has_valid_depth']
+            pc_image = sample['pc_image']
+            pc_image = self.to_tensor(pc_image)
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'path': sample['path'],  "depth_variance": depth_variance}
+                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

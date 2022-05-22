@@ -31,6 +31,7 @@ import time
 PROJECT = "MDE-AdaBins"
 logging = True
 
+count_val = 0
 
 def is_rank_zero(args):
     return args.rank == 0
@@ -224,7 +225,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
                 ################################# Validation loop ##################################################
                 model.eval()
-                metrics, val_si = validate(args, model, test_loader, criterion_ueff, epoch, epochs, device)
+                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, epochs, device)
                 [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
@@ -250,7 +251,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     return model
 
 
-def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cpu'):
+def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, epochs, device='cpu'):
+    global count_val
     with torch.no_grad():
         val_si = RunningAverage()
         # val_bins = RunningAverage()
@@ -267,7 +269,23 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
             bins, pred = model(img)
 
             mask = depth > args.min_depth
-            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+
+            l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+            mask0 = depth < 1e-9 # the mask of places with on label
+            pc_image = batch["pc_image"].to(device)
+            maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+            l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)
+
+            if args.trainconfig.w_chamfer > 0:
+                l_chamfer = criterion_bins(bins, depth)
+            else:
+                l_chamfer = torch.Tensor([0]).to(img.device)
+
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
+            writer.add_scalar("Loss/validate/l_sum", loss, global_step=count_val)
+            writer.add_scalar("Loss/validate/l_dense", l_dense, global_step=count_val)
+            writer.add_scalar("Loss/validate/l_chamfer", l_chamfer, global_step=count_val)
+            count_val = count_val + 1
             val_si.append(l_dense.item())
 
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
