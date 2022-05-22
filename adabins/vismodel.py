@@ -3,20 +3,10 @@
 
 from train import *
 import matplotlib.pyplot as plt
-<<<<<<< HEAD
-args = parse_args("@args_train.txt")
-args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_001/"
-
-test_loader = DepthDataLoader(args, 'online_eval').data
-model = models.UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.norm)
-model,opt,epoch = model_io.load_checkpoint("/media/anqiao/Semantic/Data/checkpoints/UnetAdaptiveBins_30-Apr_16-45-nodebs3-tep25-lr0.000357-wd0.1-a1bc793e-5a8d-4bfb-8ad2-2ffb39586476_best.pt" ,model)
-=======
 from torch.utils.tensorboard import SummaryWriter
 
 test_loader = None
 train_loader = None
->>>>>>> b31f5ae7bd617731e01f153391b6a4ffc40a7234
 
 def vis_one(loader = "test"):
     if(loader=="test"):
