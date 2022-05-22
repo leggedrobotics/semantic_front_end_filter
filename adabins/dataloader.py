@@ -174,6 +174,7 @@ class DataLoadPreprocess(Dataset):
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
             pc_image = pc_image[:, :, 0:1]
+
             sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance.copy()}
 
         else:
