@@ -257,18 +257,15 @@ class ToTensor(object):
 
         depth = sample['depth']
         depth_variance = sample['depth_variance']
+        depth = self.to_tensor(depth)
+        depth_variance = self.to_tensor(depth_variance)
+        pc_image = sample['pc_image']
+        pc_image = self.to_tensor(pc_image)
         if self.mode == 'train':
-            depth = self.to_tensor(depth)
-            depth_variance = self.to_tensor(depth_variance)
-            pc_image = sample['pc_image']
-            pc_image = self.to_tensor(pc_image)
             return {'image': image, 'depth': depth, "pc_image":pc_image, 
                     'focal': focal, "depth_variance": depth_variance, 'path': sample['path']}
         else:
-            depth = self.to_tensor(depth)
             has_valid_depth = sample['has_valid_depth']
-            pc_image = sample['pc_image']
-            pc_image = self.to_tensor(pc_image)
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
                     'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image}
 

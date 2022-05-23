@@ -117,6 +117,20 @@ def main_worker(gpu, ngpus_per_node, args):
     train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
 
+def train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image):
+
+    mask = (depth > args.min_depth) & (depth < args.max_depth)
+    l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+    mask0 = depth < 1e-9 # the mask of places with on label
+    maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+    depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
+    l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
+    if args.trainconfig.w_chamfer > 0:
+        l_chamfer = criterion_bins(bin_edges, depth)
+    else:
+        l_chamfer = torch.Tensor([0]).to(img.device)
+    return l_dense, l_chamfer
+
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
           optimizer_state_dict=None):
@@ -137,7 +151,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     
     ###################################### losses ##############################################
     # criterion_ueff = SILogLoss()
-    criterion_ueff = UncertaintyLoss()
+    criterion_ueff = UncertaintyLoss(args.trainconfig)
     criterion_bins = BinsChamferLoss() if args.chamfer else None
     ################################################################################################
 
@@ -191,19 +205,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 if not batch['has_valid_depth']:
                     continue
             bin_edges, pred = model(img)
-            mask = (depth > args.min_depth) & (depth < args.max_depth)
-            l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
-            mask0 = depth < 1e-9 # the mask of places with on label
             pc_image = batch["pc_image"].to(device)
-            maskpc = mask0 & (pc_image > 1e-9) # pc image have label
-            l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)
-
-            if args.trainconfig.w_chamfer > 0:
-                l_chamfer = criterion_bins(bin_edges, depth)
-            else:
-                l_chamfer = torch.Tensor([0]).to(img.device)
-
+            l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
+
             writer.add_scalar("Loss/train/l_sum", loss, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_dense", l_dense, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer, global_step=epoch*len(train_loader)+i)
@@ -264,27 +269,17 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, ep
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
-            depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
-            depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
             bins, pred = model(img)
-
-            mask = depth > args.min_depth
-
-            l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
-            mask0 = depth < 1e-9 # the mask of places with on label
             pc_image = batch["pc_image"].to(device)
-            maskpc = mask0 & (pc_image > 1e-9) # pc image have label
-            l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image,depth_var, mask=maskpc.to(torch.bool), interpolate=True)
-
-            if args.trainconfig.w_chamfer > 0:
-                l_chamfer = criterion_bins(bins, depth)
-            else:
-                l_chamfer = torch.Tensor([0]).to(img.device)
-
+            l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bins, depth, depth_var, pc_image)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
             writer.add_scalar("Loss/validate/l_sum", loss, global_step=count_val)
             writer.add_scalar("Loss/validate/l_dense", l_dense, global_step=count_val)
             writer.add_scalar("Loss/validate/l_chamfer", l_chamfer, global_step=count_val)
+
+            depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
+            depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
+            mask = depth > args.min_depth
             count_val = count_val + 1
             val_si.append(l_dense.item())
 

@@ -109,3 +109,6 @@ class TrainConfig:
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 0.5
     traj_label_W: float = 1
+    pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
+    scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
+    

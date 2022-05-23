@@ -25,9 +25,10 @@ class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
         return 10 * torch.sqrt(Dg)
 
 class UncertaintyLoss(nn.Module):  # Add variance to loss
-    def __init__(self):
+    def __init__(self, train_args):
         super(UncertaintyLoss, self).__init__()
         self.name = 'SILog'
+        self.args = train_args
 
     def forward(self, input, target, target_variance, mask=None, interpolate=True):
         if interpolate:
@@ -45,7 +46,8 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
         # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
         if(target_variance.numel() !=0):
             Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
-            Dg /= (input.shape[0]/(540*720))
+            if(self.args.scale_loss_with_point_number):
+                Dg /= (input.shape[0]/(540*720))
         else:
             Dg = 0
         return Dg

@@ -33,15 +33,6 @@ def filter_msg_pack(input_path, output_path):
     pc_distance = pc_distance[pc_proj_mask]
     pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
     
-    # Inpaint with dilation
-    kernel = np.ones((10, 10), np.float32)/100
-    dst_conv_mean = cv.filter2D(pc_image, -1, kernel)[:, :, np.newaxis]
-
-    mask = np.zeros_like(pc_image)
-    mask[(dst_conv_mean>0) & (pc_image<0)] = 1
-    mask = np.uint8(mask)
-    pc = cv.inpaint(pc_image,mask,2,cv.INPAINT_NS)[:, :, np.newaxis]
-
     if(np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)<10 ):
         print("%s is filtered out as it only have %d nonzero value"%(input_path, 
             np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)) )
@@ -56,9 +47,48 @@ def filter_msg_pack(input_path, output_path):
         out_file.write(file_dat)
 
 
+def dilation(pc_image, w):
+    """
+    pc_image: 3-dim image
+    """
+    # Inpaint with dilation
+    kernel = np.ones((w, w), np.float32)
+    dst_conv_mean = cv.filter2D(pc_image, -1, kernel)[:, :, np.newaxis]
+    
+    mask = np.zeros_like(pc_image)
+    mask[(dst_conv_mean>1e-9) & (pc_image<1e-9)] = 1
+    mask = np.uint8(mask)
+    pc = cv.inpaint(pc_image,mask,2,cv.INPAINT_NS)[:, :, np.newaxis]
+    return pc
+
+def dilate_pc(input_path, output_path):
+    """
+    Augment the pc image in a slim version dataset by dilating it. 
+    The new dilated pc images will be stacked behind the first pc image
+    """
+    with open(input_path, "rb") as data_file:
+        byte_data = data_file.read()
+        data = msgpack.unpackb(byte_data)
+
+    pc_image = data["pc_image"]
+    
+    pc_images = [pc_image]+[dilation(pc_image, w) for w in [5,10]]
+    import matplotlib.pyplot as plt
+    data = data.copy()
+    with open(output_path, "wb") as out_file:
+        data["pc_image"] = np.concatenate(pc_images, axis = 2)
+        out_file.write(msgpack.packb(data))
+
+
+
 if __name__ == "__main__":
-    data_path = "/media/chenyu/Semantic/Data/extract_trajectories_003/"
-    target_path = "/media/chenyu/Semantic/Data/extract_trajectories_003_slim/"
+    # For filter_msg_pack
+    # data_path = "/media/chenyu/Semantic/Data/extract_trajectories_003/"
+    # target_path = "/media/chenyu/Semantic/Data/extract_trajectories_003_slim/"
+    # For dilate_pc
+    # data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
+    data_path = "/media/chenyu/T7/Data/extract_003_tmps_in/tmp3"
+    target_path = "/media/chenyu/T7/Data/extract_trajectories_003_augment/"
     count = 0
     for root, dirs, files in os.walk(data_path):
         target_root = root.replace(data_path, target_path)
@@ -72,6 +102,10 @@ if __name__ == "__main__":
                 target_file_path = os.path.join(target_root,file)
                 count+=1
                 print("count:", count)
-                if(os.path.exists(target_file_path)): continue
-                filter_msg_pack(file_path, target_file_path)
+                if(os.path.exists(target_file_path)): 
+                    print(target_file_path, "already exist")
+                    continue
+                ## choose what to do by commenting out corresponding lines
+                # filter_msg_pack(file_path, target_file_path)
+                dilate_pc(file_path, target_file_path)
     
