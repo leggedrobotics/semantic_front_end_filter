@@ -204,6 +204,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 l_chamfer = torch.Tensor([0]).to(img.device)
 
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
+
             writer.add_scalar("Loss/train/l_sum", loss, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_dense", l_dense, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer, global_step=epoch*len(train_loader)+i)
