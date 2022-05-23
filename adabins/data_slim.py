@@ -8,6 +8,7 @@ import torch
 import numpy as np
 import msgpack
 import msgpack_numpy as m
+import cv2 as cv
 m.patch()
 
 def filter_msg_pack(input_path, output_path):
@@ -31,6 +32,16 @@ def filter_msg_pack(input_path, output_path):
     pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
     pc_distance = pc_distance[pc_proj_mask]
     pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
+    
+    # Inpaint with dilation
+    kernel = np.ones((10, 10), np.float32)/100
+    dst_conv_mean = cv.filter2D(pc_image, -1, kernel)[:, :, np.newaxis]
+
+    mask = np.zeros_like(pc_image)
+    mask[(dst_conv_mean>0) & (pc_image<0)] = 1
+    mask = np.uint8(mask)
+    pc = cv.inpaint(pc_image,mask,2,cv.INPAINT_NS)[:, :, np.newaxis]
+
     if(np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)<10 ):
         print("%s is filtered out as it only have %d nonzero value"%(input_path, 
             np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)) )
