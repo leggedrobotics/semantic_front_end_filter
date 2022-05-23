@@ -5,15 +5,26 @@ from train import *
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
-test_loader = None
-train_loader = None
+test_loader_iter = None
+train_loader_iter = None
 
 def vis_one(loader = "test"):
+    global test_loader_iter, train_loader_iter
     if(loader=="test"):
-        data_loader = DepthDataLoader(args, 'online_eval').data if test_loader is None else test_loader
+        if(test_loader_iter is None):
+            data_loader = DepthDataLoader(args, 'online_eval').data 
+            data_loader_iter = iter(data_loader)
+            test_loader_iter = data_loader_iter
+        else:
+            data_loader_iter = test_loader_iter
     elif(loader=="train"):
-        data_loader = DepthDataLoader(args, 'train').data if train_loader is None else train_loader
-    sample = next(iter(data_loader))
+        if(train_loader_iter is None):
+            data_loader = DepthDataLoader(args, 'train').data
+            data_loader_iter = iter(data_loader)
+            train_loader_iter = data_loader_iter
+        else:
+            data_loader_iter = train_loader_iter
+    sample = next(data_loader_iter)
 
     inputimg = np.moveaxis(sample["image"][0][:3,:,:].numpy(),0,2)
     # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
@@ -29,12 +40,12 @@ def vis_one(loader = "test"):
     print(sample["depth"].shape)
     depth = sample["depth"][0][0].numpy()
     print(depth.shape)
-    axs[0,1].imshow(depth)
+    axs[0,1].imshow(depth,vmin = 0, vmax=40)
     axs[0,1].set_title("traj label")
 
     pc_img = sample["pc_image"][0][0].numpy()
     print(pc_img.shape)
-    axs[0,2].imshow(pc_img)
+    axs[0,2].imshow(pc_img,vmin = 0, vmax=40)
     axs[0,2].set_title("pc label")
 
     pc_diff = pc_img - depth
@@ -48,7 +59,7 @@ def vis_one(loader = "test"):
         bins, images = model(sample["image"])
         pred = images[0].detach().numpy()
         plot_ind = 4+2*i
-        axs[plot_ind//4, plot_ind%4].imshow(pred[0])
+        axs[plot_ind//4, plot_ind%4].imshow(pred[0],vmin = 0, vmax=40)
         axs[plot_ind//4, plot_ind%4].set_title(f"pred_model_{name}")
         plot_ind = 5+2*i
         pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
@@ -77,6 +88,7 @@ def vis_network_structure():
 if __name__=="__main__":
     parser.add_argument("--models", default="")
     parser.add_argument("--names", default="")
+    parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
     args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
 
@@ -96,6 +108,8 @@ if __name__=="__main__":
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
     model_list = [l[0] for l in loads]
 
-    vis_one("train")
-    plt.show()
+    for i in range(20):
+        vis_one("test")
+        plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
+    # plt.show()
     # vis_network_structure()
