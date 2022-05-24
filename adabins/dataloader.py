@@ -73,12 +73,10 @@ def remove_leading_slash(s):
 class DataLoadPreprocess(Dataset):
     def __init__(self, args, mode, transform=None, is_for_online_eval=False):
         self.args = args
-        # if mode == 'online_eval':
-        #     with open(args.filenames_file_eval, 'r') as f:
-        #         self.filenames = f.readlines()
-        # else:
-        #     with open(args.filenames_file, 'r') as f:
-        #         self.filenames = f.readlines()
+        # check args 
+        if(not args.trainconfig.slim_dataset and args.trainconfig.pc_img_channel!=0):
+            print("WARNING: args.trainconfig.pc_img_channel is not effective when the dataset is not slim")
+        
         self.filenames = []
         import os
         if("TMPDIR" in os.environ.keys()):
@@ -116,7 +114,7 @@ class DataLoadPreprocess(Dataset):
         if(self.args.trainconfig.slim_dataset):
             image = Image.fromarray(np.moveaxis(data["image"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["depth_var"],0,2)
-            pc_image = data["pc_image"]
+            pc_image = data["pc_image"][:,:,self.args.trainconfig.pc_img_channel,None]
         else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
