@@ -4,6 +4,7 @@
 from train import *
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 test_loader_iter = None
 train_loader_iter = None
@@ -30,7 +31,7 @@ def vis_one(loader = "test"):
     # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
     inputimg.max(), inputimg.min()
     inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
-    fig, axs = plt.subplots(3, 4,figsize=(20, 15))
+    fig, axs = plt.subplots(5, 4,figsize=(20, 20))
     if(axs.ndim==1):
         axs = axs[None,...]
     axs[0,0].imshow(inputimg)
@@ -58,21 +59,43 @@ def vis_one(loader = "test"):
         # bins, images = model(sample["image"][:,:3,...])
         bins, images = model(sample["image"])
         pred = images[0].detach().numpy()
-        plot_ind = 4+2*i
+
+        plot_ind = 4+4*i
         axs[plot_ind//4, plot_ind%4].imshow(pred[0],vmin = 0, vmax=40)
         axs[plot_ind//4, plot_ind%4].set_title(f"pred_model_{name}")
-        plot_ind = 5+2*i
+
+        plot_ind = 5+4*i
         pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
         pred = pred[0][0].numpy()
         print("pred shape:", pred.shape)
         diff = pred- depth
         print("diff shape:", diff.shape)
         print("depth shape:", depth.shape)
-        mask = depth>1e-9
-        diff[~mask] = 0
+        mask_traj = depth>1e-9
+        diff[~mask_traj] = 0
         axs[plot_ind//4, plot_ind%4].imshow(diff,vmin = -5, vmax=5)
         axs[plot_ind//4, plot_ind%4].set_title("Square Err %.1f"%np.sum(diff**2))
-        plt.colorbar(mappable = axs[plot_ind//4, plot_ind%4].images[0])
+        divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        plt.colorbar(cax = cax, mappable = axs[plot_ind//4, plot_ind%4].images[0])
+
+        plot_ind = 6+4*i
+        pcdiff = pred- pc_img
+        mask_pc = pc_img>1e-9
+        pcdiff[~mask_pc] = 0
+        axs[plot_ind//4, plot_ind%4].imshow(pcdiff,vmin = -5, vmax=5)
+        axs[plot_ind//4, plot_ind%4].set_title("Square Err to pc%.1f"%np.sum(pcdiff**2))
+
+        plot_ind = 7+4*i
+        axs[plot_ind//4, plot_ind%4].plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
+        axs[plot_ind//4, plot_ind%4].plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        axs[plot_ind//4, plot_ind%4].set_title("err vs distance")
+        axs[plot_ind//4, plot_ind%4].set_xlabel("depth_prediction")
+        axs[plot_ind//4, plot_ind%4].set_ylabel("err")
+        axs[plot_ind//4, plot_ind%4].set_ylim((-20,20))
+        axs[plot_ind//4, plot_ind%4].legend()
+
+
         # axs[plot_ind//3, plot_ind%3].colorbar()
     print("pred range:",pred.max(), pred.min())
     
@@ -111,5 +134,5 @@ if __name__=="__main__":
     for i in range(20):
         vis_one("test")
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
-    # plt.show()
+        # plt.show()
     # vis_network_structure()

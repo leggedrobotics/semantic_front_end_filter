@@ -86,8 +86,7 @@ if __name__ == "__main__":
     # data_path = "/media/chenyu/Semantic/Data/extract_trajectories_003/"
     # target_path = "/media/chenyu/Semantic/Data/extract_trajectories_003_slim/"
     # For dilate_pc
-    # data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
-    data_path = "/media/chenyu/T7/Data/extract_003_tmps_in/tmp3"
+    data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
     target_path = "/media/chenyu/T7/Data/extract_trajectories_003_augment/"
     count = 0
     for root, dirs, files in os.walk(data_path):
