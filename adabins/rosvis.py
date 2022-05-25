@@ -248,10 +248,12 @@ if __name__ == "__main__":
         pose_ph = None
         depth_ph = None
         image_ph = None
+        points_ph = None
 
         pose_mutex = Lock()
         depth_mutex = Lock()
         image_mutex = Lock()
+        points_mutex = Lock()
 
         show_pred_flag = True
         show_depth_flag = True
@@ -269,7 +271,6 @@ if __name__ == "__main__":
             global depth_ph
             depth_mutex.acquire()
             try:
-                print(data.layout.dim)
                 shape = [d.size for d in data.layout.dim]
                 depth_ph = torch.tensor(data.data).reshape(shape)
                 print("received depth image", depth_ph.shape)
@@ -280,16 +281,26 @@ if __name__ == "__main__":
             global image_ph
             image_mutex.acquire()
             try:
-                print(data.layout.dim)
                 shape = [d.size for d in data.layout.dim]
                 image_ph = torch.tensor(data.data).reshape(shape)
-                print("received image image", image_ph.shape)
+                print("received image", image_ph.shape)
             finally:
                 image_mutex.release()
+
+        def points_callback(data):
+            global points_ph
+            points_mutex.acquire()
+            try:
+                shape = [d.size for d in data.layout.dim]
+                points_ph = np.array(data.data).reshape(shape)
+                print("received points", points_ph.shape)
+            finally:
+                points_mutex.release()
 
         rospy.Subscriber("semantic_filter_pose", Float64MultiArray, pose_callback)
         rospy.Subscriber("semantic_filter_depth", Float64MultiArray, depth_callback)
         rospy.Subscriber("semantic_filter_image", Float64MultiArray, image_callback)
+        rospy.Subscriber("semantic_filter_points", Float64MultiArray, points_callback)
 
         rate = rospy.Rate(0.1) # 1hz
         while not rospy.is_shutdown():
@@ -303,6 +314,9 @@ if __name__ == "__main__":
             pose_mutex.acquire()
             pose = pose_ph.clone() if pose_ph is not None else pose_ph
             pose_mutex.release()
+            points_mutex.acquire()
+            points = points_ph.copy() if points_ph is not None else points_ph
+            points_mutex.release()
             
             if(show_depth_flag and depth is not None and image is not None and pose is not None):
                 _depth = depth.T
@@ -313,8 +327,31 @@ if __name__ == "__main__":
                 terrainpub.publish(cloud)
 
             if(show_pred_flag and image is not None and pose is not None):
-                _image = torch.cat([image, torch.zeros_like(image[:1,...])], axis = 0) # add the pc channel
+                pc_img = torch.zeros_like(image[:1,...]).numpy()
+                print("pc_img",pc_img.shape)
+                if(points is not None and False):
+                    proj_point, proj_jac = rosv.camera.project_point(points[:,:3].astype(np.float32))                        
+                    proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)
+                    camera_heading = rosv.camera.pose[1][:3, 2]
+                    point_dir = points[:, :3] - rosv.camera.pose[0]
+                    visible = np.dot(point_dir, camera_heading) > 1.0
+                    visible = (visible & (0.0 <= proj_point[:,0]) 
+                            & (proj_point[:,0] < rosv.camera.image_width)
+                            & (0.0 <= proj_point[:, 1])
+                            & (proj_point[:, 1] < rosv.camera.image_height))
+                    proj_point = proj_point[visible]
+                    print("proj_point", proj_point.shape)
+                    pc_distance = np.sqrt(np.sum((points[visible,:3] - pose[:3].numpy())**2, axis = 1))
+                    pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
+                    ## TODO: normalize the input
+
+                pc_img = torch.tensor(pc_img)
+                _image = torch.cat([image/255., pc_img], axis = 0) # add the pc channel
                 _image = _image[None,...]
+                #normalize
+                for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
+                    _image[0,i,...] = (_image[0,i,...] - m)/s
+
                 _, pred = model(_image)
                 print("pred",pred.shape)
                 pred = pred[0].detach().numpy()
@@ -341,7 +378,7 @@ rospy.init_node('dump_publisher', anonymous=True)
 pose_pub = rospy.Publisher("/semantic_filter_pose", Float64MultiArray, queue_size=1)
 image_pub = rospy.Publisher("/semantic_filter_image", Float64MultiArray, queue_size=1)
 depth_pub = rospy.Publisher("/semantic_filter_depth", Float64MultiArray, queue_size=1)
-
+points_pub = rospy.Publisher("/semantic_filter_points", Float64MultiArray, queue_size=1)
 with open("/Data/extract_trajectories_002/WithPointCloudReconstruct_2022-03-26-22-28-54_0/traj_2_datum_4.msgpack", "rb") as data_file:
     byte_data = data_file.read()
     data = msgpack.unpackb(byte_data)
@@ -357,5 +394,10 @@ img = data["images"]["cam4depth"].astype(np.float64)[:1,...]
 img_msg = Float64MultiArray(data = img.reshape(-1))
 img_msg.layout.dim=[MultiArrayDimension(size=d) for d in img.shape]
 depth_pub.publish(img_msg)
+
+points = data["pointcloud"][:,:3].astype(np.float64)
+pc_msg = Float64MultiArray(data = points.reshape(-1))
+pc_msg.layout.dim=[MultiArrayDimension(size=d) for d in points.shape]
+points_pub.publish(pc_msg)
 ```
 """
