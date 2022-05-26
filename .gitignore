@@ -15,5 +15,5 @@ kpconv/results
 
 *.pth
 *.pt
-.visulization
+visulization
 checkpoints

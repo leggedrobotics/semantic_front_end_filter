@@ -58,7 +58,6 @@ class RosVisulizer:
     def __init__(self, topic, camera_calibration_path="/ros/catkin_ws/src/mnt/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense/"):
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
-        rospy.init_node('ros_visulizer', anonymous=True)
         self.camera_calibration_path = camera_calibration_path
         self.init_camera()
     
@@ -101,6 +100,7 @@ class RosVisulizer:
         directions = (directions @ R)
         start_points = torch.from_numpy( H_map_cam[:3,3])
         pts = start_points + depth.reshape(-1,1)*directions
+        print("pts range:", pts.min(axis = 0), pts.max(axis = 0))
 
         header = Header()
         header.frame_id = "map"
@@ -180,6 +180,7 @@ class RosVisulizer:
 
         self.pub.publish(cloud)
 
+rospy.init_node('ros_visulizer', anonymous=True)
 terrainpub = rospy.Publisher("terrain_pc", PointCloud2, queue_size=1)
 predpub = rospy.Publisher("pred_pc", PointCloud2, queue_size=1)
 def vis_from_dataset(sample):
@@ -263,7 +264,6 @@ if __name__ == "__main__":
             pose_mutex.acquire()
             try:
                 pose_ph = torch.tensor(data.data)
-                print("received pose", pose_ph)
             finally:
                 pose_mutex.release()
 
@@ -273,7 +273,6 @@ if __name__ == "__main__":
             try:
                 shape = [d.size for d in data.layout.dim]
                 depth_ph = torch.tensor(data.data).reshape(shape)
-                print("received depth image", depth_ph.shape)
             finally:
                 depth_mutex.release()
     
@@ -283,7 +282,6 @@ if __name__ == "__main__":
             try:
                 shape = [d.size for d in data.layout.dim]
                 image_ph = torch.tensor(data.data).reshape(shape)
-                print("received image", image_ph.shape)
             finally:
                 image_mutex.release()
 
@@ -293,7 +291,6 @@ if __name__ == "__main__":
             try:
                 shape = [d.size for d in data.layout.dim]
                 points_ph = np.array(data.data).reshape(shape)
-                print("received points", points_ph.shape)
             finally:
                 points_mutex.release()
 
@@ -302,9 +299,10 @@ if __name__ == "__main__":
         rospy.Subscriber("semantic_filter_image", Float64MultiArray, image_callback)
         rospy.Subscriber("semantic_filter_points", Float64MultiArray, points_callback)
 
-        rate = rospy.Rate(0.1) # 1hz
+        rate = rospy.Rate(1000) # 1hz
         while not rospy.is_shutdown():
             rate.sleep()
+            print("acqure lock")
             image_mutex.acquire()
             image = image_ph.clone() if image_ph is not None else image_ph
             image_mutex.release()
@@ -327,9 +325,9 @@ if __name__ == "__main__":
                 terrainpub.publish(cloud)
 
             if(show_pred_flag and image is not None and pose is not None):
+                print("prediction")
                 pc_img = torch.zeros_like(image[:1,...]).numpy()
-                print("pc_img",pc_img.shape)
-                if(points is not None and False):
+                if(points is not None):
                     proj_point, proj_jac = rosv.camera.project_point(points[:,:3].astype(np.float32))                        
                     proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)
                     camera_heading = rosv.camera.pose[1][:3, 2]
@@ -340,7 +338,6 @@ if __name__ == "__main__":
                             & (0.0 <= proj_point[:, 1])
                             & (proj_point[:, 1] < rosv.camera.image_height))
                     proj_point = proj_point[visible]
-                    print("proj_point", proj_point.shape)
                     pc_distance = np.sqrt(np.sum((points[visible,:3] - pose[:3].numpy())**2, axis = 1))
                     pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
                     ## TODO: normalize the input
@@ -353,15 +350,17 @@ if __name__ == "__main__":
                     _image[0,i,...] = (_image[0,i,...] - m)/s
 
                 _, pred = model(_image)
-                print("pred",pred.shape)
+                print("pred",pred.shape, pred.max(), pred.min())
                 pred = pred[0].detach().numpy()
                 pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
                 pred = pred[0][0].T
                 pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
                 im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-
-                cloud = rosv.build_could_from_depth_image(pose, pred, im_color)
+                print("paint color")
+                cloud = rosv.build_could_from_depth_image(pose, pred, ones)
+                print("build cloud")
                 predpub.publish(cloud)
+                print("cloud published")
 
 """
 This ros node mode can work with a publisher as the following
