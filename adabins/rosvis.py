@@ -41,7 +41,7 @@ sys.path.append("../Labelling/")
 from messages.imageMessage import Camera
 from scipy.spatial.transform import Rotation
 from train import *
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def calculate_H_map_cam(transition, rotation):
     
@@ -79,43 +79,55 @@ class RosVisulizer:
         pixel_cor_hom = np.concatenate( [ pixel_cor, np.ones_like(pixel_cor[None,0,:,:])], axis=0 )
         self.pixel_cor_hom = pixel_cor_hom
 
+        K = self.camera.camera_matrix
+        ray_dir = (np.linalg.inv(K) @ (self.pixel_cor_hom.reshape(3,-1))).T
+        ray_dir = ray_dir/ np.linalg.norm(ray_dir, axis=1)[:,None]
+        self.ray_dir = torch.tensor(ray_dir).to(device)
+
     
-    def build_could_from_depth_image(self, pose, depth, image):
+    def build_could_from_depth_image(self, pose, depth, image = None):
         """
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
         """
         self.camera.update_pose_from_base_pose(pose)
-        K = self.camera.camera_matrix
         W,H = self.camera.image_width,self.camera.image_height
-        ray_dir = (np.linalg.inv(K) @ (self.pixel_cor_hom.reshape(3,-1))).T
-        ray_dir = ray_dir/ np.linalg.norm(ray_dir, axis=1)[:,None]
 
         position = self.camera.pose[0]
         euler = euler_from_matrix(self.camera.pose[1][:3,:3])
             
         H_map_cam = calculate_H_map_cam(position, euler)
         R = torch.from_numpy( H_map_cam )[:3,:3]
-        directions = torch.from_numpy(ray_dir )
-        directions = (directions @ R)
-        start_points = torch.from_numpy( H_map_cam[:3,3])
+        directions = self.ray_dir
+        directions = (directions @ R.to(device))
+        start_points = torch.from_numpy( H_map_cam[:3,3]).to(device)
         pts = start_points + depth.reshape(-1,1)*directions
-        print("pts range:", pts.min(axis = 0), pts.max(axis = 0))
-
+        height_mask = pts[:,2] < pose[2]
+        pts = pts[height_mask]
+        if(image is not None):
+            im_color = image.reshape(-1,3)
+            im_color = im_color[height_mask]
         header = Header()
         header.frame_id = "map"
-
         fields = [
             PointField('x', 0, PointField.FLOAT32, 1),
             PointField('y', 4, PointField.FLOAT32, 1),
             PointField('z', 8, PointField.FLOAT32, 1),
-            # PointField('rgb', 12, PointField.UINT32, 1),
-            PointField('rgba', 12, PointField.UINT32, 1),
         ]
-
-        im_color = image.reshape(-1,3)
-        cloud = point_cloud2.create_cloud(header, fields, 
-                    [rosv.buildPoint(*p[:3], *c,a=0.2) for p,c in zip(pts, im_color)])
+        if(image is not None):
+            fields.append(PointField('rgba', 12, PointField.UINT32, 1))
+        # subsample
+        if(pts.is_cuda()):
+            subsample_mask = torch.cuda.FloatTensor(pts.shape[0]).uniform_() < 0.3
+        else:
+            subsample_mask = np.random.choice([True, False], size=pts.shape[0], p=[0.3, 0.7])
+        pts = pts[subsample_mask].cpu()
+        if(image is not None):
+            im_color = im_color[subsample_mask]
+            cloud = point_cloud2.create_cloud(header, fields, 
+                        [rosv.buildPoint(*p[:3], *c,a=0.2) for p,c in zip(pts, im_color)])
+        else:
+            cloud = point_cloud2.create_cloud(header, fields, pts)
         return cloud
 
     def buildPoint(self, x,y,z,r,g,b,a=None):
@@ -244,6 +256,7 @@ if __name__ == "__main__":
         model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                                 norm=args.modelconfig.norm)
         model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
+        model.to(device)
 
         # the place holders for the values
         pose_ph = None
@@ -302,7 +315,6 @@ if __name__ == "__main__":
         rate = rospy.Rate(1000) # 1hz
         while not rospy.is_shutdown():
             rate.sleep()
-            print("acqure lock")
             image_mutex.acquire()
             image = image_ph.clone() if image_ph is not None else image_ph
             image_mutex.release()
@@ -325,7 +337,6 @@ if __name__ == "__main__":
                 terrainpub.publish(cloud)
 
             if(show_pred_flag and image is not None and pose is not None):
-                print("prediction")
                 pc_img = torch.zeros_like(image[:1,...]).numpy()
                 if(points is not None):
                     proj_point, proj_jac = rosv.camera.project_point(points[:,:3].astype(np.float32))                        
@@ -342,25 +353,22 @@ if __name__ == "__main__":
                     pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
                     ## TODO: normalize the input
 
-                pc_img = torch.tensor(pc_img)
-                _image = torch.cat([image/255., pc_img], axis = 0) # add the pc channel
+                pc_img = torch.tensor(pc_img).to(device)
+                _image = image.to(device)
+                _image = torch.cat([_image/255., pc_img], axis = 0) # add the pc channel
                 _image = _image[None,...]
                 #normalize
                 for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
                     _image[0,i,...] = (_image[0,i,...] - m)/s
-
                 _, pred = model(_image)
-                print("pred",pred.shape, pred.max(), pred.min())
-                pred = pred[0].detach().numpy()
+                pred = pred#.cpu()
+                pred = pred[0].detach()
                 pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
                 pred = pred[0][0].T
-                pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
-                im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-                print("paint color")
-                cloud = rosv.build_could_from_depth_image(pose, pred, ones)
-                print("build cloud")
+                # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
+                # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
+                cloud = rosv.build_could_from_depth_image(pose, pred, None)
                 predpub.publish(cloud)
-                print("cloud published")
 
 """
 This ros node mode can work with a publisher as the following
