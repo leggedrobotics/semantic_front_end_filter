@@ -14,6 +14,7 @@ from argparse import ArgumentParser
 import struct
 
 import cv2
+from cv_bridge import CvBridge
 
 import numpy as np
 import matplotlib.pyplot as plt 
@@ -60,6 +61,7 @@ class RosVisulizer:
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
         self.init_camera()
+        self.image_cv_bridge = CvBridge()
     
     def init_camera(self):
         camera_calibration_path = self.camera_calibration_path
@@ -71,9 +73,9 @@ class RosVisulizer:
         self.camera = Camera(camera_calibration_path, cam_id, cfg)
         self.camera.tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), 
                         np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],
-                            [ 0.99997436,  0.00386421, -0.00602859,  0.        ],
-                            [ 0.00385317, -0.99999088, -0.00184271,  0.        ],
-                            [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+                                  [ 0.99997436,  0.00386421, -0.00602859,  0.        ],
+                                  [ 0.00385317, -0.99999088, -0.00184271,  0.        ],
+                                  [ 0.        ,  0.        ,  0.        ,  1.        ]]))
         W,H = self.camera.image_width,self.camera.image_height
         pixel_cor = np.mgrid[0:W,0:H]
         pixel_cor_hom = np.concatenate( [ pixel_cor, np.ones_like(pixel_cor[None,0,:,:])], axis=0 )
@@ -117,11 +119,12 @@ class RosVisulizer:
         if(image is not None):
             fields.append(PointField('rgba', 12, PointField.UINT32, 1))
         # subsample
-        if(pts.is_cuda()):
+        if(pts.is_cuda):
             subsample_mask = torch.cuda.FloatTensor(pts.shape[0]).uniform_() < 0.3
         else:
             subsample_mask = np.random.choice([True, False], size=pts.shape[0], p=[0.3, 0.7])
         pts = pts[subsample_mask].cpu()
+        print("cloud lengths:", len(pts))
         if(image is not None):
             im_color = im_color[subsample_mask]
             cloud = point_cloud2.create_cloud(header, fields, 
@@ -129,6 +132,17 @@ class RosVisulizer:
         else:
             cloud = point_cloud2.create_cloud(header, fields, pts)
         return cloud
+
+    def build_imgmsg_from_depth_image(self, depth, vmin, vmax):
+        depth = torch.clamp(depth,min = vmin,max = vmax)
+        depth = (depth-vmin)/(vmax-vmin) * 255
+        depth = depth.T
+        if(isinstance(depth, np.ndarray)):
+            depth = depth.astype(np.uint8)
+        elif(isinstance(depth, torch.Tensor)):
+            depth = depth.cpu().numpy().astype(np.uint8)
+        dimage = cv2.applyColorMap(depth, cv2.COLORMAP_JET)
+        return self.image_cv_bridge.cv2_to_imgmsg(dimage, "bgr8")
 
     def buildPoint(self, x,y,z,r,g,b,a=None):
         if(np.array([r,g,b]).max()<1.01):
@@ -195,6 +209,8 @@ class RosVisulizer:
 rospy.init_node('ros_visulizer', anonymous=True)
 terrainpub = rospy.Publisher("terrain_pc", PointCloud2, queue_size=1)
 predpub = rospy.Publisher("pred_pc", PointCloud2, queue_size=1)
+pred_image_pub = rospy.Publisher("pred_depth_image", Image, queue_size=1)
+pc_image_pub = rospy.Publisher("pointcloud_image", Image, queue_size=1)
 def vis_from_dataset(sample):
     with open(sample["path"][0], "rb") as data_file:
         byte_data = data_file.read()
@@ -327,7 +343,6 @@ if __name__ == "__main__":
             points_mutex.acquire()
             points = points_ph.copy() if points_ph is not None else points_ph
             points_mutex.release()
-            
             if(show_depth_flag and depth is not None and image is not None and pose is not None):
                 _depth = depth.T
                 _image = np.transpose(image.numpy(),(2,1,0))
@@ -339,19 +354,24 @@ if __name__ == "__main__":
             if(show_pred_flag and image is not None and pose is not None):
                 pc_img = torch.zeros_like(image[:1,...]).numpy()
                 if(points is not None):
-                    proj_point, proj_jac = rosv.camera.project_point(points[:,:3].astype(np.float32))                        
-                    proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)
-                    camera_heading = rosv.camera.pose[1][:3, 2]
-                    point_dir = points[:, :3] - rosv.camera.pose[0]
-                    visible = np.dot(point_dir, camera_heading) > 1.0
-                    visible = (visible & (0.0 <= proj_point[:,0]) 
-                            & (proj_point[:,0] < rosv.camera.image_width)
-                            & (0.0 <= proj_point[:, 1])
-                            & (proj_point[:, 1] < rosv.camera.image_height))
-                    proj_point = proj_point[visible]
-                    pc_distance = np.sqrt(np.sum((points[visible,:3] - pose[:3].numpy())**2, axis = 1))
-                    pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
-                    ## TODO: normalize the input
+                    try:
+                        time_count = -time.time()
+                        rosv.camera.update_pose_from_base_pose(pose)
+                        proj_point, proj_jac = rosv.camera.project_point(points[:,:3].astype(np.float32))
+                        proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)
+                        camera_heading = rosv.camera.pose[1][:3, 2]
+                        point_dir = points[:, :3] - rosv.camera.pose[0]
+                        visible = np.dot(point_dir, camera_heading) > 1.0
+                        visible = (visible & (0.0 <= proj_point[:,0])
+                                & (proj_point[:,0] < rosv.camera.image_width)
+                                & (0.0 <= proj_point[:, 1])
+                                & (proj_point[:, 1] < rosv.camera.image_height))
+                        proj_point = proj_point[visible]
+                        pc_distance = np.sqrt(np.sum((points[visible,:3] - pose[:3].numpy())**2, axis = 1))
+                        pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
+                        ## TODO: normalize the input
+                    except Exception as e:
+                        print("PC IMAGE ERROR", e)
 
                 pc_img = torch.tensor(pc_img).to(device)
                 _image = image.to(device)
@@ -361,7 +381,6 @@ if __name__ == "__main__":
                 for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
                     _image[0,i,...] = (_image[0,i,...] - m)/s
                 _, pred = model(_image)
-                pred = pred#.cpu()
                 pred = pred[0].detach()
                 pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
                 pred = pred[0][0].T
@@ -369,6 +388,8 @@ if __name__ == "__main__":
                 # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
                 cloud = rosv.build_could_from_depth_image(pose, pred, None)
                 predpub.publish(cloud)
+                pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
+                pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
 
 """
 This ros node mode can work with a publisher as the following
@@ -386,7 +407,7 @@ pose_pub = rospy.Publisher("/semantic_filter_pose", Float64MultiArray, queue_siz
 image_pub = rospy.Publisher("/semantic_filter_image", Float64MultiArray, queue_size=1)
 depth_pub = rospy.Publisher("/semantic_filter_depth", Float64MultiArray, queue_size=1)
 points_pub = rospy.Publisher("/semantic_filter_points", Float64MultiArray, queue_size=1)
-with open("/Data/extract_trajectories_002/WithPointCloudReconstruct_2022-03-26-22-28-54_0/traj_2_datum_4.msgpack", "rb") as data_file:
+with open("extract_trajectories/Reconstruct_2022-04-25-15-31-34_0/traj_0_datum_2.msgpack", "rb") as data_file:
     byte_data = data_file.read()
     data = msgpack.unpackb(byte_data)
 

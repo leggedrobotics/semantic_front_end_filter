@@ -32,7 +32,7 @@ import tf
 # import matplotlib.pyplot as plt
 
 image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
-pointcloud_topic = "/bpearl_front/point_cloud"
+pointcloud_topic = "/bpearl_rear/point_cloud"
 TF_BASE = "base"
 
 rospy.init_node('ros_visulizer_replay_filter', anonymous=False)
@@ -51,20 +51,26 @@ def image_callback(data):
     img_msg.layout.dim=[MultiArrayDimension(size=d) for d in img.shape]
     image_pub.publish(img_msg)
 
-
+points_buffer = []
 def pointcloud_callback(data):
     print("pointcloud_callback")
     # tf = tf_buffer.lookup_transform_core("map", data.header.frame_id,  data.header.stamp)
     
-    # now = rospy.Time.now()
-    # listener.waitForTransform("map", data.header.frame_id, data.header.stamp, rospy.Duration(4.0))
-    # (trans,rot) = listener.lookupTransform("map", data.header.frame_id, data.header.stamp)
-    listener.waitForTransform("map", data.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
-    (trans,rot) = listener.lookupTransform("map", data.header.frame_id, rospy.Time(0))
+    try:
+        listener.waitForTransform("map", data.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
+        (trans,rot) = listener.lookupTransform("map", data.header.frame_id, rospy.Time(0))
+    except Exception as e:
+        print(e)
+        return
     ## The rot is in order xyzw
     pose = [*trans, *rot]
     pc_array = rospcmsg_to_pcarray(data, pose)[:,:3]
-
+    global points_buffer
+    points_buffer.append(pc_array)
+    if(len(points_buffer)>5):
+        points_buffer = points_buffer[-5:]
+    
+    pc_array = np.concatenate(points_buffer,axis=0)
     pc_msg = Float64MultiArray(data = pc_array.reshape(-1))
     pc_msg.layout.dim=[MultiArrayDimension(size=d) for d in pc_array.shape]
     points_pub.publish(pc_msg)
@@ -78,5 +84,5 @@ while not rospy.is_shutdown():
     rate.sleep()
     listener.waitForTransform("map", TF_BASE, rospy.Time(0), rospy.Duration(1.0))
     (trans,rot) = listener.lookupTransform("map", TF_BASE, rospy.Time(0))
-    pose = [*trans, *rot]
+    pose = np.array([*trans, *rot]).astype(np.float64)
     pose_pub.publish(Float64MultiArray(data = pose))
