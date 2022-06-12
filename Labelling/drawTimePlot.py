@@ -38,8 +38,8 @@ for i in range(3):
     wholeData.concat(data)
     time0 = list(data.indices.values())[0][-1]
 
-keys = ["LF_shank_fixed_LF_FOOT", "prediction_LF_shank_fixed_LF_FOOT", "pointcloud_LF_shank_fixed_LF_FOOT"]
-labels = ["Actual foothold", "Prediction", "Point cloud"]
+keys = ["LF_shank_fixed_LF_FOOT", "prediction_LF_shank_fixed_LF_FOOT", "pointcloud_LF_shank_fixed_LF_FOOT", "heightmap_LF_shank_fixed_LF_FOOT"]
+labels = ["Actual foothold", "Prediction", "Point cloud", "Elevation map"]
 for k,n in zip(keys,labels):
     timeArr = wholeData.indices[k]
     lw = 2 if k != "LF_shank_fixed_LF_FOOT" else 4

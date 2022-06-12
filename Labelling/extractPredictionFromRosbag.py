@@ -146,6 +146,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
     img_topics += [cam.topic_id for cam in cameras.values()]
     pointcloud_topics = [name+POINT_CLOUD_SUFFIX for name in POINT_CLOUD_NAMES]
     pointcloud_topics.append("/pred_pc")
+    elev_topics = [ELEVATION_MAP_TOPIC]
 
     dt = rospy.Duration.from_sec(cfg['dt'])
     proprio_dt = rospy.Duration.from_sec(cfg['proprioception_dt'])
@@ -250,7 +251,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         if cfg['save_proprioception']:
             proprio_data = DataBuffer()
 
-        for topic, msg, t in bag.read_messages(topics=state_topics + pointcloud_topics, start_time=start_time,
+        for topic, msg, t in bag.read_messages(topics=state_topics + pointcloud_topics + elev_topics, start_time=start_time,
                                                end_time=end_time):
 
             # ANYmal state
@@ -338,10 +339,32 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     pc_poses = pc[pc_mask]
                     w = pc_poses[:,:2] @ np.linalg.inv(pc_poses[:,:2].T @ pc_poses[:,:2]) @ foot_hold_pos[:2]
                     pc_pos = pc_poses.T @ w 
-                    
+
                     footHoldHeights_data.append(t.to_sec(), foot_hold_pos, foot_hold_k)
                     footHoldHeights_data.append(t.to_sec(), pred_pc_pos, "prediction_%s"%foot_hold_k)
                     footHoldHeights_data.append(t.to_sec(), pc_pos, "pointcloud_%s"%foot_hold_k)
+
+
+                    ## Calculate the prediction pose from height map
+                    if(len(map_data.data.keys())):
+
+                        elev_map = map_data.data["elevation_map"][-1]
+                        if not (tf_buffer.can_transform_core(map_frame_id, elev_map.frame_id,  t)[0]): continue
+                        tf = tf_buffer.lookup_transform_core(map_frame_id, elev_map.frame_id,  t)
+                        elev_map_pose = msg_to_pose(tf)
+                        position = np.array(elev_map_pose[:3])
+                        R = np.array(quaternion_matrix(elev_map_pose[3:]))[:3,:3]
+                        # elev_pos = foot_hold_pos[:]
+                        elev_pos = np.linalg.inv(R) @ (foot_hold_pos - position)
+                        elev_map_ind = elev_map.getIndexFromPosition(elev_pos[:2])
+                        try:
+                            elev_pos[2] = elev_map.at(elev_map_ind)
+                            # elev_pos_W = elev_pos[:]
+                            elev_pos_W = R @ elev_pos + position
+                            footHoldHeights_data.append(t.to_sec(), elev_pos_W, "heightmap_%s"%foot_hold_k)
+                        except Exception as e:
+                            print(e)
+                            
 
         _name = "traj_" + str(traj_idx)
         out_file = os.path.join(out_dir, _name)
