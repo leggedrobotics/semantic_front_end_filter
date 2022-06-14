@@ -291,7 +291,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, ep
                 pc_image = batch["pc_image"].to(device)
                 l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
                 loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
-                writer.add_scalar("Loss/train/l_chamfer", l_chamfer, global_step=count_val)
+                writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
                 
             else:
                 pred = model(img)
@@ -299,8 +299,8 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, ep
                 l_dense = train_loss_unet(args, criterion_ueff, pred, depth, depth_var, pc_image)
                 loss = l_dense
 
-            writer.add_scalar("Loss/train/l_sum", loss, global_step=count_val)
-            writer.add_scalar("Loss/train/l_dense", l_dense, global_step=count_val)
+            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
+            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
