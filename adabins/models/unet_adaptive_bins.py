@@ -36,12 +36,13 @@ class DecoderBN(nn.Module):
         self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16)
 
         #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
-        self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
+        self.skip = nn.Conv2d(features // 16, 4, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(4, num_classes, kernel_size=1, stride=1, padding=0)
         # self.act_out = nn.Softmax(dim=1) if output_activation == 'softmax' else nn.Identity()
 
     def forward(self, features):
-        x_block0, x_block1, x_block2, x_block3, x_block4 = features[4], features[5], features[6], features[8], features[
-            11]
+        x_block0, x_block1, x_block2, x_block3, x_block4, x_block_skip = features[4], features[5], features[6], features[8], features[
+            11], features[0]
 
         x_d0 = self.conv2(x_block4)
 
@@ -50,7 +51,10 @@ class DecoderBN(nn.Module):
         x_d3 = self.up3(x_d2, x_block1)
         x_d4 = self.up4(x_d3, x_block0)
         #         x_d5 = self.up5(x_d4, features[0])
-        out = self.conv3(x_d4)
+        x_d5 = self.skip(x_d4)
+        x_block_skip = nn.functional.interpolate(x_block_skip, x_d5.shape[-2:], mode='bilinear', align_corners=True)
+        x_d5 += x_block_skip
+        out = self.conv3(x_d5)
         # out = self.act_out(out)
         # if with_features:
         #     return out, features[-1]
