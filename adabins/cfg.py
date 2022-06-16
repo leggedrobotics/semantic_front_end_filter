@@ -116,4 +116,4 @@ class TrainConfig:
     traj_distance_variance_ratio = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
     scale_loss_with_point_number: bool = False # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
-    
+    pc_label_mask_traj: bool = True # if yes, the masked for pc_lable loss if masked off where traj label have value

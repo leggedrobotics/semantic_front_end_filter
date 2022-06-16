@@ -123,7 +123,9 @@ def train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, dep
     depth[~mask] = 0.
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
-    maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+    maskpc = (pc_image > 1e-9) # pc image have label
+    if(args.trainconfig.pc_label_mask_traj):
+        maskpc = maskpc & mask0
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
     l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
     if bin_edges is not None and args.trainconfig.w_chamfer > 0:
