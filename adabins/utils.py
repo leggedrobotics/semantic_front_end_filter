@@ -40,7 +40,11 @@ class RunningAverageDict:
                 self._dict[key] = RunningAverage()
 
         for key, value in new_dict.items():
-            self._dict[key].append(value)
+            try:
+                self._dict[key].append(value)
+            except KeyError as e:
+                self._dict[key] = RunningAverage()
+                self._dict[key].append(value)
 
     def get_value(self):
         return {key: value.get_value() for key, value in self._dict.items()}

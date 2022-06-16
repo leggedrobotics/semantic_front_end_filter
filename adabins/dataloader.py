@@ -168,9 +168,7 @@ class DataLoadPreprocess(Dataset):
             image = np.asarray(image, dtype=np.float32) / 255.0
             image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
-            depth_gt_mean[depth_gt_mean>40]=0
             depth_gt_variance = depth_gt[:, :, 1:].copy()
-            depth_gt_variance[depth_gt_mean>40]=depth_gt_variance.max()
             pc_image = np.asarray(pc_image, dtype=np.float32)
 
             if self.mode == 'online_eval':
