@@ -89,10 +89,10 @@ class TrainConfig:
                             action='store_true')
         ('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
  """
-    bs: int = 8
+    bs: int = 1
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
-    pc_img_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
+    pc_img_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
 
     lr: float =  0.000357
     wd: float =  0.1
