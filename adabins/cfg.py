@@ -92,12 +92,8 @@ class TrainConfig:
     bs: int = 8
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
-<<<<<<< HEAD
-    pc_img_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
-=======
     pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
     pc_img_label_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
->>>>>>> 1b77de00b41a8d609f348a2e583f019931f579ec
 
     lr: float =  0.000357
     wd: float =  0.1

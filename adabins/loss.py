@@ -46,14 +46,9 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
 
         # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
         if(target_variance.numel() !=0):
-<<<<<<< HEAD
             # Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
             Dg = torch.sum(torch.pow(input - target, 2))
             # Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/(target/40.0 + target_variance))
-=======
-           #  Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
-            Dg = torch.sum(0.5 * torch.pow(input - target, 2)/(target*self.depth_variance_ratio + target_variance))
->>>>>>> 1b77de00b41a8d609f348a2e583f019931f579ec
             if(self.args.scale_loss_with_point_number):
                 Dg /= input.shape[0]
         else:
