@@ -9,7 +9,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 test_loader_iter = None
 train_loader_iter = None
 
-def vis_one(loader = "test"):
+def vis_one(loader = "train"):
     global test_loader_iter, train_loader_iter
     if(loader=="test"):
         if(test_loader_iter is None):
@@ -57,7 +57,7 @@ def vis_one(loader = "test"):
 
     for i, (model, name) in enumerate(zip(model_list,names_list)):
         # bins, images = model(sample["image"][:,:3,...])
-        bins, images = model(sample["image"])
+        images = model(sample["image"])
         pred = images[0].detach().numpy()
 
         plot_ind = 4+4*i
@@ -81,14 +81,14 @@ def vis_one(loader = "test"):
 
         plot_ind = 6+4*i
         pcdiff = pred- pc_img
-        mask_pc = pc_img>1e-9
+        mask_pc = (pc_img>1e-9)&(depth<1e-9)
         pcdiff[~mask_pc] = 0
         axs[plot_ind//4, plot_ind%4].imshow(pcdiff,vmin = -5, vmax=5)
         axs[plot_ind//4, plot_ind%4].set_title("Square Err to pc%.1f"%np.sum(pcdiff**2))
 
         plot_ind = 7+4*i
-        axs[plot_ind//4, plot_ind%4].plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
-        axs[plot_ind//4, plot_ind%4].plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        axs[plot_ind//4, plot_ind%4].plot(pc_img[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
+        axs[plot_ind//4, plot_ind%4].plot(depth[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
         axs[plot_ind//4, plot_ind%4].set_title("err vs distance")
         axs[plot_ind//4, plot_ind%4].set_xlabel("depth_prediction")
         axs[plot_ind//4, plot_ind%4].set_ylabel("err")
@@ -113,7 +113,7 @@ if __name__=="__main__":
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
-    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_004_forRepeater/"
 
     try:
         # checkpoint_paths = sys.argv[1:]
@@ -124,7 +124,7 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     
-    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, use_adabins=False, min_val=args.min_depth, max_val=args.max_depth,
                                             norm=args.modelconfig.norm) for i in checkpoint_paths]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
@@ -132,7 +132,7 @@ if __name__=="__main__":
     model_list = [l[0] for l in loads]
 
     for i in range(20):
-        vis_one("test")
+        vis_one("train")
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()
