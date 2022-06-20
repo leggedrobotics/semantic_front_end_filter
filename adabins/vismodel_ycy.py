@@ -5,11 +5,29 @@ from train import *
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.transforms import Bbox
 
 test_loader_iter = None
 train_loader_iter = None
 
+<<<<<<< HEAD
 def vis_one(loader = "train"):
+=======
+# def full_extent(ax, pad=0.0):
+#     """Get the full extent of an axes, including axes labels, tick labels, and
+#     titles."""
+#     # For text objects, we need to draw the figure first, otherwise the extents
+#     # are undefined.
+#     ax.figure.canvas.draw()
+#     items = ax.get_xticklabels() + ax.get_yticklabels() 
+# #    items += [ax, ax.title, ax.xaxis.label, ax.yaxis.label]
+#     items += [ax, ax.title]
+#     bbox = Bbox.union([item.get_window_extent() for item in items])
+
+#     return bbox.expanded(1.0 + pad, 1.0 + pad)
+
+def vis_one(loader = "test", figname=""):
+>>>>>>> 1b77de00b41a8d609f348a2e583f019931f579ec
     global test_loader_iter, train_loader_iter
     if(loader=="test"):
         if(test_loader_iter is None):
@@ -34,7 +52,7 @@ def vis_one(loader = "train"):
     fig, axs = plt.subplots(5, 4,figsize=(20, 20))
     if(axs.ndim==1):
         axs = axs[None,...]
-    axs[0,0].imshow(inputimg)
+    axs[0,0].imshow(inputimg[:,:,:3])
     axs[0,0].set_title("Input")
     fig.suptitle(sample["path"])
 
@@ -62,7 +80,7 @@ def vis_one(loader = "train"):
 
         plot_ind = 4+4*i
         axs[plot_ind//4, plot_ind%4].imshow(pred[0],vmin = 0, vmax=40)
-        axs[plot_ind//4, plot_ind%4].set_title(f"pred_model_{name}")
+        axs[plot_ind//4, plot_ind%4].set_title(f"{name}prediction")
 
         plot_ind = 5+4*i
         pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
@@ -95,6 +113,15 @@ def vis_one(loader = "train"):
         axs[plot_ind//4, plot_ind%4].set_ylim((-20,20))
         axs[plot_ind//4, plot_ind%4].legend()
 
+    # # extent = full_extent(axs[0,0]).transformed(fig.dpi_scale_trans.inverted())
+    # # fig.savefig('%sinput_.png'%figname, bbox_inches=extent)
+    # plt.imsave('%sinput_.png'%figname, inputimg[:,:,:3])
+    # extent = full_extent(axs[0,1]).transformed(fig.dpi_scale_trans.inverted())
+    # fig.savefig('%strajlabel_.png'%figname, bbox_inches=extent)
+    # extent = full_extent(axs[0,2]).transformed(fig.dpi_scale_trans.inverted())
+    # fig.savefig('%spclabel_.png'%figname, bbox_inches=extent)
+    # extent = full_extent(axs[1,0]).transformed(fig.dpi_scale_trans.inverted())
+    # fig.savefig('%sprediction_.png'%figname, bbox_inches=extent)
 
         # axs[plot_ind//3, plot_ind%3].colorbar()
     print("pred range:",pred.max(), pred.min())
@@ -132,7 +159,11 @@ if __name__=="__main__":
     model_list = [l[0] for l in loads]
 
     for i in range(20):
+<<<<<<< HEAD
         vis_one("train")
+=======
+        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
+>>>>>>> 1b77de00b41a8d609f348a2e583f019931f579ec
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()
