@@ -76,13 +76,17 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
     ###################################### Load model ##############################################
+    input_channel = 3 if args.load_pretrained else 4
 
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, min_val=args.min_depth, max_val=args.max_depth,
                                           norm=args.modelconfig.norm)
 
     ## Load pretrained kitti
-    # model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
-
+    if args.load_pretrained:
+        model,_,_ = model_io.load_checkpoint("./models/AdaBins_kitti.pt", model)
+    
+    if input_channel == 3:
+        model.transform()
     ################################################################################################
 
     if args.gpu is not None:  # If a gpu is set by user: NO PARALLELISM!!
@@ -346,6 +350,7 @@ def parse_args():
     args.max_depth = args.modelconfig.max_depth
     args.min_depth_eval = args.modelconfig.min_depth_eval
     args.max_depth_eval = args.modelconfig.max_depth_eval
+    args.load_pretrained = args.modelconfig.load_pretrained
 
     args.chamfer = args.trainconfig.w_chamfer > 0
     if args.root != "." and not os.path.isdir(args.root):

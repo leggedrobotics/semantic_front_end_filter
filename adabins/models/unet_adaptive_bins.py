@@ -123,7 +123,7 @@ class UnetAdaptiveBins(nn.Module):
             yield from m.parameters()
 
     @classmethod
-    def build(cls, n_bins, **kwargs):
+    def build(cls, n_bins, input_channel, **kwargs):
         basemodel_name = 'tf_efficientnet_b5_ap'
 
         print('Loading base model ()...'.format(basemodel_name), end='')
@@ -136,11 +136,14 @@ class UnetAdaptiveBins(nn.Module):
 
 
         print('Done.')
-        # Change first layer to 4 channel
-        orginal_first_layer_weight = basemodel.conv_stem.weight
-        basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
-        with torch.no_grad():
-            basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
+        if(input_channel == 4):
+            # Change first layer to 4 channel
+            orginal_first_layer_weight = basemodel.conv_stem.weight
+            basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+            with torch.no_grad():
+                basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
+                # basemodel.conv_stem.weight[:, 0:3, :, :] = 0
+
 
         # Remove last layer
         print('Removing last two layers (global_pool & classifier).')
@@ -152,7 +155,13 @@ class UnetAdaptiveBins(nn.Module):
         m = cls(basemodel, n_bins=n_bins, **kwargs)
         print('Done.')
         return m
-
+    
+    def transform(self):
+        orginal_first_layer_weight = self.encoder.original_model.conv_stem.weight
+        self.encoder.original_model.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+        with torch.no_grad():
+            self.encoder.original_model.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
+            # self.encoder.original_model.conv_stem.weight[:, 3:, :, :] = 0
 
 if __name__ == '__main__':
     model = UnetAdaptiveBins.build(100)

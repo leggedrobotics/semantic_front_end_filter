@@ -136,7 +136,7 @@ if __name__=="__main__":
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
-    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_003_augment/"
 
     try:
         # checkpoint_paths = sys.argv[1:]
@@ -147,12 +147,14 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     
-    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
                                             norm=args.modelconfig.norm) for i in checkpoint_paths]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
     model_list = [l[0] for l in loads]
+    # for model in model_list:
+    #     model.transform()
 
     for i in range(20):
         vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
