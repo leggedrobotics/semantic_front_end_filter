@@ -29,6 +29,7 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
         super(UncertaintyLoss, self).__init__()
         self.name = 'SILog'
         self.args = train_args
+        self.depth_variance_ratio = self.args.traj_distance_variance_ratio
 
     def forward(self, input, target, target_variance, mask=None, interpolate=True):
         if interpolate:
@@ -45,9 +46,10 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
 
         # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
         if(target_variance.numel() !=0):
-            Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
+           #  Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
+            Dg = torch.sum(0.5 * torch.pow(input - target, 2)/(target*self.depth_variance_ratio + target_variance))
             if(self.args.scale_loss_with_point_number):
-                Dg /= (input.shape[0]/(540*720))
+                Dg /= input.shape[0]
         else:
             Dg = 0
         return Dg

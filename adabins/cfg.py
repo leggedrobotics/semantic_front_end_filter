@@ -18,6 +18,7 @@ class ModelConfig:
     # One way to configure this values is to keep it same with the normalize in class `ToTensor`
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
+    use_adabins: bool = True
 
 @dataclass
 class TrainConfig:
@@ -91,7 +92,8 @@ class TrainConfig:
     bs: int = 8
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
-    pc_img_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
+    pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
+    pc_img_label_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
 
     lr: float =  0.000357
     wd: float =  0.1
@@ -111,6 +113,7 @@ class TrainConfig:
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 0.5
     traj_label_W: float = 1
+    traj_distance_variance_ratio = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
     scale_loss_with_point_number: bool = False # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     

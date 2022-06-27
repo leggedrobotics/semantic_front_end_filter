@@ -74,10 +74,13 @@ class DataLoadPreprocess(Dataset):
     def __init__(self, args, mode, transform=None, is_for_online_eval=False):
         self.args = args
         # check args 
-        if(not args.trainconfig.slim_dataset and args.trainconfig.pc_img_channel!=0):
+        if(not args.trainconfig.slim_dataset 
+            and (args.trainconfig.pc_img_input_channel!=0
+                or args.trainconfig.pc_img_label_channel!=0)):
             print("WARNING: args.trainconfig.pc_img_channel is not effective when the dataset is not slim")
         
         self.filenames = []
+        self.test_filenames = []
         import os
         if("TMPDIR" in os.environ.keys()):
             args.data_path = os.path.join(os.environ["TMPDIR"], args.data_path)
@@ -91,7 +94,10 @@ class DataLoadPreprocess(Dataset):
                     #     byte_data = data_file.read()
                     #     data = msgpack.unpackb(byte_data)
                     # if("images" in data.keys()):
-                    self.filenames.append(sample_path)
+                    if(root.split('/')[-1] in {"Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"}):
+                        self.test_filenames.append(sample_path)
+                    else:
+                        self.filenames.append(sample_path)
                         # print("success")
                     # else:
                         # print("empty")
@@ -99,8 +105,9 @@ class DataLoadPreprocess(Dataset):
         self.transform = transform
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
+        self.filenames = self.filenames if self.mode == 'train' else self.test_filenames
         random.Random(0).shuffle(self.filenames)
-        self.filenames = self.filenames[:-100] if self.mode == 'train' else self.filenames[-100:]
+        # print(len(self.filenames))
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
@@ -114,7 +121,8 @@ class DataLoadPreprocess(Dataset):
         if(self.args.trainconfig.slim_dataset):
             image = Image.fromarray(np.moveaxis(data["image"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["depth_var"],0,2)
-            pc_image = data["pc_image"][:,:,self.args.trainconfig.pc_img_channel,None]
+            pc_image_label = data["pc_image"][:,:,self.args.trainconfig.pc_img_label_channel,None]
+            pc_image_input = data["pc_image"][:,:,self.args.trainconfig.pc_img_input_channel,None]
         else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
@@ -135,7 +143,7 @@ class DataLoadPreprocess(Dataset):
             pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
             pc_distance = pc_distance[pc_proj_mask]
             pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
-
+            pc_image_label = pc_image_input = pc_image
         if self.mode == 'train':
 
             # if self.args.do_kb_crop is True:
@@ -148,24 +156,28 @@ class DataLoadPreprocess(Dataset):
 
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
-            pc_image = np.asarray(pc_image, dtype=np.float32)
+            pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
+            pc_image_input = np.asarray(pc_image_input, dtype=np.float32)
             
-            image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, pc_image)
-            image, depth_gt, pc_image = self.train_preprocess(image, depth_gt, pc_image)
+            image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
+                image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
+                pc_image_label, pc_image_input)
+            image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(
+                image, depth_gt, pc_image_label, pc_image_input)
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
-            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
+            image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
             sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 
-                'pc_image': pc_image.copy(), 'focal': focal, 
+                'pc_image': pc_image_label.copy(), 'focal': focal, 
                 'depth_variance': depth_gt_variance.copy(),
                 'path': sample_path}
 
         else:
             image = np.asarray(image, dtype=np.float32) / 255.0
-            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
-            depth_gt_mean = depth_gt[:, :, 0:1]
-            depth_gt_variance = depth_gt[:, :, 1:]
-            pc_image = np.asarray(pc_image, dtype=np.float32)
+            image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
+            depth_gt_mean = depth_gt[:, :, 0:1].copy()
+            depth_gt_variance = depth_gt[:, :, 1:].copy()
+            pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
 
             if self.mode == 'online_eval':
                     has_valid_depth = True
@@ -176,7 +188,7 @@ class DataLoadPreprocess(Dataset):
                 image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
                 sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
-                          'path': sample_path,  'depth_variance': depth_gt_variance.copy(), 'pc_image': pc_image.copy()}
+                          'path': sample_path,  'depth_variance': depth_gt_variance.copy(), 'pc_image': pc_image_label.copy()}
             else:
                 sample = {'image': image.copy(), 'focal': focal}
 

@@ -78,7 +78,7 @@ def main_worker(gpu, ngpus_per_node, args):
     ###################################### Load model ##############################################
     input_channel = 3 if args.load_pretrained else 4
 
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, min_val=args.min_depth, max_val=args.max_depth,
+    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
                                           norm=args.modelconfig.norm)
 
     ## Load pretrained kitti
@@ -124,15 +124,16 @@ def main_worker(gpu, ngpus_per_node, args):
 def train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image):
 
     mask = (depth > args.min_depth) & (depth < args.max_depth)
+    depth[~mask] = 0.
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
     l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
-    if args.trainconfig.w_chamfer > 0:
+    if bin_edges is not None and args.trainconfig.w_chamfer > 0:
         l_chamfer = criterion_bins(bin_edges, depth)
     else:
-        l_chamfer = torch.Tensor([0]).to(img.device)
+        l_chamfer = torch.Tensor([0]).to(l_dense.device)
     return l_dense, l_chamfer
 
 
@@ -208,14 +209,17 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
-            bin_edges, pred = model(img)
+            if(args.modelconfig.use_adabins):
+                bin_edges, pred = model(img)
+            else:
+                bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
             l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
 
+            writer.add_scalar("Loss/train/l_chamfer", l_chamfer, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_sum", loss, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_dense", l_dense, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_chamfer", l_chamfer, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
@@ -273,13 +277,17 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, ep
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
-            bins, pred = model(img)
+            if(args.modelconfig.use_adabins):
+                bin_edges, pred = model(img)
+            else:
+                bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bins, depth, depth_var, pc_image)
+            l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
-            writer.add_scalar("Loss/validate/l_sum", loss, global_step=count_val)
-            writer.add_scalar("Loss/validate/l_dense", l_dense, global_step=count_val)
-            writer.add_scalar("Loss/validate/l_chamfer", l_chamfer, global_step=count_val)
+
+            writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
+            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
+            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
@@ -312,6 +320,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, ep
                     
             valid_mask = np.logical_and(valid_mask, eval_mask)
             metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
+            metrics.update({ "test/l_chamfer": l_chamfer, "test/l_sum": loss, "test/l_dense": l_dense})
 
         return metrics.get_value(), val_si
 
