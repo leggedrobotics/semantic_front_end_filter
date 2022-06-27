@@ -10,9 +10,6 @@ from matplotlib.transforms import Bbox
 test_loader_iter = None
 train_loader_iter = None
 
-<<<<<<< HEAD
-def vis_one(loader = "train"):
-=======
 # def full_extent(ax, pad=0.0):
 #     """Get the full extent of an axes, including axes labels, tick labels, and
 #     titles."""
@@ -27,7 +24,6 @@ def vis_one(loader = "train"):
 #     return bbox.expanded(1.0 + pad, 1.0 + pad)
 
 def vis_one(loader = "test", figname=""):
->>>>>>> 1b77de00b41a8d609f348a2e583f019931f579ec
     global test_loader_iter, train_loader_iter
     if(loader=="test"):
         if(test_loader_iter is None):
@@ -49,6 +45,9 @@ def vis_one(loader = "test", figname=""):
     # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
     inputimg.max(), inputimg.min()
     inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
+
+    
+
     fig, axs = plt.subplots(5, 4,figsize=(20, 20))
     if(axs.ndim==1):
         axs = axs[None,...]
@@ -75,6 +74,8 @@ def vis_one(loader = "test", figname=""):
 
     for i, (model, name) in enumerate(zip(model_list,names_list)):
         # bins, images = model(sample["image"][:,:3,...])
+        zerosImage = sample["image"]
+        zerosImage[:,:3,:,:]=0
         images = model(sample["image"])
         pred = images[0].detach().numpy()
 
@@ -140,8 +141,9 @@ if __name__=="__main__":
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_004_forRepeater/"
-
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_003_augment/"
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
     try:
         # checkpoint_paths = sys.argv[1:]
         checkpoint_paths = args.models.split(" ")
@@ -159,11 +161,7 @@ if __name__=="__main__":
     model_list = [l[0] for l in loads]
 
     for i in range(20):
-<<<<<<< HEAD
-        vis_one("train")
-=======
-        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
->>>>>>> 1b77de00b41a8d609f348a2e583f019931f579ec
+        vis_one("test")
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()
