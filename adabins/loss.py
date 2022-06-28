@@ -11,7 +11,8 @@ class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
 
     def forward(self, input, target, mask=None, interpolate=True):
         if interpolate:
-            input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+            # input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+            input = nn.functional.interpolate(input, target.shape[-2:], align_corners=True)
 
         if mask is not None:
             input = input[mask]

@@ -138,6 +138,9 @@ if __name__=="__main__":
     args = parse_args()
     args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_003_augment/"
 
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
+
     try:
         # checkpoint_paths = sys.argv[1:]
         checkpoint_paths = args.models.split(" ")
@@ -147,7 +150,7 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     
-    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
+    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, use_adabins = True, min_val=args.min_depth, max_val=args.max_depth,
                                             norm=args.modelconfig.norm) for i in checkpoint_paths]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
