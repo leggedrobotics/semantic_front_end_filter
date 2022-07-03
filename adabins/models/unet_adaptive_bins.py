@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 import geffnet
 from .miniViT import mViT
-
+import os
 
 class UpSampleBN(nn.Module):
     def __init__(self, skip_input, output_features):
@@ -136,11 +136,12 @@ class UnetAdaptiveBins(nn.Module):
         basemodel_name = 'tf_efficientnet_b5_ap'
 
         print('Loading base model ()...'.format(basemodel_name), end='')
+        models_path = os.path.dirname(__file__)
         try:
-            basemodel = torch.load("models/%s.pth"%basemodel_name)
+            basemodel = torch.load(os.path.join(models_path, "%s.pth"%basemodel_name))
         except Exception as e:
             basemodel = torch.hub.load('rwightman/gen-efficientnet-pytorch', basemodel_name, pretrained=True)
-            torch.save(basemodel,"models/%s.pth"%basemodel_name)
+            torch.save(basemodel,os.path.join(models_path, "%s.pth"%basemodel_name))
             # NOTE: No internet connection on euler nodes, execute `python3 download_and_save_basemodel.py` to prepare tf_efficientnet_b5_ap.p
 
 

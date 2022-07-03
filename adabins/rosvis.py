@@ -14,7 +14,6 @@ from argparse import ArgumentParser
 import struct
 
 import cv2
-from cv_bridge import CvBridge
 
 import numpy as np
 import matplotlib.pyplot as plt 
@@ -22,19 +21,25 @@ import matplotlib
 
 import msgpack
 import msgpack_numpy as m
-import math
-from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
 m.patch()
+import math
+from scipy.spatial.transform import Rotation 
+try:
+    from cv_bridge import CvBridge
+    from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
+    import rospy
+    from sensor_msgs import point_cloud2
+    from sensor_msgs.msg import PointCloud2, PointField
+    from sensor_msgs.msg import Image
+    from std_msgs.msg import Header
+    from std_msgs.msg import Float64MultiArray
+    import rosgraph
+    assert rosgraph.is_master_online()
+except ModuleNotFoundError as ex:
+    print("rosvis Warning: ros package fails to load")
+    print(ex)
 
 
-import rospy
-from sensor_msgs import point_cloud2
-from sensor_msgs.msg import PointCloud2, PointField
-from sensor_msgs.msg import Image
-from std_msgs.msg import Header
-from std_msgs.msg import Float64MultiArray
-import rosgraph
-assert rosgraph.is_master_online()
 from threading import Lock
 
 import sys
@@ -87,6 +92,27 @@ class RosVisulizer:
         self.ray_dir = torch.tensor(ray_dir).to(device)
 
     
+    def project_depth_to_cloud(self, pose, depth):
+        """
+        depth: a torch tensor depth image
+        image: the color image, can be numpy or torch
+        """
+        self.camera.update_pose_from_base_pose(pose)
+        W,H = self.camera.image_width,self.camera.image_height
+
+        position = self.camera.pose[0]
+        euler = euler_from_matrix(self.camera.pose[1][:3,:3])
+            
+        H_map_cam = calculate_H_map_cam(position, euler)
+        R = torch.from_numpy( H_map_cam )[:3,:3]
+        directions = self.ray_dir
+        directions = (directions @ R.to(device))
+        start_points = torch.from_numpy( H_map_cam[:3,3]).to(device)
+        pts = start_points + depth.reshape(-1,1)*directions
+        height_mask = pts[:,2] < pose[2]
+        pts = pts[height_mask]
+        return pts
+
     def build_could_from_depth_image(self, pose, depth, image = None):
         """
         depth: a torch tensor depth image

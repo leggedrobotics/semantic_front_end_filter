@@ -97,7 +97,6 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
         args.batch_size = int(args.batch_size / ngpus_per_node)
-        # args.batch_size = 8
         args.workers = int((args.num_workers + ngpus_per_node - 1) / ngpus_per_node)
         print(args.gpu, args.rank, args.batch_size, args.workers)
         torch.cuda.set_device(args.gpu)
@@ -213,9 +212,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
 
-            writer.add_scalar("Loss/train/l_chamfer", l_chamfer, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_sum", loss, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_dense", l_dense, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
@@ -235,7 +234,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, epochs, device)
-                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i*args.batch_size) for k,v in metrics.items()]
+                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     # wandb.log({

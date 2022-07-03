@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
+from ruamel.yaml import YAML
 
 test_loader_iter = None
 train_loader_iter = None
@@ -70,8 +71,8 @@ def vis_one(loader = "test", figname=""):
     axs[0,3].set_title("pc - traj")
 
     for i, (model, name) in enumerate(zip(model_list,names_list)):
-        # bins, images = model(sample["image"][:,:3,...])
         bins, images = model(sample["image"])
+        # bins, images = None, model(sample["image"])
         pred = images[0].detach().numpy()
 
         plot_ind = 4+4*i
@@ -86,7 +87,7 @@ def vis_one(loader = "test", figname=""):
         print("diff shape:", diff.shape)
         print("depth shape:", depth.shape)
         mask_traj = depth>1e-9
-        diff[~mask_traj] = 0
+        diff[~mask_traj] = None
         axs[plot_ind//4, plot_ind%4].imshow(diff,vmin = -5, vmax=5)
         axs[plot_ind//4, plot_ind%4].set_title("Square Err %.1f"%np.sum(diff**2))
         divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
@@ -130,14 +131,22 @@ def vis_network_structure():
     writer.add_graph(model, sample["image"])
     writer.close()
 
+"""
+Load the parameters from the 
+"""
+def load_param_from_path(data_path):
+    model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
+    return model_cfg
 
 if __name__=="__main__":
     parser.add_argument("--models", default="")
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
+    # args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_agument/"
     args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
-
+    args.trainconfig.bs = 1
+    args.batch_size = 1
     try:
         # checkpoint_paths = sys.argv[1:]
         checkpoint_paths = args.models.split(" ")
@@ -146,16 +155,19 @@ if __name__=="__main__":
         print(e)
         print("Usage: python vismodel checkpoint_path")
     
-    
+    model_cfgs = [load_param_from_path(os.path.dirname(checkpoint_path)) for checkpoint_path in checkpoint_paths]
     model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm) for i in checkpoint_paths]
+                                            norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"]) for cfg in model_cfgs]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
     model_list = [l[0] for l in loads]
 
-    for i in range(20):
-        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
+    for i in range(9):
+        vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()
+
+
+    
