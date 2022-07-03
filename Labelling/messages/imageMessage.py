@@ -1,11 +1,15 @@
 import cv2
-from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
 from ruamel.yaml import YAML
-from .messageToVectors import msg_to_pose
-from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
+from scipy.spatial.transform import Rotation 
+try:
+    from .messageToVectors import msg_to_pose
+    from cv_bridge import CvBridge, CvBridgeError
+    from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
+except ModuleNotFoundError as ex:
+    print("ImageMassage Warning: ros package fails to load")
+    print(ex)
 import os
-
 class Camera:
     def __init__(self, calibration_cfg_path, cam_id, cfg):
         cali_path = None
@@ -53,7 +57,12 @@ class Camera:
     def update_pose_from_base_pose(self, base_in_world):
 
         position = np.array(base_in_world[:3])
-        R = np.array(quaternion_matrix(base_in_world[3:]))
+        # R_bak = np.array(quaternion_matrix(base_in_world[3:]))
+        rotation = Rotation.from_quat(base_in_world[3:])
+        R = np.eye(4)
+        R[:3,:3] = rotation.as_matrix()
+        # assert(np.sum((R_bak - R)**2) < 1e-10)
+
 
         self.pose = (np.matmul(R[:3, :3], self.tf_base_to_sensor[0]) + position, np.matmul(R, self.tf_base_to_sensor[1]))
         R = self.pose[1][:3, :3].transpose()
