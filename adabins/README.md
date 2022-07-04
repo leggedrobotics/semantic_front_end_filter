@@ -17,7 +17,7 @@ The code can run in euler official installation of python, plus a local package 
 ```bash
 # on euler: Execute this every time logging in
 env2lmod
-module load gcc/8.2.0 python/3.8.5
+module load gcc/8.2.0 python/3.8.5 eth_proxy
 ```
 
 **Install msgpack_numpy**
@@ -31,6 +31,14 @@ python3 -m pip install --user simple-parsing
 
 this will install the package `msgpack-numpy` to your `$HOME/.local/lib/python3.8/site-packages` 
 
+**config wandb**
+
+We use wandb to log experiments, please consult [this tutorial](https://docs.wandb.ai/guides/integrations/pytorch) for configuring it 
+
+On euler, we don't neet to pip install it. But we should config it in an interactive job on euler with `wandb login`. Check `https://wandb.ai/quickstart/pytorch` for details.
+
+> On euler, we should load module `eth_proxy` and set `HTTPS_PROXY`
+
 ### Run jobs
 
 **script for copying dataset to $TMPDIR**
@@ -39,6 +47,7 @@ Save the following script into a file "run_train_adabins.sh"
 
 ```bash
 #!/usr/bin/env bash
+export HTTPS_PROXY=http://proxy.ethz.ch:3128
 tar -xf extract_trajectories.tar -C $TMPDIR
 cd semantic_front_end_filter/adabins/
 python3 train.py  "$@"

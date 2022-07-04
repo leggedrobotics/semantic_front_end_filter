@@ -13,11 +13,12 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
 from torch.utils.tensorboard import SummaryWriter
-# import wandb
+import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
 from cfg import TrainConfig, ModelConfig
 from experimentSaver import ConfigurationSaver
+import matplotlib.pyplot as plt
 
 import model_io
 import models
@@ -27,8 +28,7 @@ from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 import time
 
-# os.environ['WANDB_MODE'] = 'dryrun'
-PROJECT = "MDE-AdaBins"
+PROJECT = "semantic_front_end_filter"
 logging = True
 
 count_val = 0
@@ -40,7 +40,7 @@ def is_rank_zero(args):
 import matplotlib
 
 
-def colorize(value, vmin=10, vmax=1000, cmap='plasma'):
+def colorize(value, vmin=10, vmax=40, cmap='plasma'):
     # normalize
     vmin = value.min() if vmin is None else vmin
     vmax = value.max() if vmax is None else vmax
@@ -61,15 +61,81 @@ def colorize(value, vmin=10, vmax=1000, cmap='plasma'):
     return img
 
 
-def log_images(img, depth, pred, args, step):
-    depth = colorize(depth, vmin=args.min_depth, vmax=args.max_depth)
-    pred = colorize(pred, vmin=args.min_depth, vmax=args.max_depth)
+def log_images(samples, model, name, step, maxImages = 5, device = None):
+    if(device is None):
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    # depth = colorize(depth, vmin=args.min_depth, vmax=args.max_depth)
+    # pred = colorize(pred, vmin=args.min_depth, vmax=args.max_depth)
     # wandb.log(
     #     {
     #         "Input": [wandb.Image(img)],
     #         "GT": [wandb.Image(depth)],
     #         "Prediction": [wandb.Image(pred)]
     #     }, step=step)
+    
+    inputimgs = []
+    trajlabels = []
+    pclabels = []
+    filepaths = []
+    predictions = []
+    trajerrors = []
+    pcimgerrors = []
+    errordistributions = []
+
+    for i, sample in zip(range(maxImages), samples):
+
+        inputimg = np.moveaxis(sample["image"][0][:3,:,:].numpy(),0,2)
+        # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
+        inputimg.max(), inputimg.min()
+        inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
+        inputimgs.append(wandb.Image(inputimg[:,:,:3]))
+        filepaths.append(sample["path"][:1])
+        depth = sample["depth"][0][0].numpy()
+        trajlabels.append(wandb.Image(colorize(depth, vmin = 0, vmax=40)))
+
+        pc_img = sample["pc_image"][0][0].numpy()
+        pclabels.append(wandb.Image(colorize(pc_img,vmin = 0, vmax=40)))
+        
+        bins, images = model(sample["image"][None,0,...].to(device))
+        # bins, images = None, model(sample["image"])
+        pred = images[0].detach()
+        predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
+        
+        pred = nn.functional.interpolate(pred[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        pred = pred[0][0].cpu().numpy()
+        diff = pred- depth
+        mask_traj = depth>1e-9
+        diff[~mask_traj] = 0
+        trajerrors.append(wandb.Image(colorize(diff,vmin = -5, vmax=5 )))
+
+        pcdiff = pred- pc_img
+        mask_pc = pc_img>1e-9
+        pcdiff[~mask_pc] = 0
+        pcimgerrors.append(wandb.Image(colorize(pcdiff, vmin = -5, vmax=5)))
+        
+        fig = plt.figure()
+        plt.plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
+        plt.plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        plt.title("err vs distance")
+        plt.xlabel("depth_prediction")
+        plt.ylabel("err")
+        plt.ylim((-20,20))
+        plt.legend()
+        errordistributions.append(wandb.Image(fig))
+
+    columns = ["filepaths","image"]
+    data = [[f, img ] for f,img in zip(filepaths,inputimgs)]
+    result_image_table = wandb.Table(columns = columns, data = data)
+    # result_image_table.add_column("image", inputimgs)
+    result_image_table.add_column("trajlabel", trajlabels)
+    result_image_table.add_column("pclabel", pclabels)
+    # result_image_table.add_column("filepath", filepaths)
+    result_image_table.add_column("pred", predictions)
+    result_image_table.add_column("traj_label_error", trajerrors)
+    result_image_table.add_column("pc_label_error", pcimgerrors)
+    result_image_table.add_column("distribution", errordistributions)
+
+    wandb.log({name: result_image_table}, step=step)
 
 
 def main_worker(gpu, ngpus_per_node, args):
@@ -143,7 +209,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
     should_write = ((not args.distributed) or args.rank == 0)
     should_log = should_write and logging
-
+    if should_log:
+        tags = args.tags.split(',') if args.tags != '' else None
+        wandb.init(project=PROJECT, config=args, tags=tags, notes=args.notes)
+        # wandb.watch(model)
     ################################################################################################
 
     train_loader = DepthDataLoader(args, 'train').data
@@ -191,7 +260,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         time_core = 0.
         time_total = -time.time()
         ################################# Train loop ##########################################################
-        # if should_log: wandb.log({"Epoch": epoch}, step=step)
+        if should_log: wandb.log({"Epoch": epoch}, step=step)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
                              total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
@@ -219,9 +288,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
-            # if should_log and step % 5 == 0:
-            #     wandb.log({f"Train/{criterion_ueff.name}": l_dense.item()}, step=step)
-            #     wandb.log({f"Train/{criterion_bins.name}": l_chamfer.item()}, step=step)
+            if should_log and step % 5 == 0:
+                wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step)
+                wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step)
+                wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step)
 
             step += 1
             scheduler.step()
@@ -234,15 +304,15 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, epochs, device)
-                [writer.add_scalar("metrics/"+k, v, epoch*len(train_loader) + i) for k,v in metrics.items()]
+                [writer.add_scalar("metrics/"+k, v, step) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
-                    # wandb.log({
-                    #     f"Test/{criterion_ueff.name}": val_si.get_value(),
-                    #     # f"Test/{criterion_bins.name}": val_bins.get_value()
-                    # }, step=step)
+                    wandb.log({
+                        f"Test/{criterion_ueff.name}": val_si.get_value(),
+                        # f"Test/{criterion_bins.name}": val_bins.get_value()
+                    }, step=step)
 
-                    # wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
+                    wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
                                              root=saver.data_dir)
                                             
@@ -255,7 +325,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-
+        if (epoch+1)%10==0:
+            log_images(test_loader, model, "vis/test", step)
+            log_images(train_loader, model, "vis/train", step)
     return model
 
 
@@ -339,6 +411,8 @@ parser.add_argument("--resume", default='', type=str, help="Resume from checkpoi
 parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
 parser.add_argument("--workers", default=11, type=int, help="Number of workers for data loading")
+parser.add_argument("--notes", default='', type=str, help="Wandb notes")
+parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
 
 parser.add_arguments(TrainConfig, dest="trainconfig")
 parser.add_arguments(ModelConfig, dest="modelconfig")
