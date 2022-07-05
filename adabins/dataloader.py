@@ -166,6 +166,7 @@ class DataLoadPreprocess(Dataset):
                 image, depth_gt, pc_image_label, pc_image_input)
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
+            depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
             image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
             sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 
                 'pc_image': pc_image_label.copy(), 'focal': focal, 
@@ -177,6 +178,7 @@ class DataLoadPreprocess(Dataset):
             image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
             depth_gt_variance = depth_gt[:, :, 1:].copy()
+            depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
 
             if self.mode == 'online_eval':

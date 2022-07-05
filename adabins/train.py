@@ -257,6 +257,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
     # max_iter = len(train_loader) * epochs
     for epoch in range(args.epoch, epochs):
+        print("EPOCH:", epoch)
         time_core = 0.
         time_total = -time.time()
         ################################# Train loop ##########################################################

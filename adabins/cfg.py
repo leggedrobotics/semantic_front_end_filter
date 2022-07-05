@@ -108,6 +108,7 @@ class TrainConfig:
     do_kb_crop: bool = True # if set, crop input images as kitti benchmark images', action='store_true
     garg_crop: bool = True
     eigen_crop: bool=True
+    traj_variance_threashold: float = 0.05 # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
     same_lr: bool = False
     use_right: bool = False # if set, will randomly use right images when train on KITTI
