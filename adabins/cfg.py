@@ -4,7 +4,7 @@ import os
 @dataclass
 class ModelConfig:
     n_bins: int =  256
-    load_pretrained: bool = True
+    load_pretrained: bool = False
     input_height: int= 352
     input_width: int =  704
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
@@ -94,7 +94,7 @@ class TrainConfig:
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
     pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
     pc_img_label_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
-
+    var_thershold : float = 0.05 # trajectory label will be filtered by this thershold
     lr: float =  0.000357
     wd: float =  0.1
     div_factor: int =  25
