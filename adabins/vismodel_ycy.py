@@ -169,8 +169,8 @@ if __name__=="__main__":
     # for model in model_list:
     #     model.transform()
 
-    for i in range(9):
-        vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
+    for i in range(20):
+        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()

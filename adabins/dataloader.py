@@ -164,13 +164,13 @@ class DataLoadPreprocess(Dataset):
                 pc_image_label, pc_image_input)
             image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(
                 image, depth_gt, pc_image_label, pc_image_input)
-            depth_gt_mean = depth_gt[:, :, 0:1]
-            depth_gt_variance = depth_gt[:, :, 1:]
-            depth_gt_mean[depth_gt_variance>self.args.trainconfig.var_thershold] = 0
+            depth_gt_mean = depth_gt[:, :, 0:1].copy()
+            depth_gt_variance = depth_gt[:, :, 1:].copy()
+            depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
             image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
-            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 
+            sample = {'image': image.copy(), 'depth': depth_gt_mean, 
                 'pc_image': pc_image_label.copy(), 'focal': focal, 
-                'depth_variance': depth_gt_variance.copy(),
+                'depth_variance': depth_gt_variance,
                 'path': sample_path}
 
         else:
@@ -178,6 +178,7 @@ class DataLoadPreprocess(Dataset):
             image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
             depth_gt_variance = depth_gt[:, :, 1:].copy()
+            depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
 
             if self.mode == 'online_eval':
@@ -188,8 +189,8 @@ class DataLoadPreprocess(Dataset):
             if self.args.trainconfig.do_kb_crop is True:
                 image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
-                sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
-                          'path': sample_path,  'depth_variance': depth_gt_variance.copy(), 'pc_image': pc_image_label.copy()}
+                sample = {'image': image.copy(), 'depth': depth_gt_mean, 'focal': focal, 'has_valid_depth': has_valid_depth,
+                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy()}
             else:
                 sample = {'image': image.copy(), 'focal': focal}
 
