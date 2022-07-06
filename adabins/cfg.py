@@ -89,6 +89,7 @@ class TrainConfig:
                             action='store_true')
         ('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
  """
+    wandb_name: str = "random"
     bs: int = 8
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)

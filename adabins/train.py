@@ -27,7 +27,9 @@ from dataloader import DepthDataLoader
 from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 import time
+from datetime import datetime
 
+DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 PROJECT = "semantic_front_end_filter-adabins"
 logging = True
 
@@ -61,7 +63,7 @@ def colorize(value, vmin=10, vmax=40, cmap='plasma'):
     return img
 
 
-def log_images(samples, model, name, step, maxImages = 5, device = None):
+def log_images(samples, model, name, step, maxImages = 5, device = None, use_adabins = False):
     if(device is None):
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     # depth = colorize(depth, vmin=args.min_depth, vmax=args.max_depth)
@@ -96,7 +98,10 @@ def log_images(samples, model, name, step, maxImages = 5, device = None):
         pc_img = sample["pc_image"][0][0].numpy()
         pclabels.append(wandb.Image(colorize(pc_img,vmin = 0, vmax=40)))
         
-        bins, images = model(sample["image"][None,0,...].to(device))
+        if(use_adabins):
+            _, images = model(sample["image"][None,0,...].to(device))
+        else:
+            images = model(sample["image"][None,0,...].to(device))
         # bins, images = None, model(sample["image"])
         pred = images[0].detach()
         predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
@@ -215,7 +220,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
         # wandb.watch(model)
     ################################################################################################
 
@@ -331,8 +336,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 model.train()
                 #################################################################################################
         if (epoch+1)%10==0:
-            log_images(test_loader, model, "vis/test", step)
-            log_images(train_loader, model, "vis/train", step)
+            log_images(test_loader, model, "vis/test", step, args.modelconfig.use_adabins)
+            log_images(train_loader, model, "vis/train", step, args.modelconfig.use_adabins)
     return model
 
 
