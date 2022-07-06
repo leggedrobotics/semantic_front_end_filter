@@ -166,7 +166,7 @@ class DataLoadPreprocess(Dataset):
                 image, depth_gt, pc_image_label, pc_image_input)
             depth_gt_mean = depth_gt[:, :, 0:1]
             depth_gt_variance = depth_gt[:, :, 1:]
-            depth_gt_mean[depth_gt_variance>self.args.trainconfig.var_thershold] == 0
+            depth_gt_mean[depth_gt_variance>self.args.trainconfig.var_thershold] = 0
             image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
             sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 
                 'pc_image': pc_image_label.copy(), 'focal': focal, 

@@ -18,7 +18,7 @@ class ModelConfig:
     # One way to configure this values is to keep it same with the normalize in class `ToTensor`
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
-    use_adabins: bool = True
+    use_adabins: bool = False
 
 @dataclass
 class TrainConfig:
