@@ -28,7 +28,7 @@ from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 import time
 
-PROJECT = "semantic_front_end_filter"
+PROJECT = "semantic_front_end_filter-adabins"
 logging = True
 
 count_val = 0
@@ -211,7 +211,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, config=args, tags=tags, notes=args.notes)
+        wandb.init(project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
         # wandb.watch(model)
     ################################################################################################
 

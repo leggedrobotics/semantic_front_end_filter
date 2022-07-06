@@ -97,9 +97,17 @@ Run `vismodel.py`, a simple script to load a data from test loader, run it throu
 
 ## Rviz Replay
 
-Run the following two scripts with roscore running
+First get the trajectories replayed
 
 ```bash
+# semantic_front_end_filter/bin
+bash launch_replayandrecord.sh
+```
+
+Then Run the following two scripts with roscore running
+
+```bash
+# In two seperated terminals
 python3 rosvis_replay.py 
 python3 rosvis.py
 ```

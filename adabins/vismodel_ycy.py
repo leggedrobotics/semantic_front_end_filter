@@ -143,8 +143,8 @@ if __name__=="__main__":
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
-    # args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_agument/"
-    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
+    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_005_augment/"
+    # args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
     args.trainconfig.bs = 1
     args.batch_size = 1
     try:

@@ -47,17 +47,9 @@ sys.path.append("../Labelling/")
 from messages.imageMessage import Camera
 from scipy.spatial.transform import Rotation
 from train import *
+
+from pointcloudUtils import RaycastCamera
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-def calculate_H_map_cam(transition, rotation):
-    
-    H_map_cam = np.eye(4)
-    H_map_cam[:3,3] =  np.array( [transition])
-    H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
-    #         H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
-
-    H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
-    return H_map_cam
 
 
 class RosVisulizer:
@@ -65,71 +57,17 @@ class RosVisulizer:
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
-        self.init_camera()
+        self.raycastCamera = RaycastCamera(self.camera_calibration_path, device)
         self.image_cv_bridge = CvBridge()
     
-    def init_camera(self):
-        camera_calibration_path = self.camera_calibration_path
-        cam_id = "cam4"
-        cfg={}
-        cfg["CAM_RBSWAP"]=['']
-        cfg["CAM_SUFFIX"]= '/dropped/debayered/compressed'
-        cfg["CAM_PREFIX"]= '/alphasense_driver_ros/'
-        self.camera = Camera(camera_calibration_path, cam_id, cfg)
-        self.camera.tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), 
-                        np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],
-                                  [ 0.99997436,  0.00386421, -0.00602859,  0.        ],
-                                  [ 0.00385317, -0.99999088, -0.00184271,  0.        ],
-                                  [ 0.        ,  0.        ,  0.        ,  1.        ]]))
-        W,H = self.camera.image_width,self.camera.image_height
-        pixel_cor = np.mgrid[0:W,0:H]
-        pixel_cor_hom = np.concatenate( [ pixel_cor, np.ones_like(pixel_cor[None,0,:,:])], axis=0 )
-        self.pixel_cor_hom = pixel_cor_hom
-
-        K = self.camera.camera_matrix
-        ray_dir = (np.linalg.inv(K) @ (self.pixel_cor_hom.reshape(3,-1))).T
-        ray_dir = ray_dir/ np.linalg.norm(ray_dir, axis=1)[:,None]
-        self.ray_dir = torch.tensor(ray_dir).to(device)
-
     
-    def project_depth_to_cloud(self, pose, depth):
-        """
-        depth: a torch tensor depth image
-        image: the color image, can be numpy or torch
-        """
-        self.camera.update_pose_from_base_pose(pose)
-        W,H = self.camera.image_width,self.camera.image_height
-
-        position = self.camera.pose[0]
-        euler = euler_from_matrix(self.camera.pose[1][:3,:3])
-            
-        H_map_cam = calculate_H_map_cam(position, euler)
-        R = torch.from_numpy( H_map_cam )[:3,:3]
-        directions = self.ray_dir
-        directions = (directions @ R.to(device))
-        start_points = torch.from_numpy( H_map_cam[:3,3]).to(device)
-        pts = start_points + depth.reshape(-1,1)*directions
-        height_mask = pts[:,2] < pose[2]
-        pts = pts[height_mask]
-        return pts
-
     def build_could_from_depth_image(self, pose, depth, image = None):
         """
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
         """
-        self.camera.update_pose_from_base_pose(pose)
-        W,H = self.camera.image_width,self.camera.image_height
-
-        position = self.camera.pose[0]
-        euler = euler_from_matrix(self.camera.pose[1][:3,:3])
-            
-        H_map_cam = calculate_H_map_cam(position, euler)
-        R = torch.from_numpy( H_map_cam )[:3,:3]
-        directions = self.ray_dir
-        directions = (directions @ R.to(device))
-        start_points = torch.from_numpy( H_map_cam[:3,3]).to(device)
-        pts = start_points + depth.reshape(-1,1)*directions
+        
+        pts = self.raycastCamera.project_depth_to_cloud(pose, depth)
         height_mask = pts[:,2] < pose[2]
         pts = pts[height_mask]
         if(image is not None):
@@ -259,7 +197,7 @@ def vis_from_dataset(sample):
 
     checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
     model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm)
+                                            norm=args.modelconfig.norm, use_adabins = True)
     model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
 
     _, pred = model(sample["image"])
@@ -296,7 +234,7 @@ if __name__ == "__main__":
     elif(MODE=="MODE_NODE"):
         checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
         model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                                norm=args.modelconfig.norm)
+                                                norm=args.modelconfig.norm, use_adabins = True)
         model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
         model.to(device)
 
