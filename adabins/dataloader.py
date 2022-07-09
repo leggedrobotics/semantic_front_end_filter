@@ -101,6 +101,9 @@ class DataLoadPreprocess(Dataset):
                         # print("success")
                     # else:
                         # print("empty")
+        if args.trainconfig.train_with_sample:
+            self.filenames = self.test_filenames
+
         self.mode = mode
         self.transform = transform
         self.to_tensor = ToTensor
