@@ -18,3 +18,5 @@ kpconv/results
 lsf.*
 visulization
 checkpoints
+adabins/wandb
+

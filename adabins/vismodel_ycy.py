@@ -72,8 +72,12 @@ def vis_one(loader = "test", figname=""):
 
     for i, (model, name) in enumerate(zip(model_list,names_list)):
         # bins, images = model(sample["image"][:,:3,...])
-        # bins, images = model(sample["image"])
-        images = model(sample["image"])
+        input_ = sample["image"]
+        input_[:, :, :, :] = 0
+        if(model.use_adabins):
+            bins, images = model(input_)
+        else:
+            images = model(input_)
 
         pred = images[0].detach().numpy()
 
@@ -82,7 +86,8 @@ def vis_one(loader = "test", figname=""):
         axs[plot_ind//4, plot_ind%4].set_title(f"{name}prediction")
 
         plot_ind = 5+4*i
-        pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        # pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:])
         pred = pred[0][0].numpy()
         print("pred shape:", pred.shape)
         diff = pred- depth

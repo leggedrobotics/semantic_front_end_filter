@@ -18,7 +18,7 @@ class ModelConfig:
     # One way to configure this values is to keep it same with the normalize in class `ToTensor`
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
-    use_adabins: bool = False
+    use_adabins: bool = True
 
 @dataclass
 class TrainConfig:
@@ -108,7 +108,7 @@ class TrainConfig:
     do_kb_crop: bool = True # if set, crop input images as kitti benchmark images', action='store_true
     garg_crop: bool = True
     eigen_crop: bool=True
-    traj_variance_threashold: float = 0.05 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
+    traj_variance_threashold: float = 0.03 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
     same_lr: bool = False
     use_right: bool = False # if set, will randomly use right images when train on KITTI

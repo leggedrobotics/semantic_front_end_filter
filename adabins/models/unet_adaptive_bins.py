@@ -118,6 +118,7 @@ class UnetAdaptiveBins(nn.Module):
             pred = torch.sum(out * centers, dim=1, keepdim=True)
         else:
             pred = unet_out
+            pred = self.normalize(pred)
             return pred
 
         pred = self.normalize(pred)
