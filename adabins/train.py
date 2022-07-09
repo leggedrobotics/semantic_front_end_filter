@@ -336,8 +336,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 model.train()
                 #################################################################################################
         if (epoch+1)%10==0:
-            log_images(test_loader, model, "vis/test", step, args.modelconfig.use_adabins)
-            log_images(train_loader, model, "vis/train", step, args.modelconfig.use_adabins)
+            log_images(test_loader, model, "vis/test", step, use_adabins=args.modelconfig.use_adabins)
+            log_images(train_loader, model, "vis/train", step, use_adabins=args.modelconfig.use_adabins)
     return model
 
 
