@@ -43,8 +43,6 @@ except ModuleNotFoundError as ex:
 from threading import Lock
 
 import sys
-sys.path.append("../Labelling/")
-from messages.imageMessage import Camera
 from scipy.spatial.transform import Rotation
 from train import *
 

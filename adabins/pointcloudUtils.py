@@ -6,7 +6,7 @@ This file defines a class raycastCamera
 
 import sys
 import os
-LabellingPath = os.path.join(os.path.dirname(os.path.dirname(__file__)),"/Labelling")
+LabellingPath = os.path.join(os.path.dirname(os.path.dirname(__file__)),"Labelling")
 sys.path.append(LabellingPath)
 from messages.imageMessage import Camera
 import numpy as np
