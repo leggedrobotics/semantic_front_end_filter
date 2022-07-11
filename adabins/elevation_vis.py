@@ -25,8 +25,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 
-
-def plt_add_robot_patch(ax, pos):
+def _robot_patch(pos):
     """
     pos is the form data["pose"]["map"]: (x,y,z,rx,ry,rz,rw)
     """
@@ -39,13 +38,30 @@ def plt_add_robot_patch(ax, pos):
                              [robot_l+0.5, 0], [robot_l,robot_w], 
                              [-robot_l,robot_w]], color = "r", fill = True)
     robot_center = patches.Circle((0,0),0.2, color = "w",fill = True)
-    t2 = mpl.transforms.Affine2D().rotate(xyth[2]).translate(xyth[0],xyth[1])+ ax.transData
-    robot.set_transform(t2) 
-    robot_center.set_transform(t2)
+    R = np.array([[np.cos(xyth[2]), -np.sin(xyth[2])],
+                  [np.sin(xyth[2]),  np.cos(xyth[2])]])
+    t = np.array([xyth[:2]])
+    robot.set_xy( (R@ robot.get_xy().T ).T+t )
+    robot_center.center =  (robot_center.center[0] + t[0][0], robot_center.center[1] + t[0][1])
+    # t2 = mpl.transforms.Affine2D().rotate(xyth[2]).translate(xyth[0],xyth[1])#+ ax.transData
+    # robot.set_transform(t2) 
+    # robot_center.set_transform(t2)
+    return (robot, robot_center)
+
+def plt_add_robot_patch(ax, pos):
+    (robot, robot_center) = _robot_patch(pos)
     pat_r = ax.add_patch(robot)
     pat_c = ax.add_patch(robot_center)
     return [pat_r, pat_c]
 
+def plt_set_robot_patch(pat_r, pat_c, pos):
+    """
+    pos is the form data["pose"]["map"]: (x,y,z,rx,ry,rz,rw)
+    """
+    (robot, robot_center) = _robot_patch(pos)
+    pat_r.set_xy(robot.get_xy())
+    pat_c.set(center = robot_center.center)
+    
 
 def get_xy_from_elevation(elevation):
     cell_n = elevation.cell_n
@@ -63,6 +79,13 @@ def plt_add_elevation_map(ax, elevation, data, vmin, vmax, colorbar = True):
             c = data.reshape(-1),s = 2, vmin = vmin, vmax = vmax)
     if colorbar:
         plt.colorbar(sc,ax = ax)
+    return [sc,]
+
+def plt_set_elevation_map(sc, xy, data):
+    x,y = xy
+    offsets = np.stack([x,y]).T
+    sc.set_offsets(offsets)
+    sc.set_array(data.reshape(-1))
     return [sc,]
 
 # def plt_add_traj_map(ax, elevation, gft, vmin, vmax):
@@ -178,146 +201,246 @@ if __name__ == "__main__":
     elevation_pc_fusion = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
 
 
-    fig, axs = plt.subplots(3,3, figsize = (21,15))
-    [ax.get_xaxis().set_animated(True) for ax in axs.reshape(-1)]
-    [ax.get_yaxis().set_animated(True) for ax in axs.reshape(-1)]
-    need_color_bar = True
-    
-    def animate(i):
-        global data_iter, need_color_bar
-        try:
-            sample = next(data_iter)
-        except Exception as e:
-            print(e)
-            data_iter = iter(data_loader)
-            sample = next(data_iter)
-        rawdatapath = sample["path"][0].replace("extract_trajectories_003_augment", "extract_trajectories_002")
-        with open(rawdatapath, "rb") as data_file:
-            byte_data = data_file.read()
-            rawdata = msgpack.unpackb(byte_data)
+    class AnimateElevation:
+        def __init__(self, data_loader):
+            
+            self.fig, self.axs = plt.subplots(3,3, figsize = (21,15))
+            [ax.get_xaxis().set_animated(True) for ax in self.axs.reshape(-1)]
+            [ax.get_yaxis().set_animated(True) for ax in self.axs.reshape(-1)]
+            self.data_loader = data_loader
+            self.data_iter = iter(self.data_loader)
+            self.stream = self.data_stream()
+            self.need_color_bar = True
 
-        ## Prepare data
-        pose = rawdata["pose"]["map"]
-        print(pose[:3])
-        pc_points = rawdata["pointcloud"][:,:3]
-        pos = rawdata["pose"]["map"][:3].copy()
-        elevation.move_to_and_input(pos, pc_points)
-        x,y = get_xy_from_elevation(elevation)
-        data_traj = np.array([gft.getHeight(a,b, "GPMap")[0] for a,b in zip(x,y)])
+        def setup_plot(self):
+            try:
+                data = next(self.stream)
+            except Exception as e:
+                self.stream = self.data_stream()
+                data = next(self.stream)
+            pose = data["pose"]
+            pc_points = data["pc_points"]
+            pred_points = data["pred_points"]
+            map_pc = data["map_pc"]
+            map_pc_fusion = data["map_pc_fusion"]
+            map_pred = data["map_pred"]
+            map_pred_fusion = data["map_pred_fusion"]
+            (x,y) = data["xy"]
+            data_traj = data["data_traj"]
+            data_error = data["data_error"]
+            data_error_fusion = data["data_error_fusion"]
 
-        elevation.reset()
-        elevation.move_to_and_input(pos, pc_points)
-        elevation_pc_fusion.move_to_and_input(pos, pc_points)
-        map_pc = elevation.get_elevation_map()
-        map_pc_fusion = elevation_pc_fusion.get_elevation_map()
+            self.elems = []
+            self.axs[0,0].set_title("pc point clouds")
+            self.ax00sc = self.axs[0,0].scatter(x = pc_points[:,0], y = pc_points[:,1], c = pc_points[:,2],
+                                s = 1, vmin = pose[2]-1.5, vmax = pose[2]+0.5)
+            if self.need_color_bar: plt.colorbar(self.ax00sc, ax = self.axs[0,0])
+            self.elems.append(self.ax00sc)
+            self.axs[0,0].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[0,0].set_ylim((pose[1]-5, pose[1]+5))
+            self.ax00ptch = plt_add_robot_patch(self.axs[0,0], pose)
+            self.elems += self.ax00ptch
 
+            self.axs[0,1].set_title("pc points elevation map")
+            self.ax01sc =  plt_add_elevation_map(self.axs[0,1], elevation, map_pc, vmin = pose[2]-1.5, vmax = pose[2]+0.5,colorbar = self.need_color_bar)
+            self.ax01ptch = plt_add_robot_patch(self.axs[0,1], pose)
+            self.elems += self.ax01sc
+            self.elems += self.ax01ptch
+            self.axs[0,1].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[0,1].set_ylim((pose[1]-5, pose[1]+5))
 
-        elevation.reset()
-        _, pred = model(sample["image"].cuda())
-        depth = sample["depth"][0][0].T
-        pred = pred[0].detach()#.numpy()
-        pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], torch.tensor(depth.T).shape[-2:], mode='bilinear', align_corners=True)
-        pred = pred[0][0].T
-        
+            self.axs[0,2].set_title("pc points fusion map")
+            self.ax02sc = plt_add_elevation_map(self.axs[0,2], elevation_pc_fusion, map_pc_fusion, 
+                vmin = pose[2]-1.5, vmax = pose[2]+0.5,colorbar = self.need_color_bar)
+            self.ax02ptch= plt_add_robot_patch(self.axs[0,2], pose)
+            self.elems += self.ax02sc
+            self.elems += self.ax02ptch
+            self.axs[0,2].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[0,2].set_ylim((pose[1]-5, pose[1]+5))
 
-        pose = rawdata["pose"]["map"] # xyzw
-        pts = camera.project_depth_to_cloud(pose, pred)
+            self.axs[1,0].set_title("pred point clouds")
+            self.ax10sc = self.axs[1,0].scatter(x = pred_points[:,0], y = pred_points[:,1], c = pred_points[:,2],
+                                s = 1, vmin = pose[2]-1.5, vmax = pose[2]+0.5)
+            if self.need_color_bar: plt.colorbar(self.ax10sc, ax = self.axs[1,0])
+            self.elems.append(self.ax10sc)
+            self.axs[1,0].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[1,0].set_ylim((pose[1]-5, pose[1]+5))
+            self.ax10ptch = plt_add_robot_patch(self.axs[1,0], pose)
+            self.elems += self.ax10ptch
 
-        height_mask = pts[:,2] < pose[2]
-        pred_points = pts[height_mask].cpu()
+            self.axs[1,1].set_title("pc points elevation map")
+            self.ax11sc = plt_add_elevation_map(self.axs[1,1], elevation, map_pred, vmin = pose[2]-1.5, vmax = pose[2]+0.5, colorbar = self.need_color_bar)
+            self.ax11ptch = plt_add_robot_patch(self.axs[1,1], pose)
+            self.elems+= self.ax11sc
+            self.elems+= self.ax11ptch
+            self.axs[1,1].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[1,1].set_ylim((pose[1]-5, pose[1]+5))
 
-        elevation.move_to_and_input(pos, pred_points)
-        elevation_pred_fusion.move_to_and_input(pos, pred_points)
-        map_pred = elevation.get_elevation_map()
-        map_pred_fusion = elevation_pred_fusion.get_elevation_map()
+            self.axs[1,2].set_title("pred fusion map")
+            self.ax12sc = plt_add_elevation_map(self.axs[1,2], elevation_pred_fusion, map_pred_fusion, 
+                vmin = pose[2]-1.5, vmax = pose[2]+0.5,colorbar = self.need_color_bar)
+            self.ax12ptch = plt_add_robot_patch(self.axs[1,2], pose)
+            self.elems += self.ax12sc
+            self.elems += self.ax12ptch
+            self.axs[1,2].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[1,2].set_ylim((pose[1]-5, pose[1]+5))
 
-
-        elems = []
-        axs[0,0].set_title("pc point clouds")
-        sc = axs[0,0].scatter(x = pc_points[:,0], y = pc_points[:,1], c = pc_points[:,2],
-                            s = 1, vmin = pos[2]-1.5, vmax = pos[2]+0.5)
-        if need_color_bar: plt.colorbar(sc, ax = axs[0,0])
-        elems.append(sc)
-        axs[0,0].set_xlim((pos[0]-5, pos[0]+5))
-        axs[0,0].set_ylim((pos[1]-5, pos[1]+5))
-        elems += plt_add_robot_patch(axs[0,0], pose)
-
-        axs[0,1].set_title("pc points elevation map")
-        elems += plt_add_elevation_map(axs[0,1], elevation, map_pc, vmin = pos[2]-1.5, vmax = pos[2]+0.5,colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[0,1], pose)
-        axs[0,1].set_xlim((pos[0]-5, pos[0]+5))
-        axs[0,1].set_ylim((pos[1]-5, pos[1]+5))
-
-        axs[0,2].set_title("pc points fusion map")
-        elems += plt_add_elevation_map(axs[0,2], elevation_pc_fusion, map_pc_fusion, 
-            vmin = pos[2]-1.5, vmax = pos[2]+0.5,colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[0,2], pose)
-        axs[0,2].set_xlim((pos[0]-5, pos[0]+5))
-        axs[0,2].set_ylim((pos[1]-5, pos[1]+5))
-
-
-        axs[1,0].set_title("pred point clouds")
-        sc = axs[1,0].scatter(x = pred_points[:,0], y = pred_points[:,1], c = pred_points[:,2],
-                            s = 1, vmin = pos[2]-1.5, vmax = pos[2]+0.5)
-        if need_color_bar: plt.colorbar(sc, ax = axs[0,0])
-        elems.append(sc)
-        axs[1,0].set_xlim((pos[0]-5, pos[0]+5))
-        axs[1,0].set_ylim((pos[1]-5, pos[1]+5))
-        elems += plt_add_robot_patch(axs[1,0], pose)
-
-        axs[1,1].set_title("pc points elevation map")
-        elems += plt_add_elevation_map(axs[1,1], elevation, map_pred, vmin = pos[2]-1.5, vmax = pos[2]+0.5, colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[1,1], pose)
-        axs[1,1].set_xlim((pos[0]-5, pos[0]+5))
-        axs[1,1].set_ylim((pos[1]-5, pos[1]+5))
-
-        axs[1,2].set_title("pred fusion map")
-        elems += plt_add_elevation_map(axs[1,2], elevation_pred_fusion, map_pred_fusion, 
-            vmin = pos[2]-1.5, vmax = pos[2]+0.5,colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[1,2], pose)
-        axs[1,2].set_xlim((pos[0]-5, pos[0]+5))
-        axs[1,2].set_ylim((pos[1]-5, pos[1]+5))
-
-        x,y = get_xy_from_elevation(elevation)
-        data_traj = np.array([gft.getHeight(a,b, "GPMap")[0] for a,b in zip(x,y)])
-        data_error = np.array(map_pred.reshape(-1) - data_traj)
-        data_error_fusion = np.array(map_pred_fusion.reshape(-1) - data_traj)
-
-        axs[2,0].set_title("traj elevation map")
-        elems += plt_add_elevation_map(axs[2,0], elevation, data_traj, vmin = pos[2]-1.5, vmax = pos[2]+0.5, colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[2,0], pose)
-        axs[2,0].set_xlim((pos[0]-5, pos[0]+5))
-        axs[2,0].set_ylim((pos[1]-5, pos[1]+5))
+               
+            self.axs[2,0].set_title("traj elevation map")
+            self.ax20sc = plt_add_elevation_map(self.axs[2,0], elevation, data_traj, vmin = pose[2]-1.5, vmax = pose[2]+0.5, colorbar = self.need_color_bar)
+            self.ax20ptch = plt_add_robot_patch(self.axs[2,0], pose)
+            self.elems += self.ax20sc
+            self.elems += self.ax20ptch
+            self.axs[2,0].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[2,0].set_ylim((pose[1]-5, pose[1]+5))
 
 
-        axs[2,1].set_title("Error")
-        elems += plt_add_elevation_map(axs[2,1], elevation, data_error, vmin = -0.5, vmax = 0.5, colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[2,0], pose)
-        axs[2,1].set_xlim((pos[0]-5, pos[0]+5))
-        axs[2,1].set_ylim((pos[1]-5, pos[1]+5))
+            self.axs[2,1].set_title("Error")
+            self.ax21sc = plt_add_elevation_map(self.axs[2,1], elevation, data_error, vmin = -0.5, vmax = 0.5, colorbar = self.need_color_bar)
+            self.ax21ptch = plt_add_robot_patch(self.axs[2,1], pose)
+            self.elems += self.ax21sc
+            self.elems += self.ax21ptch
+            self.axs[2,1].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[2,1].set_ylim((pose[1]-5, pose[1]+5))
 
-        axs[2,2].set_title("fusion Error")
-        elems += plt_add_elevation_map(axs[2,2], elevation, data_error_fusion, vmin = -0.5, vmax = 0.5, colorbar = need_color_bar)
-        elems += plt_add_robot_patch(axs[2,0], pose)
-        axs[2,2].set_xlim((pos[0]-5, pos[0]+5))
-        axs[2,2].set_ylim((pos[1]-5, pos[1]+5))
+            self.axs[2,2].set_title("fusion Error")
+            self.ax22sc = plt_add_elevation_map(self.axs[2,2], elevation, data_error_fusion, vmin = -0.5, vmax = 0.5, colorbar = self.need_color_bar)
+            self.ax22ptch = plt_add_robot_patch(self.axs[2,2], pose)
+            self.elems += self.ax22sc
+            self.elems += self.ax22ptch
+            self.axs[2,2].set_xlim((pose[0]-5, pose[0]+5))
+            self.axs[2,2].set_ylim((pose[1]-5, pose[1]+5))
+
+            self.need_color_bar = False
+            return self.elems
+
+        def update_plot(self, i):
+            try:
+                data = next(self.stream)
+            except Exception as e:
+                self.stream = self.data_stream()
+                data = next(self.stream)
+            pose = data["pose"]
+            pc_points = data["pc_points"]
+            pred_points = data["pred_points"]
+            map_pc = data["map_pc"]
+            map_pc_fusion = data["map_pc_fusion"]
+            map_pred = data["map_pred"]
+            map_pred_fusion = data["map_pred_fusion"]
+            (x,y) = data["xy"]
+            data_traj = data["data_traj"]
+            data_error = data["data_error"]
+            data_error_fusion = data["data_error_fusion"]
+
+            self.ax00sc.set_offsets(pc_points[:,:2])
+            self.ax00sc.set_array(pc_points[:,2])
+            plt_set_robot_patch(*self.ax00ptch, pose)
+
+            plt_set_elevation_map(*self.ax01sc, (x,y), map_pc)
+            plt_set_robot_patch(*self.ax01ptch, pose)
+
+            plt_set_elevation_map(*self.ax02sc, (x,y), map_pc_fusion)
+            plt_set_robot_patch(*self.ax02ptch, pose)
 
 
-        # elems = []
-        # elems+= plt_add_elevation_map(ax, elevation, data_traj, vmin = pos[2]-1.5, vmax = pos[2]+0.5,colorbar = False)
-        # elems+= plt_add_robot_patch(ax, pose)
-        # ax.set_xlim((pos[0]-5, pos[0]+5))
-        # ax.set_ylim((pos[1]-5, pos[1]+5))
-        # elems += [ax.get_yticklabels(), ax.get_xticklabels()]
-        # elems += [ax.xaxis, ax.yaxis]
-        need_color_bar = False
-        return elems
+            self.ax10sc.set_offsets(pred_points[:,:2])
+            self.ax10sc.set_array(pred_points[:,2])
+            plt_set_robot_patch(*self.ax10ptch, pose)
+
+            plt_set_elevation_map(*self.ax11sc, (x,y), map_pred)
+            plt_set_robot_patch(*self.ax11ptch, pose)
+            
+            plt_set_elevation_map(*self.ax12sc, (x,y), map_pred_fusion)
+            plt_set_robot_patch(*self.ax12ptch, pose)
+            
+
+            plt_set_elevation_map(*self.ax20sc, (x,y), data_traj)
+            plt_set_robot_patch(*self.ax20ptch, pose)
+
+            plt_set_elevation_map(*self.ax21sc, (x,y), data_error)
+            plt_set_robot_patch(*self.ax21ptch, pose)      
+
+            plt_set_elevation_map(*self.ax22sc, (x,y), data_error_fusion)
+            plt_set_robot_patch(*self.ax22ptch, pose)            
+
+
+            [ax.set_xlim((pose[0]-5, pose[0]+5)) for ax in self.axs.reshape(-1)]
+            [ax.set_ylim((pose[1]-5, pose[1]+5)) for ax in self.axs.reshape(-1)]
+
+            return self.elems
+
+        def data_stream(self):
+            try:
+                sample = next(self.data_iter)
+            except Exception as e:
+                print(e)
+                self.data_iter = iter(self.data_loader)
+                sample = next(self.data_iter)
+            rawdatapath = sample["path"][0].replace("extract_trajectories_003_augment", "extract_trajectories_002")
+            with open(rawdatapath, "rb") as data_file:
+                byte_data = data_file.read()
+                rawdata = msgpack.unpackb(byte_data)
+
+            ## Prepare data
+            pose = rawdata["pose"]["map"]
+            print(pose[:3])
+            pc_points = rawdata["pointcloud"][:,:3]
+            pos = rawdata["pose"]["map"][:3].copy()
+            elevation.move_to_and_input(pos, pc_points)
+            
+            elevation.reset()
+            elevation.move_to_and_input(pos, pc_points)
+            elevation_pc_fusion.move_to_and_input(pos, pc_points)
+            map_pc = elevation.get_elevation_map()
+            map_pc_fusion = elevation_pc_fusion.get_elevation_map()
+
+            elevation.reset()
+            _, pred = model(sample["image"].cuda())
+            depth = sample["depth"][0][0].T
+            pred = pred[0].detach()#.numpy()
+            pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], torch.tensor(depth.T).shape[-2:], mode='bilinear', align_corners=True)
+            pred = pred[0][0].T
+            
+            pose = rawdata["pose"]["map"] # xyzw
+            pts = camera.project_depth_to_cloud(pose, pred)
+
+            height_mask = pts[:,2] < pose[2]
+            pred_points = pts[height_mask].cpu()
+
+            elevation.move_to_and_input(pos, pred_points)
+            elevation_pred_fusion.move_to_and_input(pos, pred_points)
+            map_pred = elevation.get_elevation_map()
+            map_pred_fusion = elevation_pred_fusion.get_elevation_map()
+
+            x,y = get_xy_from_elevation(elevation)
+            data_traj = np.array([gft.getHeight(a,b, "GPMap")[0] for a,b in zip(x,y)])
+            data_error = np.array(map_pred.reshape(-1) - data_traj)
+            data_error_fusion = np.array(map_pred_fusion.reshape(-1) - data_traj)
+
+            yield {
+                "pose": pose,
+                "pc_points": pc_points,
+                "pred_points": pred_points,
+                "map_pc": map_pc,
+                "map_pc_fusion": map_pc_fusion,
+                "map_pred": map_pred,
+                "map_pred_fusion": map_pred_fusion,
+                "xy": (x,y), 
+                "data_traj": data_traj,
+                "data_error": data_error,
+                "data_error_fusion": data_error_fusion
+            }
+
+
+    animator = AnimateElevation(data_loader)
 
     ani = animation.FuncAnimation(
-        fig, animate, frames = 10, # init_func=init,
+        animator.fig, func = animator.update_plot, frames = len(data_loader), 
+        init_func=animator.setup_plot,
         interval=200, repeat_delay=1000, blit=True)
     # writervideo = animation.FFMpegWriter(fps=60)
 
     ani.save('visulization/elevation_animation.mp4')
-    plt.show()
+
+    # plt.show()
 
