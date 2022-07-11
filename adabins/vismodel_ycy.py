@@ -69,11 +69,12 @@ def vis_one(loader = "test", figname=""):
     pc_diff[pc_img<1e-9] = 0
     axs[0,3].imshow(pc_diff,vmin = -5, vmax=5)
     axs[0,3].set_title("pc - traj")
-
+    print(model_list, names_list)
     for i, (model, name) in enumerate(zip(model_list,names_list)):
         # bins, images = model(sample["image"][:,:3,...])
+        print(i)
         input_ = sample["image"]
-        input_[:, :, :, :] = 0
+        # input_[:, :, :, :] = 0
         if(model.use_adabins):
             bins, images = model(input_)
         else:

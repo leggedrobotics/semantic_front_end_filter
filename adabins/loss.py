@@ -54,6 +54,22 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
         else:
             Dg = 0
         return Dg
+
+class EdgeAwareLoss(nn.Module):  # Add variance to loss
+    def __init__(self, train_args):
+        super(EdgeAwareLoss, self).__init__()
+        self.name = 'EdgeAwareLoss'
+        self.args = train_args
+
+    def forward(self, input, target, interpolate=True):
+        if interpolate:
+            input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+
+        input_gradient = torch.gradient(input, dim=[2, 3]) # gradient of prediction
+        target_gradient = torch.gradient(target[:, 0:1, :, :], dim=[2, 3]) # gradient of input image
+        loss = 1/torch.numel(input) * torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])) + torch.abs(input_gradient[1]) * torch.exp(-torch.abs(target_gradient[1])))
+        return loss
+
 class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins paper
     def __init__(self):
         super().__init__()

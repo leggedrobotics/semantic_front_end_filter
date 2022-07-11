@@ -3,6 +3,7 @@ import os
 import sys
 import uuid
 from datetime import datetime as dt
+from matplotlib import image
 
 import numpy as np
 from scipy import ndimage # this has to happend before import torch on euler
@@ -24,7 +25,7 @@ import model_io
 import models
 import utils
 from dataloader import DepthDataLoader
-from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
+from loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 import time
 from datetime import datetime
@@ -191,7 +192,7 @@ def main_worker(gpu, ngpus_per_node, args):
     train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
 
-def train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image):
+def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, image):
 
     mask = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~mask] = 0.
@@ -200,11 +201,13 @@ def train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, dep
     maskpc = mask0 & (pc_image > 1e-9) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
     l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
+
+    l_edge = criterion_edge(pred, image, interpolate = True)
     if bin_edges is not None and args.trainconfig.w_chamfer > 0:
         l_chamfer = criterion_bins(bin_edges, depth)
     else:
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
-    return l_dense, l_chamfer
+    return l_dense, l_chamfer, l_edge
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -231,6 +234,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     # criterion_ueff = SILogLoss()
     criterion_ueff = UncertaintyLoss(args.trainconfig)
     criterion_bins = BinsChamferLoss() if args.chamfer else None
+    criterion_edge = EdgeAwareLoss(args.trainconfig)
     ################################################################################################
 
     model.train()
@@ -288,12 +292,13 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             else:
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
+            l_dense, l_chamfer, l_edge = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
@@ -301,6 +306,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if should_log and step % 5 == 0:
                 wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step)
                 wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step)
+                wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step)
                 wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step)
 
             step += 1
@@ -313,7 +319,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
                 ################################# Validation loop ##################################################
                 model.eval()
-                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, epochs, device)
+                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
                 [writer.add_scalar("metrics/"+k, v, step) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
@@ -335,13 +341,13 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-        if (epoch+1)%10==0:
+        if (epoch+1)%2==0:
             log_images(test_loader, model, "vis/test", step, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step, use_adabins=args.modelconfig.use_adabins)
     return model
 
 
-def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, epochs, device='cpu'):
+def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device='cpu'):
     global count_val
     with torch.no_grad():
         val_si = RunningAverage()
@@ -359,8 +365,8 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, epoch, ep
             else:
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer = train_loss(args, criterion_ueff, criterion_bins, pred, bin_edges, depth, depth_var, pc_image)
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
+            l_dense, l_chamfer, l_edge = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
             writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
             writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
