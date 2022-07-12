@@ -145,7 +145,7 @@ def main_worker(gpu, ngpus_per_node, args):
     ###################################### Load model ##############################################
 
     model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.modelconfig.norm)
+                                          norm=args.modelconfig.norm, use_pcdistance_as_bin = args.modelconfig.use_pcdistance_as_bin)
 
     ## Load pretrained kitti
     # model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
@@ -328,7 +328,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-        if (epoch+1)%10==0:
+        if (epoch+1)%5==0:
             log_images(test_loader, model, "vis/test", step)
             log_images(train_loader, model, "vis/train", step)
     return model

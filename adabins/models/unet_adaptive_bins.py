@@ -35,7 +35,7 @@ class DecoderBN(nn.Module):
         self.up3 = UpSampleBN(skip_input=features // 4 + 24 + 16, output_features=features // 8)
         self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16)
 
-        #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
+        self.up5 = UpSampleBN(skip_input=features // 16+4, output_features=features//16)
         self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
         # self.act_out = nn.Softmax(dim=1) if output_activation == 'softmax' else nn.Identity()
 
@@ -49,8 +49,9 @@ class DecoderBN(nn.Module):
         x_d2 = self.up2(x_d1, x_block2)
         x_d3 = self.up3(x_d2, x_block1)
         x_d4 = self.up4(x_d3, x_block0)
-        #         x_d5 = self.up5(x_d4, features[0])
-        out = self.conv3(x_d4)
+        x_d5 = self.up5(x_d4, features[0])
+        out = self.conv3(x_d5)
+        # out = self.conv3(x_d4)
         # out = self.act_out(out)
         # if with_features:
         #     return out, features[-1]
@@ -77,9 +78,10 @@ class Encoder(nn.Module):
 
 class UnetAdaptiveBins(nn.Module):
     def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear',
-                    output_norm_mean = 0, output_norm_std = 1., use_adabins = True):
+                    output_norm_mean = 0, output_norm_std = 1., use_adabins = True, use_pcdistance_as_bin = False):
         super(UnetAdaptiveBins, self).__init__()
         self.use_adabins = use_adabins
+        self.use_pcdistance_as_bin = use_pcdistance_as_bin
         self.num_classes = n_bins
         self.min_val = min_val
         self.max_val = max_val
@@ -90,16 +92,18 @@ class UnetAdaptiveBins(nn.Module):
 
         if(use_adabins):
             self.decoder = DecoderBN(num_classes=128)
+            conv_out_nbins = n_bins +1 if use_pcdistance_as_bin else n_bins
+            self.conv_out = nn.Sequential(nn.Conv2d(128, conv_out_nbins, kernel_size=1, stride=1, padding=0),
+                                        nn.Softmax(dim=1))
+        
         else:
             self.decoder = DecoderBN(num_classes=1)
 
-        self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
-                                      nn.Softmax(dim=1))
         self.normalize = transforms.Normalize(mean=[-output_norm_mean/output_norm_std], std=[1/output_norm_std])
 
     def forward(self, x, **kwargs):
         unet_out = self.decoder(self.encoder(x), **kwargs)
-        if(self.use_adabins==True):
+        if(self.use_adabins):
             bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
             out = self.conv_out(range_attention_maps)
 
@@ -114,10 +118,13 @@ class UnetAdaptiveBins(nn.Module):
             centers = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
             n, dout = centers.size()
             centers = centers.view(n, dout, 1, 1)
-
-            pred = torch.sum(out * centers, dim=1, keepdim=True)
+            if(self.use_pcdistance_as_bin):
+                pred = torch.sum(out[:,1:,:,:] * centers, dim=1, keepdim=True) + out[:,:1,:,:] * x[:,-1:,:,:]
+            else:
+                pred = torch.sum(out * centers, dim=1, keepdim=True)
         else:
             pred = unet_out
+            bin_edges = None
             return pred
 
         pred = self.normalize(pred)

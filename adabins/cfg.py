@@ -3,7 +3,7 @@ import os
 
 @dataclass
 class ModelConfig:
-    n_bins: int =  256
+    n_bins: int =  32
     load_pretrained: bool = True
     input_height: int= 352
     input_width: int =  704
@@ -19,6 +19,7 @@ class ModelConfig:
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
     use_adabins: bool = True
+    use_pcdistance_as_bin: bool = True
 
 @dataclass
 class TrainConfig:
