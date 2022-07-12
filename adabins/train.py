@@ -27,6 +27,7 @@ from dataloader import DepthDataLoader
 from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 import time
+from dataclasses import asdict
 
 PROJECT = "semantic_front_end_filter-adabins"
 logging = True
@@ -212,6 +213,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
         wandb.init(project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
         # wandb.watch(model)
     ################################################################################################
 
@@ -457,6 +459,10 @@ def parse_args():
         args.dist_backend = 'nccl'
         args.gpu = None
 
+    for k,v in asdict(args.trainconfig).items():
+        setattr(args, f"trainconfig:{k}", v)
+    for k,v in asdict(args.modelconfig).items():
+        setattr(args, f"modelconfig:{k}", v)
 
     return args
 if __name__ == '__main__':
