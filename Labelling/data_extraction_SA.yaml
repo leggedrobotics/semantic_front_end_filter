@@ -1,13 +1,14 @@
-bagfile: /media/anqiao/Semantic/Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_07/mission2/Reconstruct_2022-04-23-21-02-46_0.bag
-outdir: /media/anqiao/Semantic/Data/extract_trajectories_001_fusepc
-calibration: /home/anqiao/darpa_ws/src/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense
+#bagfile: /home/jolee/nav_data/bags/processed/2021-10-10-16-36-47_anymal-chimera_mission_2021-10-13-05-13-06_0.bag
+bagfile: /home/anqiao/catkin_ws/SA_dataset/Italy/Reconstruct/Reconstruct_2022-07-19-19-02-15_0.bag
+outdir: /media/anqiao/Semantic/Data/extract_trajectories_Italy/extract_trajectories/
+calibration: /home/anqiao/anymal_ws/src/anymal_rsl/anymal_c_rsl/anymal_cerberus_rsl/anymal_cerberus_rsl/calibration/alphasense/intrinsic/
 
 save_proprioception: False
 skip_no_patch: True
 visualize: False
 dt: 0.5
 
-max_traj_len: 100  # to avoid filling up memory (number of max time steps to process at once)
+max_traj_len: 30  # to avoid filling up memory (number of max time steps to process at once)
 min_traj_len: 10
 image_patch_shape: [64, 64]
 
@@ -25,7 +26,7 @@ map_idx: 1 # 0: traversability
 CAM_PREFIX: '/alphasense_driver_ros/'
 CAM_NAMES: ['cam3', 'cam4', 'cam5']
 #CAM_NAMES: ['cam3']
-CAM_SUFFIX: '/dropped/debayered/compressed'
+CAM_SUFFIX: '/debayered'
 CAM_RBSWAP: ['']
 
 ELEVATION_MAP_TOPIC: '/elevation_mapping/elevation_map_recordable'

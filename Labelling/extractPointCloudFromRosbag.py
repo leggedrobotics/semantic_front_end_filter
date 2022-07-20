@@ -344,7 +344,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     print('Unknown point cloud topic: ' + topic)
                     continue
                 pointcloud_data.append(msg.header.stamp.to_sec(), pc_array,  cam_id)
-
+        
         # Update poses & commands
         for i, stamp in enumerate(command_data.indices['base']):
             stamp_ros = rospy.Time.from_sec(stamp)
@@ -371,8 +371,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     # r = msg_to_rotmat(tf)
                     # print(r)
                     # exit()
-
-        # Transform velocities
+        
         for i, stamp in enumerate(velocity_data.indices['base']):
             stamp_ros = rospy.Time.from_sec(stamp)
             velocity_base = velocity_data.data['base'][i]
@@ -433,6 +432,9 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
 
         img_df = resample_dataid_ffill(image_data, resampled_idx, 1.0)  # tol > 0.7 second (darpa: img updates ~ 1.5 Hz)
         map_df = resample_dataid_ffill(map_data, resampled_idx, 0.3)  # tol > 0.2 second (map updates ~ 5 Hz)
+        if(pointcloud_data.data=={}):
+            print("No point cloud in this traj")
+            continue
         pointcloud_df = resample_dataid_ffill(pointcloud_data, resampled_idx, 0.15)  # tol > 0.1 second (pointcloud updates ~ 9.9 Hz)
         pose_df = resample_ffill(pose_data, resampled_idx, dt.to_sec())
         vel_df = resample_ffill(velocity_data, resampled_idx, dt.to_sec())
@@ -507,7 +509,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
-                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 10)
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx,10)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
@@ -599,14 +601,14 @@ def main():
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
-    parser.add_argument('--bag_path', default='', help = 'bag file path')
+    # parser.add_argument('--bag_path', default='', help = 'bag file path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    # bag_file_path = cfg['bagfile']
-    bag_file_path = args.bag_path
+    bag_file_path = cfg['bagfile']
+    # bag_file_path = args.bag_path
     print("Extracting file: " + bag_file_path)
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
