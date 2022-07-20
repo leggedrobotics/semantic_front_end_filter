@@ -1,5 +1,6 @@
-import os
+# please change the root_dir, the path to extractFeetTrajsFromRosbag.py and the outdir, calibration path in data_extraction_SA.yaml
 
+import os
 root_dir = '/media/anqiao/Semantic/Data/Italy/day3/'
 
 for date_file in os.listdir(root_dir):
