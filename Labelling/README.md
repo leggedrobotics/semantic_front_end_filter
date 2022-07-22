@@ -74,6 +74,8 @@
    roslaunch semantic_frontend_filter replay_and_record_Italy.launch bagfile:="'1.bag' '2.bag' ..." output_file=:" "
 
    ```
+   The replay speed is set to 0.5, in case there is dismatching caused by the limited computation speed of lidar points.
+   
 4. To replay with the reconstructed map use 
    ```bash
    roslaunch semantic_frontend_filter replay_with_map_Italy.launch bagfile:="'1.bag' '2.bag' ..." map_file:="GroundMap.msgpack"
