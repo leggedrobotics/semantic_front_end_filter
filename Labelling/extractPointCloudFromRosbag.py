@@ -149,6 +149,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
     if not os.path.exists(GroundMap_filepath):
         ## if the map file not exist, then generate it
         FeetTrajs_filepath = os.path.join(out_dir, "FeetTrajs.msgpack")
+        print(FeetTrajs_filepath)
         assert os.path.exists(FeetTrajs_filepath) 
         gft = GFT(FeetTrajsFile = FeetTrajs_filepath)
         gft.save(out_dir, GPMap=True)
@@ -243,8 +244,20 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
             tf_buffer.set_transform_static(transform, 'rosbag')
 
     for cam_id in cfg['CAM_NAMES']:
-        cameras[cam_id].update_static_tf(
-            tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
+        # cameras[cam_id].update_static_tf(
+        #     tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
+        cameras["cam3"].tf_base_to_sensor = (np.array([-0.3496997 , -0.07530075,  0.24087976]), np.array([[-0.99997646,  0.00626061,  0.0028084 ,  0.        ],\
+        [-0.00386116, -0.17507344, -0.98454781,  0.        ],\
+        [-0.00567219, -0.98453547,  0.17509349,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        cameras["cam4"].tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],\
+        [ 0.99997436,  0.00386421, -0.00602859,  0.        ],\
+        [ 0.00385317, -0.99999088, -0.00184271,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        cameras["cam5"].tf_base_to_sensor = (np.array([-0.34988457,  0.07470715,  0.24034518]), np.array([[ 0.99999023,  0.00205021, -0.00391555,  0.        ],\
+        [ 0.00349934,  0.17390848,  0.9847556 ,  0.        ],\
+        [ 0.00269991, -0.98475969,  0.1738996 ,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
         print(cam_id, cameras[cam_id].tf_base_to_sensor)
 
     for topic, msg, t in bag.read_messages(topics=['/tf'], end_time=time_stamps_sequences[0][0]):
@@ -346,13 +359,15 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 pointcloud_data.append(msg.header.stamp.to_sec(), pc_array,  cam_id)
         
         # Update poses & commands
+        base_key = TF_BASE
+        # base_key = 'cam4_sensor_frame'
         for i, stamp in enumerate(command_data.indices['base']):
             stamp_ros = rospy.Time.from_sec(stamp)
             command_base = command_data.data['base'][i]
 
             for key in TF_POSE_REF_LIST:
-                if (tf_buffer.can_transform_core(key, TF_BASE, stamp_ros)[0]):
-                    tf = tf_buffer.lookup_transform_core(key, TF_BASE, stamp_ros)
+                if (tf_buffer.can_transform_core(key, base_key, stamp_ros)[0]):
+                    tf = tf_buffer.lookup_transform_core(key, base_key, stamp_ros)
                     pose = msg_to_pose(tf)  # pose in fixed ref frame (odom or map)
                     pose_data.append(stamp, pose, key)
 
@@ -371,7 +386,8 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     # r = msg_to_rotmat(tf)
                     # print(r)
                     # exit()
-        
+
+        # Transform velocities
         for i, stamp in enumerate(velocity_data.indices['base']):
             stamp_ros = rospy.Time.from_sec(stamp)
             velocity_base = velocity_data.data['base'][i]
@@ -509,7 +525,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
-                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx,10)
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 10)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
@@ -601,14 +617,14 @@ def main():
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
-    # parser.add_argument('--bag_path', default='', help = 'bag file path')
+    parser.add_argument('--bag_path', default='', help = 'bag file path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    bag_file_path = cfg['bagfile']
-    # bag_file_path = args.bag_path
+    # bag_file_path = cfg['bagfile']
+    bag_file_path = args.bag_path
     print("Extracting file: " + bag_file_path)
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
