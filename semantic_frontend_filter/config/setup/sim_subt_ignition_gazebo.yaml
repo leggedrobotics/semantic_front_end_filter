@@ -1,0 +1,166 @@
+######################
+## namespaced nodes ##
+######################
+anymal_c:
+  robot_to_world_tf_publisher:
+    pose_topic: /anymal_c/robot_base_pose
+    child_frame_id: anymal_c
+    max_rate: 100
+    publish_continuously: false
+  ## Controller Topics
+  subscriber:
+    command_velocity:
+      topic: "cmd_vel"
+    joint_state:
+      topic: "joint_state"
+    body_twist:
+      topic: "robot_base_twist"
+  publisher:
+    des_joint_position:
+      topic: "desired_joint_positions"
+############################
+## other nodes/parameters ##
+############################
+base_to_map_in_map:
+  child_frame_id: anymal_c
+gbplanner_pci_anymal_ros_node:
+  control_mode: walk_learning
+local_guidance_path_manager:
+  replan_path:
+    robot_frame_id: anymal_c # frame_id of the robot, used to check where robot is with respect to the path.
+local_guidance_path_follower:
+  frames:
+    robot: "anymal_c"
+  publishers:
+    twist_command:
+      topic: /anymal_c/cmd_vel
+  use_motion_transitioner: false # false if output twist should be published without requesting a new motion state
+path_creator:
+  robot_frame_id: "anymal_c"
+point_cloud_filter_navigation:
+  filter_and_merger:
+    stream_combinations:
+      - decimation: 1
+        filter: true
+        filters_config: pointmatcher_filters_velodyne_vlp16.yaml
+        fixed_frame_tf: odom
+        keep_intensity: true
+        master: 0
+        max_time_offset: 0.5
+        name: velodyne_cropped
+        output_topic: /point_cloud_filter_navigation/velodyne/point_cloud
+        sources:
+          - 0
+        target_frame: anymal_c/base/velodyne # we must filter in the same frame_id of the sensor, i.e. do NOT transform the pcl in another frame, because of voxblox ray-casting & loam
+        use_fixed_frame_tf: true
+        wait_time_tf: 0.05
+    stream_sources:
+      - filter: false
+        id: 0
+        input_topic: /anymal_c/velodyne/points
+        queue_size: 1
+        source_name: vlp-16
+        source_type: lidar
+use_sim_time: true
+####################
+## Stack Launcher ##
+####################
+stack_launcher:
+  nodes:
+    cerberus_anymal_c_controller:
+      roslaunch:
+        name: cerberus_anymal_c_controller
+        namespace: anymal_c
+        node_type: cerberus_anymal_c_control_1_node
+        package: cerberus_anymal_c_control_1
+        output: screen
+    rqt_gui:
+      preprocessed_params:
+        roslaunch_args:
+          value: --force-discover --clear-config --perspective-file $(rospack find anymal_c_subt)/config/ui/ignition_gazebo/ign_rqt.perspective
+    rviz:
+      preprocessed_params:
+        roslaunch_args:
+          value: --display-config $(rospack find anymal_c_subt)/config/ui/ignition_gazebo/ign_config.rviz --splash-screen $(rospack find anymal_c_subt)/config/ui/splash.png
+    robot_to_world_tf_publisher:
+      roslaunch:
+        name: robot_to_world_tf_publisher
+        namespace: anymal_c
+        node_type: pose_tf_publisher
+        package: pose_tf_publisher
+        output: screen
+    tf_world_to_odom_connector:
+      roslaunch:
+        args: 0 0 0 0 0 0 1 world odom
+        name: tf_static_world_to_odom
+        namespace: anymal_c
+        node_type: static_transform_publisher
+        package: tf2_ros
+    tf_odom_to_map_connector:
+      roslaunch:
+        args: 0 0 0 0 0 0 1 odom map
+        name: tf_static_odom_map
+        namespace: anymal_c
+        node_type: static_transform_publisher
+        package: tf2_ros
+    tf_base_to_base_inertia_connector:
+      roslaunch:
+        args: 0 0 0 0 0 0 1 anymal_c/base anymal_c/base_inertia
+        name: tf_static_base_base_inertia
+        namespace: anymal_c
+        node_type: static_transform_publisher
+        package: tf2_ros
+  stacks:
+    ignition_simulation_environment:
+      nodes:
+        cerberus_anymal_c_controller:
+          enabled: true
+          name: cerberus_anymal_c_controller
+        point_cloud_filter_navigation:
+          enabled: true
+          name: point_cloud_filter_navigation
+        tf_base_to_base_inertia_connector:
+          enabled: true
+          name: tf_base_to_base_inertia_connector
+        robot_to_world_tf_publisher:
+          enabled: true
+          name: robot_to_world_tf_publisher
+        tf_world_to_odom_connector:
+          enabled: true
+          name: tf_world_to_odom_connector
+        tf_odom_to_map_connector:
+          enabled: true
+          name: tf_odom_to_map_connector
+    locomotion_subt:
+      stacks:
+        locomotion:
+          enabled: false
+    post_process_config:
+      nodes:
+        load_anymal_description:
+          enabled: false
+        load_dodgeball_description:
+          enabled: false
+    sim_subt_mission:
+      stacks:
+        ignition_simulation_environment:
+          enabled: true
+          name: ignition_simulation_environment
+    sim_subt_navigation:
+      stacks:
+        simulation_environment:
+          enabled: false
+    user_interface:
+      nodes:
+        interaction_marker:
+          enabled: false
+        monitor_network_op:
+          enabled: false
+        play_audio:
+          enabled: false
+        rviz_world_loader:
+          enabled: false
+    user_interface_subt:
+      nodes:
+        gbplanner_bounding_box_handler:
+          enabled: false

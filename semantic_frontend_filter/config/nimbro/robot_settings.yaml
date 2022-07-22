@@ -1,0 +1,45 @@
+# This files provides an example, to be adapted for each robot.
+# WARNING: do NOT use port 17001, as this is reserved for common tcp services for maplab transfolder service!
+nimbro_anymal_missionctrl_topics_ports: &nimbro_anymal_missionctrl_topics_ports # Use for sender on one machine and corresponding receiver on other machine
+  port:             17002 # param used by receiver, must be same as destination_port
+  destination_port: 17002 # param used by sender, must be same as port
+
+nimbro_anymal_missionctrl_tcp_services_ports: &nimbro_anymal_missionctrl_tcp_services_ports # Use for server on one machine and corresponding client on other machine
+  port:             17003 # param used by both client and server
+
+nimbro_missionctrl_anymal_topics_ports: &nimbro_missionctrl_anymal_topics_ports # Use for sender on one machine and corresponding receiver on other machine
+  port:             17004 # param used by receiver, must be same as destination_port
+  destination_port: 17004 # param used by sender, must be same as port
+
+## Simulated ANYmal - Simulated Mission Control
+nimbro_anymal_missionctrl_simulation_topics_ports: &nimbro_anymal_missionctrl_simulation_topics_ports # Use only during simulation
+  port:             17000 # param used by receiver, must be same as destination_port
+  destination_port: 17000 # param used by sender, must be same as port
+
+## ----------------------- Copying params to needed nodes, modify only above section and leave below section untouched ---------------------
+# ANYmal - Mission Control
+nimbro_anymal_missionctrl_sender:
+  <<: *nimbro_anymal_missionctrl_topics_ports
+  # Other shared settings must be loaded via 'shared_settings.yaml'
+
+nimbro_missionctrl_anymal_receiver:
+  <<: *nimbro_anymal_missionctrl_topics_ports
+
+nimbro_anymal_missionctrl_receiver:
+  <<: *nimbro_missionctrl_anymal_topics_ports
+
+nimbro_missionctrl_anymal_sender:
+  <<: *nimbro_missionctrl_anymal_topics_ports
+
+nimbro_anymal_missionctrl_tcp_server:
+  <<: *nimbro_anymal_missionctrl_tcp_services_ports
+
+nimbro_missionctrl_anymal_tcp_client:
+  <<: *nimbro_anymal_missionctrl_tcp_services_ports
+
+# Simulated ANYmal - Simulated Mission Control
+nimbro_anymal_missionctrl_sender_simulation:
+  <<: *nimbro_anymal_missionctrl_simulation_topics_ports
+
+nimbro_missionctrl_anymal_receiver_simulation:
+  <<: *nimbro_anymal_missionctrl_simulation_topics_ports
