@@ -1,4 +1,4 @@
-# Construct Map from Robot Feet Trajectories
+# Dataset Gerneration (for Itatly dataset)
 
 ## Installation
 
@@ -43,7 +43,7 @@
 
 
 
-2. Rvise the launch file catkin_ws/src/alphasense_rsl/image_proc_cuda_ros/launch/image_proc_cuda_node.launch. Also change the calibration_path for each camera.
+2. Rvise the launch file `catkin_ws/src/alphasense_rsl/image_proc_cuda_ros/launch/image_proc_cuda_node.launch`. Also change the calibration_path for each camera.
    ```xml
    <arg name="run_undistortion"                     default="true"/>
 
@@ -69,7 +69,7 @@
    <arg name="color_calibration_cam5"               default="$(find image_proc_cuda)/config/alphasense_color_calib_example.yaml"/>
    ```
 
-3. To replay and re-record the rosbag use
+3. To replay and re-record the rosbags use
    ```bash
    roslaunch semantic_frontend_filter replay_and_record_Italy.launch bagfile:="'1.bag' '2.bag' ..." output_file=:" "
 
@@ -124,4 +124,6 @@ For image undistortion you need to acces cuda within docker anymal-gpu:21.11. If
 RUN_COMMAND="docker run \
   --rm --gpus all \
   --volume=$XSOCK:$XSOCK:rw \
+  ...
+  ...
 ```
