@@ -94,7 +94,8 @@ class DataLoadPreprocess(Dataset):
                     #     byte_data = data_file.read()
                     #     data = msgpack.unpackb(byte_data)
                     # if("images" in data.keys()):
-                    if(root.split('/')[-1] in {"Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"}):
+                    # if(root.split('/')[-1] in {"Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"}):
+                    if(root.split('/')[-1] in args.trainconfig.testing):
                         self.test_filenames.append(sample_path)
                     else:
                         self.filenames.append(sample_path)
