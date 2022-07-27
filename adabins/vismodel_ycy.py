@@ -7,6 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML
+import cv2
 
 test_loader_iter = None
 train_loader_iter = None
@@ -51,7 +52,8 @@ def vis_one(loader = "test", figname=""):
     fig, axs = plt.subplots(5, 4,figsize=(20, 20))
     if(axs.ndim==1):
         axs = axs[None,...]
-    axs[0,0].imshow(inputimg[:,:,:3])
+    # axs[0,0].imshow(inputimg[:,:,:3])
+    axs[0,0].imshow(cv2.cvtColor(inputimg[:,:,:3], cv2.COLOR_BGR2RGB))
     axs[0,0].set_title("Input")
     fig.suptitle(sample["path"])
 
@@ -154,7 +156,7 @@ if __name__=="__main__":
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_005_augment/"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_Italy_augment/"
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
