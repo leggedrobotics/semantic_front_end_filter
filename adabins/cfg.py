@@ -1,10 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 
 @dataclass
 class ModelConfig:
     n_bins: int =  256
-    load_pretrained: bool = True
+    load_pretrained: bool = False
     input_height: int= 352
     input_width: int =  704
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
@@ -89,12 +89,12 @@ class TrainConfig:
                             action='store_true')
         ('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
  """
+    wandb_name: str = "random"
     bs: int = 8
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
     pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
-    pc_img_label_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
-
+    pc_img_label_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
     lr: float =  0.000357
     wd: float =  0.1
     div_factor: int =  25
@@ -108,13 +108,17 @@ class TrainConfig:
     do_kb_crop: bool = True # if set, crop input images as kitti benchmark images', action='store_true
     garg_crop: bool = True
     eigen_crop: bool=True
-    traj_variance_threashold: float = 0.05 # if the variance is below this above this value, mask the corresponding traj label off
+    traj_variance_threashold: float = 0.03 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
     same_lr: bool = False
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 0.5
     traj_label_W: float = 1
+    edge_aware_label_W: float = 1
+
     traj_distance_variance_ratio: float = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
-    scale_loss_with_point_number: bool = False # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
+    scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     
+    train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
+    testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-22-10-36-29_0"])

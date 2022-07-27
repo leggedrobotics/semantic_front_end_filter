@@ -7,6 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML
+import cv2
 
 test_loader_iter = None
 train_loader_iter = None
@@ -43,13 +44,16 @@ def vis_one(loader = "test", figname=""):
     sample = next(data_loader_iter)
 
     inputimg = np.moveaxis(sample["image"][0][:3,:,:].numpy(),0,2)
+    inputpc = np.moveaxis(sample["image"][0][3:,:,:].numpy(),0,2)
+
     # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
     inputimg.max(), inputimg.min()
     inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
     fig, axs = plt.subplots(5, 4,figsize=(20, 20))
     if(axs.ndim==1):
         axs = axs[None,...]
-    axs[0,0].imshow(inputimg[:,:,:3])
+    # axs[0,0].imshow(inputimg[:,:,:3])
+    axs[0,0].imshow(cv2.cvtColor(inputimg[:,:,:3], cv2.COLOR_BGR2RGB))
     axs[0,0].set_title("Input")
     fig.suptitle(sample["path"])
 
@@ -67,12 +71,20 @@ def vis_one(loader = "test", figname=""):
     pc_diff = pc_img - depth
     pc_diff[depth<1e-9] = 0
     pc_diff[pc_img<1e-9] = 0
-    axs[0,3].imshow(pc_diff,vmin = -5, vmax=5)
-    axs[0,3].set_title("pc - traj")
-
+    # axs[0,3].imshow(pc_diff,vmin = -5, vmax=5)
+    axs[0,3].imshow(inputpc,vmin = 0, vmax=40)
+    # axs[0,3].set_title("pc - traj")
+    axs[0,3].set_title("Input pc")
     for i, (model, name) in enumerate(zip(model_list,names_list)):
-        bins, images = model(sample["image"])
-        # bins, images = None, model(sample["image"])
+        # bins, images = model(sample["image"][:,:3,...])
+        print(i)
+        input_ = sample["image"]
+        # input_[:, :, :, :] = 0
+        if(model.use_adabins):
+            bins, images = model(input_)
+        else:
+            images = model(input_)
+
         pred = images[0].detach().numpy()
 
         plot_ind = 4+4*i
@@ -80,7 +92,8 @@ def vis_one(loader = "test", figname=""):
         axs[plot_ind//4, plot_ind%4].set_title(f"{name}prediction")
 
         plot_ind = 5+4*i
-        pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        # pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(depth).shape[-2:])
         pred = pred[0][0].numpy()
         print("pred shape:", pred.shape)
         diff = pred- depth
@@ -143,8 +156,10 @@ if __name__=="__main__":
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
     args = parse_args()
-    args.data_path = "/media/chenyu/T7/Data/extract_trajectories_005_augment/"
-    # args.data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_Italy_augment/"
+
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
     args.trainconfig.bs = 1
     args.batch_size = 1
     try:
@@ -156,12 +171,14 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     model_cfgs = [load_param_from_path(os.path.dirname(checkpoint_path)) for checkpoint_path in checkpoint_paths]
-    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
                                             norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"]) for cfg in model_cfgs]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
     model_list = [l[0] for l in loads]
+    # for model in model_list:
+    #     model.transform()
 
     for i in range(9):
         vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
