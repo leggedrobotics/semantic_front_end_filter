@@ -3,6 +3,7 @@ import os
 import sys
 import uuid
 from datetime import datetime as dt
+from matplotlib import image
 
 import numpy as np
 from scipy import ndimage # this has to happend before import torch on euler
@@ -12,22 +13,30 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
-# import wandb
+from torch.utils.tensorboard import SummaryWriter
+import wandb
 from tqdm import tqdm
+from simple_parsing import ArgumentParser
+from cfg import TrainConfig, ModelConfig
+from experimentSaver import ConfigurationSaver
+import matplotlib.pyplot as plt
 
 import model_io
 import models
 import utils
 from dataloader import DepthDataLoader
-from loss import SILogLoss, BinsChamferLoss, UncertaintyLoss
+from loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
-
 import time
+from dataclasses import asdict
 
-# os.environ['WANDB_MODE'] = 'dryrun'
-PROJECT = "MDE-AdaBins"
+from datetime import datetime
+
+DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+PROJECT = "semantic_front_end_filter-adabins"
 logging = True
 
+count_val = 0
 
 def is_rank_zero(args):
     return args.rank == 0
@@ -36,7 +45,7 @@ def is_rank_zero(args):
 import matplotlib
 
 
-def colorize(value, vmin=10, vmax=1000, cmap='plasma'):
+def colorize(value, vmin=10, vmax=40, cmap='plasma'):
     # normalize
     vmin = value.min() if vmin is None else vmin
     vmax = value.max() if vmax is None else vmax
@@ -57,28 +66,101 @@ def colorize(value, vmin=10, vmax=1000, cmap='plasma'):
     return img
 
 
-def log_images(img, depth, pred, args, step):
-    depth = colorize(depth, vmin=args.min_depth, vmax=args.max_depth)
-    pred = colorize(pred, vmin=args.min_depth, vmax=args.max_depth)
+def log_images(samples, model, name, step, maxImages = 5, device = None, use_adabins = False):
+    if(device is None):
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    # depth = colorize(depth, vmin=args.min_depth, vmax=args.max_depth)
+    # pred = colorize(pred, vmin=args.min_depth, vmax=args.max_depth)
     # wandb.log(
     #     {
     #         "Input": [wandb.Image(img)],
     #         "GT": [wandb.Image(depth)],
     #         "Prediction": [wandb.Image(pred)]
     #     }, step=step)
+    
+    inputimgs = []
+    trajlabels = []
+    pclabels = []
+    filepaths = []
+    predictions = []
+    trajerrors = []
+    pcimgerrors = []
+    errordistributions = []
+
+    for i, sample in zip(range(maxImages), samples):
+
+        inputimg = np.moveaxis(sample["image"][0][:3,:,:].numpy(),0,2)
+        # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
+        inputimg.max(), inputimg.min()
+        inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
+        inputimgs.append(wandb.Image(inputimg[:,:,:3]))
+        filepaths.append(sample["path"][:1])
+        depth = sample["depth"][0][0].numpy()
+        trajlabels.append(wandb.Image(colorize(depth, vmin = 0, vmax=40)))
+
+        pc_img = sample["pc_image"][0][0].numpy()
+        pclabels.append(wandb.Image(colorize(pc_img,vmin = 0, vmax=40)))
+        
+        if(use_adabins):
+            _, images = model(sample["image"][None,0,...].to(device))
+        else:
+            images = model(sample["image"][None,0,...].to(device))
+        # bins, images = None, model(sample["image"])
+        pred = images[0].detach()
+        predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
+        
+        pred = nn.functional.interpolate(pred[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        pred = pred[0][0].cpu().numpy()
+        diff = pred- depth
+        mask_traj = depth>1e-9
+        diff[~mask_traj] = 0
+        trajerrors.append(wandb.Image(colorize(diff,vmin = -5, vmax=5 )))
+
+        pcdiff = pred- pc_img
+        mask_pc = pc_img>1e-9
+        pcdiff[~mask_pc] = 0
+        pcimgerrors.append(wandb.Image(colorize(pcdiff, vmin = -5, vmax=5)))
+        
+        fig = plt.figure()
+        plt.plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
+        plt.plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        plt.title("err vs distance")
+        plt.xlabel("depth_prediction")
+        plt.ylabel("err")
+        plt.ylim((-20,20))
+        plt.legend()
+        errordistributions.append(wandb.Image(fig))
+
+    columns = ["filepaths","image"]
+    data = [[f, img ] for f,img in zip(filepaths,inputimgs)]
+    result_image_table = wandb.Table(columns = columns, data = data)
+    # result_image_table.add_column("image", inputimgs)
+    result_image_table.add_column("trajlabel", trajlabels)
+    result_image_table.add_column("pclabel", pclabels)
+    # result_image_table.add_column("filepath", filepaths)
+    result_image_table.add_column("pred", predictions)
+    result_image_table.add_column("traj_label_error", trajerrors)
+    result_image_table.add_column("pc_label_error", pcimgerrors)
+    result_image_table.add_column("distribution", errordistributions)
+
+    wandb.log({name: result_image_table}, step=step)
 
 
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
     ###################################### Load model ##############################################
+    input_channel = 3 if args.load_pretrained else 4
 
-    model = models.UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.norm)
+    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
+                                          norm=args.modelconfig.norm)
 
     ## Load pretrained kitti
-    # model,_,_ = model_io.load_checkpoint("./pretrained/AdaBins_kitti.pt", model)
-
+    if args.load_pretrained:
+        model,_,_ = model_io.load_checkpoint("./models/AdaBins_kitti.pt", model)
+    
+    if input_channel == 3:
+        model.transform()
     ################################################################################################
 
     if args.gpu is not None:  # If a gpu is set by user: NO PARALLELISM!!
@@ -93,7 +175,6 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
         args.batch_size = int(args.batch_size / ngpus_per_node)
-        # args.batch_size = 8
         args.workers = int((args.num_workers + ngpus_per_node - 1) / ngpus_per_node)
         print(args.gpu, args.rank, args.batch_size, args.workers)
         torch.cuda.set_device(args.gpu)
@@ -110,8 +191,25 @@ def main_worker(gpu, ngpus_per_node, args):
 
     args.epoch = 0
     args.last_epoch = -1
-    train(model, args, epochs=args.epochs, lr=args.lr, device=args.gpu, root=args.root,
+    train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
+
+def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, image):
+
+    mask = (depth > args.min_depth) & (depth < args.max_depth)
+    depth[~mask] = 0.
+    l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+    mask0 = depth < 1e-9 # the mask of places with on label
+    maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+    depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
+    l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
+
+    l_edge = criterion_edge(pred, image, interpolate = True)
+    if bin_edges is not None and args.trainconfig.w_chamfer > 0:
+        l_chamfer = criterion_bins(bin_edges, depth)
+    else:
+        l_chamfer = torch.Tensor([0]).to(l_dense.device)
+    return l_dense, l_chamfer, l_edge
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -123,15 +221,13 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     ###################################### Logging setup #########################################
     print(f"Training {experiment_name}")
 
-    run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{args.bs}-tep{epochs}-lr{lr}-wd{args.wd}-{uuid.uuid4()}"
-    name = f"{experiment_name}_{run_id}"
     should_write = ((not args.distributed) or args.rank == 0)
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        if args.dataset != 'nyu':
-            PROJECT = PROJECT + f"-{args.dataset}"
-        # wandb.init(project=PROJECT, name=name, config=args, dir=args.root, tags=tags, notes=args.notes)
+        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+
         # wandb.watch(model)
     ################################################################################################
 
@@ -140,14 +236,15 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     
     ###################################### losses ##############################################
     # criterion_ueff = SILogLoss()
-    criterion_ueff = UncertaintyLoss()
+    criterion_ueff = UncertaintyLoss(args.trainconfig)
     criterion_bins = BinsChamferLoss() if args.chamfer else None
+    criterion_edge = EdgeAwareLoss(args.trainconfig)
     ################################################################################################
 
     model.train()
 
     ###################################### Optimizer ################################################
-    if args.same_lr:
+    if args.trainconfig.same_lr:
         print("Using same LR")
         params = model.parameters()
     else:
@@ -156,7 +253,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         params = [{"params": m.get_1x_lr_params(), "lr": lr / 10},
                   {"params": m.get_10x_lr_params(), "lr": lr}]
 
-    optimizer = optim.AdamW(params, weight_decay=args.wd, lr=args.lr)
+    optimizer = optim.AdamW(params, weight_decay=args.trainconfig.wd, lr=args.trainconfig.lr)
     if optimizer_state_dict is not None:
         optimizer.load_state_dict(optimizer_state_dict)
     ################################################################################################
@@ -169,21 +266,21 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, lr, epochs=epochs, steps_per_epoch=len(train_loader),
                                               cycle_momentum=True,
                                               base_momentum=0.85, max_momentum=0.95, last_epoch=args.last_epoch,
-                                              div_factor=args.div_factor,
-                                              final_div_factor=args.final_div_factor)
+                                              div_factor=args.trainconfig.div_factor,
+                                              final_div_factor=args.trainconfig.final_div_factor)
     if args.resume != '' and scheduler is not None:
         scheduler.step(args.epoch + 1)
     ################################################################################################
 
     # max_iter = len(train_loader) * epochs
     for epoch in range(args.epoch, epochs):
+        print("EPOCH:", epoch)
         time_core = 0.
         time_total = -time.time()
         ################################# Train loop ##########################################################
-        # if should_log: wandb.log({"Epoch": epoch}, step=step)
+        if should_log: wandb.log({"Epoch": epoch}, step=step)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
-                             total=len(train_loader)) if is_rank_zero(
-                args) else enumerate(train_loader):
+                             total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
             time_core -= time.time()
             optimizer.zero_grad()
@@ -194,26 +291,27 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
-            bin_edges, pred = model(img)
-            mask = (depth > args.min_depth) & (depth < args.max_depth)
-            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
-            mask0 = depth < 1e-9 # the mask of places with on label
-            pc_image = batch["pc_image"].to(device)
-            mask0 = mask0 & (pc_image > 1e-9) # pc image have label
-            l_dense += 1 * criterion_ueff(pred, pc_image,depth_var, mask=mask0.to(torch.bool), interpolate=True)
-
-            if args.w_chamfer > 0:
-                l_chamfer = criterion_bins(bin_edges, depth)
+            if(args.modelconfig.use_adabins):
+                bin_edges, pred = model(img)
             else:
-                l_chamfer = torch.Tensor([0]).to(img.device)
+                bin_edges, pred = None, model(img)
+            pc_image = batch["pc_image"].to(device)
+            l_dense, l_chamfer, l_edge = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
-            loss = l_dense + args.w_chamfer * l_chamfer
+            writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
+
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
-            # if should_log and step % 5 == 0:
-            #     wandb.log({f"Train/{criterion_ueff.name}": l_dense.item()}, step=step)
-            #     wandb.log({f"Train/{criterion_bins.name}": l_chamfer.item()}, step=step)
+            if should_log and step % 5 == 0:
+                wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step)
+                wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step)
+                wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step)
+                wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step)
 
             step += 1
             scheduler.step()
@@ -221,55 +319,67 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             time_core += time.time()
             ########################################################################################################
 
-            if should_write and step % args.validate_every == 0:
+            if should_write and step % args.trainconfig.validate_every == 0:
 
                 ################################# Validation loop ##################################################
                 model.eval()
-                metrics, val_si = validate(args, model, test_loader, criterion_ueff, epoch, epochs, device)
-
+                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
+                [writer.add_scalar("metrics/"+k, v, step) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
-                    # wandb.log({
-                    #     f"Test/{criterion_ueff.name}": val_si.get_value(),
-                    #     # f"Test/{criterion_bins.name}": val_bins.get_value()
-                    # }, step=step)
+                    wandb.log({
+                        f"Test/{criterion_ueff.name}": val_si.get_value(),
+                        # f"Test/{criterion_bins.name}": val_bins.get_value()
+                    }, step=step)
 
-                    # wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_latest.pt",
-                                             root=os.path.join(root, "checkpoints"))
+                    wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
+                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                                             root=saver.data_dir)
                                             
                     print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                     time_total = -time.time()
                     time_core = 0.
                 if metrics['abs_rel'] < best_loss and should_write:
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_{run_id}_best.pt",
-                                             root=os.path.join(root, "checkpoints"))
+                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
+                                             root=saver.data_dir)
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-
+        if (epoch+1)%2==0:
+            log_images(test_loader, model, "vis/test", step, use_adabins=args.modelconfig.use_adabins)
+            log_images(train_loader, model, "vis/train", step, use_adabins=args.modelconfig.use_adabins)
     return model
 
 
-def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cpu'):
+def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device='cpu'):
+    global count_val
     with torch.no_grad():
         val_si = RunningAverage()
         # val_bins = RunningAverage()
         metrics = utils.RunningAverageDict()
-        for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if is_rank_zero(
-                args) else test_loader:
+        for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
             depth_var = batch['depth_variance'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
+            if(args.modelconfig.use_adabins):
+                bin_edges, pred = model(img)
+            else:
+                bin_edges, pred = None, model(img)
+            pc_image = batch["pc_image"].to(device)
+            l_dense, l_chamfer, l_edge = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+
+            writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
+            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
+            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
+
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
-            bins, pred = model(img)
-
             mask = depth > args.min_depth
-            l_dense = criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+            count_val = count_val + 1
             val_si.append(l_dense.item())
 
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
@@ -282,22 +392,22 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
 
             gt_depth = depth.squeeze().cpu().numpy()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
-            if args.garg_crop or args.eigen_crop:
+            if args.trainconfig.garg_crop or args.trainconfig.eigen_crop:
                 gt_height, gt_width = gt_depth.shape
                 eval_mask = np.zeros(valid_mask.shape)
 
-                if args.garg_crop:
+                if args.trainconfig.garg_crop:
                     eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
                     int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
 
                 elif args.eigen_crop:
-                    if args.dataset == 'kitti':
-                        eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
-                        int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                    else:
-                        eval_mask[45:471, 41:601] = 1
+
+                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
+                    int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
+                    
             valid_mask = np.logical_and(valid_mask, eval_mask)
             metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
+            metrics.update({ "test/l_chamfer": l_chamfer, "test/l_sum": loss, "test/l_dense": l_dense})
 
         return metrics.get_value(), val_si
 
@@ -311,86 +421,36 @@ def convert_arg_line_to_args(arg_line):
 
 
 # Arguments
-parser = argparse.ArgumentParser(description='Training script. Default values of all arguments are recommended for reproducibility', fromfile_prefix_chars='@',
-                                    conflict_handler='resolve')
-parser.convert_arg_line_to_args = convert_arg_line_to_args
-parser.add_argument('--epochs', default=25, type=int, help='number of total epochs to run')
-parser.add_argument('--n-bins', '--n_bins', default=80, type=int,
-                    help='number of bins/buckets to divide depth range into')
-parser.add_argument('--lr', '--learning-rate', default=0.000357, type=float, help='max learning rate')
-parser.add_argument('--wd', '--weight-decay', default=0.1, type=float, help='weight decay')
-parser.add_argument('--w_chamfer', '--w-chamfer', default=0.1, type=float, help="weight value for chamfer loss")
-parser.add_argument('--div-factor', '--div_factor', default=25, type=float, help="Initial div factor for lr")
-parser.add_argument('--final-div-factor', '--final_div_factor', default=100, type=float,
-                    help="final div factor for lr")
-
-parser.add_argument('--bs', default=16, type=int, help='batch size')
-parser.add_argument('--validate-every', '--validate_every', default=100, type=int, help='validation period')
+parser = ArgumentParser()
 parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
 parser.add_argument("--name", default="UnetAdaptiveBins")
-parser.add_argument("--norm", default="linear", type=str, help="Type of norm/competition for bin-widths",
-                    choices=['linear', 'softmax', 'sigmoid'])
-parser.add_argument("--same-lr", '--same_lr', default=False, action="store_true",
-                    help="Use same LR for all param groups")
 parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
 parser.add_argument("--root", default=".", type=str,
                     help="Root folder to save data in")
 parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
-parser.add_argument("--load_pretrained", action="store_true", default=False, help="Load pretrained weights of kitti dataset")
-
-parser.add_argument("--notes", default='', type=str, help="Wandb notes")
-parser.add_argument("--tags", default='sweep', type=str, help="Wandb tags")
+parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
 parser.add_argument("--workers", default=11, type=int, help="Number of workers for data loading")
-parser.add_argument("--dataset", default='nyu', type=str, help="Dataset to train on")
+parser.add_argument("--notes", default='', type=str, help="Wandb notes")
+parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
 
-parser.add_argument("--data_path", default='../dataset/nyu/sync/', type=str,
-                    help="path to dataset")
-parser.add_argument("--gt_path", default='../dataset/nyu/sync/', type=str,
-                    help="path to dataset")
+parser.add_arguments(TrainConfig, dest="trainconfig")
+parser.add_arguments(ModelConfig, dest="modelconfig")
 
-parser.add_argument('--filenames_file',
-                    default="./train_test_inputs/nyudepthv2_train_files_with_gt.txt",
-                    type=str, help='path to the filenames text file')
-
-parser.add_argument('--input_height', type=int, help='input height', default=416)
-parser.add_argument('--input_width', type=int, help='input width', default=544)
-parser.add_argument('--max_depth', type=float, help='maximum depth in estimation', default=10)
-parser.add_argument('--min_depth', type=float, help='minimum depth in estimation', default=1e-3)
-
-parser.add_argument('--do_random_rotate', default=True,
-                    help='if set, will perform random rotation for augmentation',
-                    action='store_true')
-parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
-parser.add_argument('--do_kb_crop', help='if set, crop input images as kitti benchmark images', action='store_true')
-parser.add_argument('--use_right', help='if set, will randomly use right images when train on KITTI',
-                    action='store_true')
-
-parser.add_argument('--data_path_eval',
-                    default="../dataset/nyu/official_splits/test/",
-                    type=str, help='path to the data for online evaluation')
-parser.add_argument('--gt_path_eval', default="../dataset/nyu/official_splits/test/",
-                    type=str, help='path to the groundtruth data for online evaluation')
-parser.add_argument('--filenames_file_eval',
-                    default="./train_test_inputs/nyudepthv2_test_files_with_gt.txt",
-                    type=str, help='path to the filenames text file for online evaluation')
-
-parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=1e-3)
-parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=10)
-parser.add_argument('--eigen_crop', default=True, help='if set, crops according to Eigen NIPS14',
-                    action='store_true')
-parser.add_argument('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
-
-def parse_args(arg_filename_with_prefix = None):
-    if(arg_filename_with_prefix is not None):
-        args = parser.parse_args([arg_filename_with_prefix])
-    else:
-        args = parser.parse_args()
-
-    args.batch_size = args.bs
+def parse_args():
+    
+    args = parser.parse_args()
+    args.batch_size = args.trainconfig.bs
     args.num_threads = args.workers
     args.mode = 'train'
-    args.chamfer = args.w_chamfer > 0
+    args.data_path = args.trainconfig.data_path
+    args.min_depth = args.modelconfig.min_depth
+    args.max_depth = args.modelconfig.max_depth
+    args.min_depth_eval = args.modelconfig.min_depth_eval
+    args.max_depth_eval = args.modelconfig.max_depth_eval
+    args.load_pretrained = args.modelconfig.load_pretrained
+
+    args.chamfer = args.trainconfig.w_chamfer > 0
     if args.root != "." and not os.path.isdir(args.root):
         os.makedirs(args.root)
 
@@ -418,19 +478,29 @@ def parse_args(arg_filename_with_prefix = None):
         args.gpu = None
 
 
+    # flatten nested configs, to make it easier to wandb
+    for k,v in asdict(args.trainconfig).items():
+        setattr(args, f"trainconfig:{k}", v)
+    for k,v in asdict(args.modelconfig).items():
+        setattr(args, f"modelconfig:{k}", v)
+
     return args
 if __name__ == '__main__':
 
-    if sys.argv.__len__() == 2:
-        arg_filename_with_prefix = '@' + sys.argv[1]
-    else:
-        arg_filename_with_prefix = None
-
-    args = parse_args(arg_filename_with_prefix)
+    args = parse_args()
     ngpus_per_node = torch.cuda.device_count()
     args.num_workers = args.workers
     args.ngpus_per_node = ngpus_per_node
-        
+    
+    saver_dir = os.path.join(args.root,"checkpoints")
+    saver = ConfigurationSaver(log_dir=saver_dir,
+                            save_items=[os.path.realpath(__file__)],
+                            args=args,
+                            dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
+                                ModelConfig(**vars(args.modelconfig))])
+                
+    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))

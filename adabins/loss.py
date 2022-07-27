@@ -11,7 +11,8 @@ class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
 
     def forward(self, input, target, mask=None, interpolate=True):
         if interpolate:
-            input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+            # input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+            input = nn.functional.interpolate(input, target.shape[-2:], align_corners=True)
 
         if mask is not None:
             input = input[mask]
@@ -25,9 +26,11 @@ class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
         return 10 * torch.sqrt(Dg)
 
 class UncertaintyLoss(nn.Module):  # Add variance to loss
-    def __init__(self):
+    def __init__(self, train_args):
         super(UncertaintyLoss, self).__init__()
         self.name = 'SILog'
+        self.args = train_args
+        self.depth_variance_ratio = self.args.traj_distance_variance_ratio
 
     def forward(self, input, target, target_variance, mask=None, interpolate=True):
         if interpolate:
@@ -44,10 +47,29 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
 
         # Dg = torch.var(g) + 0.15 * torch.pow(torch.mean(g), 2)
         if(target_variance.numel() !=0):
-            Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
+           #  Dg = 1/(input.shape[0]) * torch.sum(0.5 * torch.pow(input - target, 2)/target_variance)
+            Dg = torch.sum(0.5 * torch.pow(input - target, 2)/(1e-3 + target*self.depth_variance_ratio + target_variance))
+            if(self.args.scale_loss_with_point_number):
+                Dg /= input.shape[0]
         else:
             Dg = 0
         return Dg
+
+class EdgeAwareLoss(nn.Module):  # Add variance to loss
+    def __init__(self, train_args):
+        super(EdgeAwareLoss, self).__init__()
+        self.name = 'EdgeAwareLoss'
+        self.args = train_args
+
+    def forward(self, input, target, interpolate=True):
+        if interpolate:
+            input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+
+        input_gradient = torch.gradient(input, dim=[2, 3]) # gradient of prediction
+        target_gradient = torch.gradient(target[:, 0:1, :, :], dim=[2, 3]) # gradient of input image
+        loss = 1/torch.numel(input) * torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])) + torch.abs(input_gradient[1]) * torch.exp(-torch.abs(target_gradient[1])))
+        return loss
+
 class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins paper
     def __init__(self):
         super().__init__()

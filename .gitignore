@@ -15,4 +15,8 @@ kpconv/results
 
 *.pth
 *.pt
-adabins/checkpoints
+lsf.*
+visulization
+checkpoints
+adabins/wandb
+.vscode/launch.json

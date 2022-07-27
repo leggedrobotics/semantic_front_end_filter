@@ -73,13 +73,14 @@ def remove_leading_slash(s):
 class DataLoadPreprocess(Dataset):
     def __init__(self, args, mode, transform=None, is_for_online_eval=False):
         self.args = args
-        # if mode == 'online_eval':
-        #     with open(args.filenames_file_eval, 'r') as f:
-        #         self.filenames = f.readlines()
-        # else:
-        #     with open(args.filenames_file, 'r') as f:
-        #         self.filenames = f.readlines()
+        # check args 
+        if(not args.trainconfig.slim_dataset 
+            and (args.trainconfig.pc_img_input_channel!=0
+                or args.trainconfig.pc_img_label_channel!=0)):
+            print("WARNING: args.trainconfig.pc_img_channel is not effective when the dataset is not slim")
+        
         self.filenames = []
+        self.test_filenames = []
         import os
         if("TMPDIR" in os.environ.keys()):
             args.data_path = os.path.join(os.environ["TMPDIR"], args.data_path)
@@ -93,16 +94,24 @@ class DataLoadPreprocess(Dataset):
                     #     byte_data = data_file.read()
                     #     data = msgpack.unpackb(byte_data)
                     # if("images" in data.keys()):
-                    self.filenames.append(sample_path)
+                    # if(root.split('/')[-1] in {"Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"}):
+                    if(root.split('/')[-1] in args.trainconfig.testing):
+                        self.test_filenames.append(sample_path)
+                    else:
+                        self.filenames.append(sample_path)
                         # print("success")
                     # else:
                         # print("empty")
+        if args.trainconfig.train_with_sample:
+            self.filenames = self.test_filenames
+
         self.mode = mode
         self.transform = transform
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
+        self.filenames = self.filenames if self.mode == 'train' else self.test_filenames
         random.Random(0).shuffle(self.filenames)
-        self.filenames = self.filenames[:-100] if self.mode == 'train' else self.filenames[-100:]
+        # print(len(self.filenames))
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
@@ -110,19 +119,20 @@ class DataLoadPreprocess(Dataset):
         # focal = float(sample_path.split()[2])
         focal = 0
 
-        if self.mode == 'train':
-            # image_path = os.path.join(self.args.data_path, remove_leading_slash(sample_path.split()[3]))
-            # depth_path = os.path.join(self.args.gt_path, remove_leading_slash(sample_path.split()[4]))
-            # image = Image.open(image_path)
-            # depth_gt = Image.open(depth_path)
-            with open(sample_path, "rb") as data_file:
-                byte_data = data_file.read()
-                data = msgpack.unpackb(byte_data)
+        with open(sample_path, "rb") as data_file:
+            byte_data = data_file.read()
+            data = msgpack.unpackb(byte_data)
+        if(self.args.trainconfig.slim_dataset):
+            image = Image.fromarray(np.moveaxis(data["image"].astype(np.uint8), 0, 2))
+            depth_gt = np.moveaxis(data["depth_var"],0,2)
+            pc_image_label = data["pc_image"][:,:,self.args.trainconfig.pc_img_label_channel,None]
+            pc_image_input = data["pc_image"][:,:,self.args.trainconfig.pc_img_input_channel,None]
+        else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
 
 
-            pc_image = np.zeros_like(depth_gt)
+            pc_image = np.zeros_like(depth_gt[:,:,:1])
             pos = data["pose"]["map"][:3]
             pc = data["pointcloud"]
             pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
@@ -137,120 +147,54 @@ class DataLoadPreprocess(Dataset):
             pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
             pc_distance = pc_distance[pc_proj_mask]
             pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
+            pc_image_label = pc_image_input = pc_image
+        if self.mode == 'train':
 
             # if self.args.do_kb_crop is True:
-            #     height = image.height
-            #     width = image.width
-            #     top_margin = int(height - 352)
-            #     left_margin = int((width - 1216) / 2)
+            #       .....
             #     depth_gt = depth_gt.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
             #     image = image.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
-
-            # # To avoid blank boundaries due to pixel registration
-            # if self.args.dataset == 'nyu':
-            #     depth_gt = depth_gt.crop((43, 45, 608, 472))
-            #     image = image.crop((43, 45, 608, 472))
-
             # if self.args.do_random_rotate is True:
-            #     random_angle = (random.random() - 0.5) * 2 * self.args.degree
-            #     image = self.rotate_image(image, random_angle)
+            #       .....
             #     depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
 
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
-            pc_image = np.asarray(pc_image, dtype=np.float32)
+            pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
+            pc_image_input = np.asarray(pc_image_input, dtype=np.float32)
             
-            # print("shapes", image.shape, depth_gt.shape)
-            # depth_gt = np.expand_dims(depth_gt, axis=2)
-
-
-            # if self.args.dataset == 'nyu':
-            #     depth_gt = depth_gt / 1000.0
-            # else:
-            #     depth_gt = depth_gt / 256.0
-            image, depth_gt, pc_image = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width, pc_image)
-            image, depth_gt, pc_image = self.train_preprocess(image, depth_gt, pc_image)
-            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
-            depth_gt_mean = depth_gt[:, :, 0:1]
-            depth_gt_variance = depth_gt[:, :, 1:]
-            pc_image = pc_image[:, :, 0:1]
-
-            sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'pc_image': pc_image.copy(), 'focal': focal, 'depth_variance': depth_gt_variance.copy()}
+            image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
+                image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
+                pc_image_label, pc_image_input)
+            image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(
+                image, depth_gt, pc_image_label, pc_image_input)
+            depth_gt_mean = depth_gt[:, :, 0:1].copy()
+            depth_gt_variance = depth_gt[:, :, 1:].copy()
+            depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
+            image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
+            sample = {'image': image.copy(), 'depth': depth_gt_mean, 
+                'pc_image': pc_image_label.copy(), 'focal': focal, 
+                'depth_variance': depth_gt_variance,
+                'path': sample_path}
 
         else:
-            # if self.mode == 'online_eval':
-            #     data_path = self.args.data_path_eval
-            # else:
-            #     data_path = self.args.data_path
-
-            # image_path = os.path.join(data_path, remove_leading_slash(sample_path.split()[0]))
-            # image = np.asarray(Image.open(image_path), dtype=np.float32) / 255.0
-
-            with open(sample_path, "rb") as data_file:
-                byte_data = data_file.read()
-                data = msgpack.unpackb(byte_data)
-            image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
-            depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
             image = np.asarray(image, dtype=np.float32) / 255.0
-            
-            #  pc image
-            pc_image = np.zeros_like(depth_gt)
-            pos = data["pose"]["map"][:3]
-            pc = data["pointcloud"]
-            pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
-
-            imgshape = pc_image.shape[:-1] 
-            pc_proj_mask = pc[:, 10] > 0.5 # the point is on the graph
-            pc_proj_loc = pc[:, 11:13] # the x,y pos of point on image
-            pc_proj_mask = (pc_proj_mask & (pc_proj_loc[:, 0]<imgshape[1])
-                                        & (pc_proj_loc[:, 0]>=0)
-                                        &  (pc_proj_loc[:, 1]<imgshape[0])
-                                        &  (pc_proj_loc[:, 1]>=0))
-            pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
-            pc_distance = pc_distance[pc_proj_mask]
-            pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
-
-            image = np.concatenate((image, pc_image[:, :, 0:1]), axis=2)
-            depth_gt_mean = depth_gt[:, :, 0:1]
-            depth_gt_variance = depth_gt[:, :, 1:]
-            pc_image = pc_image[:, :, 0:1]
-            pc_image = np.asarray(pc_image, dtype=np.float32)
+            image = np.concatenate((image, pc_image_input[:, :, 0:1]), axis=2)
+            depth_gt_mean = depth_gt[:, :, 0:1].copy()
+            depth_gt_variance = depth_gt[:, :, 1:].copy()
+            depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
+            pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
 
             if self.mode == 'online_eval':
-                # gt_path = self.args.gt_path_eval
-                # depth_path = os.path.join(gt_path, remove_leading_slash(sample_path.split()[1]))
-                # has_valid_depth = False
-                # try:
-                    # depth_gt = Image.open(depth_path)
                     has_valid_depth = True
-                # except IOError:
-                    # depth_gt = False
-                    # print('Missing gt for {}'.format(image_path))
-
-                # if has_valid_depth:
                     depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
-                    # depth_gt = np.expand_dims(depth_gt, axis=2)
-                    # if self.args.dataset == 'nyu':
-                    #     depth_gt = depth_gt / 1000.0
-                    # else:
-                    #     depth_gt = depth_gt / 256.0
 
-            if self.args.do_kb_crop is True:
-                # height = image.shape[0]
-                # width = image.shape[1]
-                # top_margin = int(height - 352)
-                # left_margin = int((width - 1216) / 2)
-                # image = image[top_margin:top_margin + 352, left_margin:left_margin + 1216, :]
-                # if self.mode == 'online_eval' and has_valid_depth:
-                # depth_gt = depth_gt[top_margin:top_margin + 352, left_margin:left_margin + 1216, :]
 
-                # image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
-                # image, depth_gt = self.train_preprocess(image, depth_gt)
-                image,depth_gt = image,depth_gt
+            if self.args.trainconfig.do_kb_crop is True:
+                image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
-                sample = {'image': image.copy(), 'depth': depth_gt_mean.copy(), 'focal': focal, 'has_valid_depth': has_valid_depth,
-                        #   'image_path': sample_path.split()[0], 'depth_path': sample_path.split()[1]}
-                          'image_path': sample_path, 'depth_path': sample_path, 'depth_variance': depth_gt_variance.copy()}
+                sample = {'image': image.copy(), 'depth': depth_gt_mean, 'focal': focal, 'has_valid_depth': has_valid_depth,
+                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy()}
             else:
                 sample = {'image': image.copy(), 'focal': focal}
 
@@ -298,10 +242,7 @@ class DataLoadPreprocess(Dataset):
         image_aug = image ** gamma
 
         # brightness augmentation
-        if self.args.dataset == 'nyu':
-            brightness = random.uniform(0.75, 1.25)
-        else:
-            brightness = random.uniform(0.9, 1.1)
+        brightness = random.uniform(0.9, 1.1)
         image_aug = image_aug * brightness
 
         # color augmentation
@@ -332,16 +273,17 @@ class ToTensor(object):
 
         depth = sample['depth']
         depth_variance = sample['depth_variance']
+        depth = self.to_tensor(depth)
+        depth_variance = self.to_tensor(depth_variance)
+        pc_image = sample['pc_image']
+        pc_image = self.to_tensor(pc_image)
         if self.mode == 'train':
-            depth = self.to_tensor(depth)
-            depth_variance = self.to_tensor(depth_variance)
-            pc_image = sample['pc_image']
-            pc_image = self.to_tensor(pc_image)
-            return {'image': image, 'depth': depth, "pc_image":pc_image, 'focal': focal, "depth_variance": depth_variance}
+            return {'image': image, 'depth': depth, "pc_image":pc_image, 
+                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path']}
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'image_path': sample['image_path'], 'depth_path': sample['depth_path'], "depth_variance": depth_variance}
+                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

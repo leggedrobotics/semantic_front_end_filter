@@ -1,6 +1,7 @@
-bagfile: /media/anqiao/Semantic/Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_07/mission2/Reconstruct_2022-04-23-21-02-46_0.bag
-outdir: /media/anqiao/Semantic/Data/extract_trajectories_001_fusepc
-calibration: /home/anqiao/darpa_ws/src/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense
+#bagfile: /home/jolee/nav_data/bags/processed/2021-10-10-16-36-47_anymal-chimera_mission_2021-10-13-05-13-06_0.bag
+bagfile: /Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission10_locomotion/Reconstruct_2022-04-26-17-35-27_0.bag
+outdir: /Data/extract_trajectories
+calibration: /ros/catkin_ws/src/mnt/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense/
 
 save_proprioception: False
 skip_no_patch: True

@@ -5,6 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "train",
+            "type": "python",
+            "request": "launch",
+            "cwd": "/home/anqiao/semantic_front_end_filter/adabins",
+            "program": "/home/anqiao/semantic_front_end_filter/adabins/train.py",
+            "console": "integratedTerminal",
+            "args": ["--traj_label_W", "0", "--validate_every", "10", "--data_path", "/media/anqiao/Semantic/Data/extract_trajectories_003_slim", "--tqdm", "--bs", "1",],
+            "justMyCode": true
+        },
+        {
             "name": "visulizePC",
             "type": "python",
             "request": "launch",
@@ -15,18 +25,6 @@
                 "--hint=traj_0_datum_0.msgpack" 
             ],
             "justMyCode": true
-        },
-        {
-            "name": "train",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "args": [
-                "args_train.txt"
-            ],
-            "cwd": "${fileDirname}"
         },
         {
             "name": "Python: Current File",

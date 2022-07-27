@@ -110,8 +110,6 @@ def showImages(images):
             image = np.moveaxis(image, 0, 2)
         if(image.shape[2]==2): # depth maps and covariance map
             image=image[:,:,0]
-        elif(image.shape[2]==2): # depth maps
-            image=image[:,:,0]
         else:
             image = image/256
         axs[i].imshow(image)
@@ -167,7 +165,6 @@ def showPointCloudsOnGraph(pc, images):
     N = len(images)
     fig, axs = plt.subplots(1, N, figsize=(20, 6))
     
-    print(len(pc))
     pc = np.array(pc)
     imgs = [img.copy() for img in images]
     ### Color the points differently to verify that the projection is indeed correct.
@@ -293,7 +290,7 @@ def main():
             im_color = np.moveaxis(im_color, 2, 0)
             print("im_color :",im_color.shape)
             
-            rosv.publish_point_cloud(data['pointcloud'])
+            rosv.publish_point_cloud(data['pointcloud'], im_color)
 
         plt.show()
 

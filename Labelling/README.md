@@ -16,7 +16,7 @@ Visualize session depends on `msgpack-c`.
 
 ## Dataset generation
 
-1. Use `replay_and_record.launch` to get the re-record rosbag.
+1. Use `replayandrecord.launch` to get the re-record rosbag.
 2. Run `python3 extractFeetTrajsFromRosbag.py`
 3. Run `python3 extractPointCloudFromRosbag.py`. 
    1. It automatically calls `GroundfromTrajs.py` `ExtractDepthImage.py`

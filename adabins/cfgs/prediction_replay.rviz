@@ -11,8 +11,9 @@ Panels:
         - /Autonomy1/Active Client Path1
         - /Overlay Info1/Distance Tracker1
         - /Bluetooth Gas Detection1
+        - /PointCloud22
       Splitter Ratio: 0.48351648449897766
-    Tree Height: 336
+    Tree Height: 306
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -116,335 +117,7 @@ Visualization Manager:
             Expand Joint Details: false
             Expand Link Details: false
             Expand Tree: false
-            LF_FOOT:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LF_HAA:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LF_HFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LF_HIP:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            LF_KFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LF_SHANK:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            LF_THIGH:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            LF_hip_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LF_shank_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LF_thigh_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_FOOT:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_HAA:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_HFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_HIP:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            LH_KFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_SHANK:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            LH_THIGH:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            LH_hip_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_shank_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            LH_thigh_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
             Link Tree Style: Links in Alphabetic Order
-            RF_FOOT:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RF_HAA:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RF_HFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RF_HIP:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            RF_KFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RF_SHANK:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            RF_THIGH:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            RF_hip_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RF_shank_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RF_thigh_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_FOOT:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_HAA:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_HFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_HIP:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            RH_KFE:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_SHANK:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            RH_THIGH:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            RH_hip_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_shank_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            RH_thigh_fixed:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            alphasense_mesh:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            base:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            base_inertia:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            base_subt:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            battery:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            body_top:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            bottom_shell:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            bpearl_front:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            bpearl_front_beam_origin:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            bpearl_front_protection_bars:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            bpearl_rear:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            bpearl_rear_beam_origin:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            bpearl_rear_protection_bars:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            cam0_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            cam1_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            cam2_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            cam3_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            cam4_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            cam5_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            cam6_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            docking_hatch_cover:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            front_handle:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            handle:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            hatch:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            imu_link:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            imu_sensor_frame:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-            interface_hatch:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            lidar:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            perception_head_cage:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            remote:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
-            top_shell:
-              Alpha: 1
-              Show Axes: false
-              Show Trail: false
-              Value: true
           Name: RobotModel
           Robot Description: anymal_description
           TF Prefix: ""
@@ -1264,7 +937,7 @@ Visualization Manager:
           Unreliable: false
           Value: true
         - Class: rviz/Image
-          Enabled: false
+          Enabled: true
           Image Topic: /alphasense_driver_ros/cam1
           Max Value: 1
           Median window: 5
@@ -1274,9 +947,9 @@ Visualization Manager:
           Queue Size: 2
           Transport Hint: compressed
           Unreliable: false
-          Value: false
+          Value: true
         - Class: rviz/Image
-          Enabled: false
+          Enabled: true
           Image Topic: /alphasense_driver_ros/cam2
           Max Value: 1
           Median window: 5
@@ -1286,7 +959,7 @@ Visualization Manager:
           Queue Size: 2
           Transport Hint: compressed
           Unreliable: false
-          Value: false
+          Value: true
       Enabled: false
       Name: Alphasense
     - Class: rviz/Group
@@ -1448,8 +1121,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 0.3414856791496277
-        Min Value: -9.572151184082031
+        Max Value: 3.99322247505188
+        Min Value: 3.99322247505188
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -1466,12 +1139,36 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.10000000149011612
       Style: Flat Squares
       Topic: /pred_pc
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /pred_depth_image
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /pointcloud_image
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
       Value: true
   Enabled: true
   Global Options:
@@ -1504,26 +1201,23 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz/Orbit
-      Distance: 1.4572334289550781
+      Class: rviz/FPS
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
-      Field of View: 0.7853981852531433
-      Focal Point:
-        X: 0.005669289268553257
-        Y: -2.3475522994995117
-        Z: 1.1594557762145996
-      Focal Shape Fixed Size: false
-      Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3697972893714905
+      Pitch: 0.029999997466802597
+      Position:
+        X: 1.9113788604736328
+        Y: -12.990578651428223
+        Z: 1.0071830749511719
+      Roll: 0
       Target Frame: base
-      Yaw: 4.219698905944824
+      Yaw: 1.6831581592559814
     Saved: ~
 Window Geometry:
   Cam0:
@@ -1534,10 +1228,12 @@ Window Geometry:
     collapsed: false
   Displays:
     collapsed: false
-  Height: 602
+  Height: 979
   Hide Left Dock: false
-  Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd00000004000000000000021d000001befc0200000019fb0000001200530065006c0065006300740069006f006e00000001e10000009b000000b000fffffffb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000006e000001be0000018200fffffffb0000001a004b0069006e006500630074002000430061006d0065007200610000000191000001010000000000000000fb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0056006900650077007302000005b000000196000001d0000000e1fb000000100044006900730070006c0061007900730000000301000001350000018200fffffffb0000001a004b0069006e006500630074002000430061006d0065007200610000000000ffffffff0000000000000000fb0000000c00430061006d00650072006100000001d20000007c0000000000000000fb00000016005a006f006f006d002000430061006d0065007200610100000131000000160000000000000000fb0000001c0054006800650072006d0061006c002000430061006d006500720061010000014d000000160000000000000000fb0000001a0042006c00610063006b0066006c0079002000720065006100720000000000ffffffff0000000000000000fb0000001c0042006c00610063006b0066006c0079002000660072006f006e00740000000000ffffffff0000000000000000fb0000000800430061006d0030000000021e000000e20000002600fffffffb0000001e0044006500740065006300740069006f006e002000460072006f006e00740000000303000000e20000000000000000fb0000000800430061006d0031000000035b000001000000002600fffffffb0000000800430061006d00320000000428000001140000002600fffffffb0000001c0044006500740065006300740069006f006e0020004c006500660074000000028e0000008b0000000000000000fb0000000a0049006d0061006700650000000721000000f40000000000000000fb0000001e0044006500740065006300740069006f006e00200052006900670068007400000002e1000000a10000000000000000fb000000220044006500740065006300740069006f006e002000550070007700610072006400730000000351000000ba0000000000000000fb00000022005200650070006f00720074006500640020004100720074006900660061006300740000000272000000b6000000000000000000000001000001f6000001d0fc0200000008fb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000003c000000b8000000b000fffffffc00000043000001d00000000000fffffffa000000000100000004fb0000001600540065006c0065006f007000500061006e0065006c0000000000ffffffff0000000000000000fb00000012005000610074006800500061006e0065006c0000000000ffffffff0000000000000000fb00000012005000610074006800500061006e0065006c0100000000ffffffff0000000000000000fb0000000a0056006900650077007300000004ba000001720000017e00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000fb000000140046006500650064006200610063006b00200031000000003d000000360000000000000000fb000000140046006500650064006200610063006b002000340000000079000000360000000000000000fb000000140046006500650064006200610063006b0020003300000000b5000000360000000000000000fb000000140046006500650064006200610063006b0020003200000000f1000000360000000000000000fb0000000c0052006500730075006c0074000000012d000000360000000000000000000000020000075a00000098fc0100000001fb0000001e0054006f006f006c002000500072006f007000650072007400690065007300000000000000075a0000000000000000000000030000073f0000003efc0100000002fb0000000800540069006d006500000000000000073f0000051300fffffffb0000000800540069006d0065010000000000000450000000000000000000000f3f000001be00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Hide Right Dock: false
+  Image:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000021d00000337fc020000001bfb0000001200530065006c0065006300740069006f006e00000001e10000009b000000b000fffffffb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000006e000001a00000018200fffffffb0000001a004b0069006e006500630074002000430061006d0065007200610000000191000001010000000000000000fb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0056006900650077007302000005b000000196000001d0000000e1fb000000100044006900730070006c0061007900730000000301000001350000018200fffffffb0000001a004b0069006e006500630074002000430061006d0065007200610000000000ffffffff0000000000000000fb0000000c00430061006d00650072006100000001d20000007c0000000000000000fb00000016005a006f006f006d002000430061006d0065007200610100000131000000160000000000000000fb0000001c0054006800650072006d0061006c002000430061006d006500720061010000014d000000160000000000000000fb0000001a0042006c00610063006b0066006c0079002000720065006100720000000000ffffffff0000000000000000fb0000001c0042006c00610063006b0066006c0079002000660072006f006e00740000000000ffffffff0000000000000000fb0000000800430061006d0030000000021e000000e20000002600fffffffb0000001e0044006500740065006300740069006f006e002000460072006f006e00740000000303000000e20000000000000000fb0000000800430061006d0031000000035b000001000000002600fffffffb0000000800430061006d00320000000428000001140000002600fffffffb0000001c0044006500740065006300740069006f006e0020004c006500660074000000028e0000008b0000000000000000fb0000000a0049006d006100670065010000021a000000b30000002600fffffffb0000001e0044006500740065006300740069006f006e00200052006900670068007400000002e1000000a10000000000000000fb000000220044006500740065006300740069006f006e002000550070007700610072006400730000000351000000ba0000000000000000fb00000022005200650070006f00720074006500640020004100720074006900660061006300740000000272000000b60000000000000000fb0000000a0049006d006100670065010000020f000000ba0000000000000000fb0000000a0049006d00610067006501000002d9000000cc0000002600ffffff00000001000001f600000337fc0200000008fb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000003c000000b8000000b000fffffffc0000006e000003370000013200fffffffa000000030100000004fb0000001600540065006c0065006f007000500061006e0065006c0000000000ffffffff0000000000000000fb00000012005000610074006800500061006e0065006c0000000000ffffffff0000000000000000fb00000012005000610074006800500061006e0065006c0100000000ffffffff0000000000000000fb0000000a0056006900650077007301000004ba000001720000017e00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000fb000000140046006500650064006200610063006b00200031000000003d000000360000000000000000fb000000140046006500650064006200610063006b002000340000000079000000360000000000000000fb000000140046006500650064006200610063006b0020003300000000b5000000360000000000000000fb000000140046006500650064006200610063006b0020003200000000f1000000360000000000000000fb0000000c0052006500730075006c0074000000012d000000360000000000000000000000020000075a00000098fc0100000001fb0000001e0054006f006f006c002000500072006f007000650072007400690065007300000000000000075a0000000000000000000000030000073f0000003efc0100000002fb0000000800540069006d006500000000000000073f0000051300fffffffb0000000800540069006d0065010000000000000450000000000000000000000a450000033700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -1545,7 +1241,7 @@ Window Geometry:
   Tool Properties:
     collapsed: false
   Views:
-    collapsed: true
-  Width: 4456
-  X: 109
+    collapsed: false
+  Width: 3696
+  X: 144
   Y: 156
