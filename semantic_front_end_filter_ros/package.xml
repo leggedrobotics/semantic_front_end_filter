@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>semantic_front_end_filter_ros</name>
+  <version>1.0.0</version>
+  <description>semantic front end filter ros package.</description>
+
+  <license>Proprietary</license>
+
+  <maintainer email="chenyangt@student.ethz.ch">Chenyu Yang</maintainer>
+  <author email="anqiali@student.ethz.ch">Anqiao Li</author>
+  <author email="chenyangt@student.ethz.ch">Chenyu Yang</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>anymal_c</exec_depend>
+  <exec_depend>anymal_c_rsl</exec_depend>
+  <exec_depend>stack_launcher</exec_depend>
+
+</package>

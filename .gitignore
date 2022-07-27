@@ -11,12 +11,13 @@ __pycache__
 *.ipynb
 
 # kpconv
-kpconv/results
+results
 
 *.pth
 *.pt
 lsf.*
 visulization
 checkpoints
-adabins/wandb
+wandb
 .vscode/launch.json
+
