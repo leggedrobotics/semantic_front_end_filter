@@ -19,5 +19,4 @@ lsf.*
 visulization
 checkpoints
 adabins/wandb
-
-.vscode
+.vscode/launch.json
