@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
-from cfg import TrainConfig, ModelConfig
+from .cfgUtils import parse_args
 from experimentSaver import ConfigurationSaver
 import matplotlib.pyplot as plt
 
@@ -420,37 +420,22 @@ def convert_arg_line_to_args(arg_line):
 
 
 
-# Arguments
-parser = ArgumentParser()
-parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
-parser.add_argument("--name", default="UnetAdaptiveBins")
-parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
-parser.add_argument("--root", default=".", type=str,
-                    help="Root folder to save data in")
-parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
-parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
+if __name__ == '__main__':
+    # Arguments
+    parser = ArgumentParser()
+    parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
+    parser.add_argument("--name", default="UnetAdaptiveBins")
+    parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
+    parser.add_argument("--root", default=".", type=str,
+                        help="Root folder to save data in")
+    parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
+    parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
-parser.add_argument("--workers", default=11, type=int, help="Number of workers for data loading")
-parser.add_argument("--notes", default='', type=str, help="Wandb notes")
-parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
+    parser.add_argument("--notes", default='', type=str, help="Wandb notes")
+    parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
 
-parser.add_arguments(TrainConfig, dest="trainconfig")
-parser.add_arguments(ModelConfig, dest="modelconfig")
+    args = parse_args(parser, flatten = True)
 
-def parse_args():
-    
-    args = parser.parse_args()
-    args.batch_size = args.trainconfig.bs
-    args.num_threads = args.workers
-    args.mode = 'train'
-    args.data_path = args.trainconfig.data_path
-    args.min_depth = args.modelconfig.min_depth
-    args.max_depth = args.modelconfig.max_depth
-    args.min_depth_eval = args.modelconfig.min_depth_eval
-    args.max_depth_eval = args.modelconfig.max_depth_eval
-    args.load_pretrained = args.modelconfig.load_pretrained
-
-    args.chamfer = args.trainconfig.w_chamfer > 0
     if args.root != "." and not os.path.isdir(args.root):
         os.makedirs(args.root)
 
@@ -478,16 +463,6 @@ def parse_args():
         args.gpu = None
 
 
-    # flatten nested configs, to make it easier to wandb
-    for k,v in asdict(args.trainconfig).items():
-        setattr(args, f"trainconfig:{k}", v)
-    for k,v in asdict(args.modelconfig).items():
-        setattr(args, f"modelconfig:{k}", v)
-
-    return args
-if __name__ == '__main__':
-
-    args = parse_args()
     ngpus_per_node = torch.cuda.device_count()
     args.num_workers = args.workers
     args.ngpus_per_node = ngpus_per_node

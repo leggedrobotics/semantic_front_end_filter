@@ -2,6 +2,7 @@ build
 __pycache__
 # python files
 *.pyc
+*.egg-info
 
 # CPP files
 *.o
@@ -20,4 +21,4 @@ visulization
 checkpoints
 wandb
 .vscode/launch.json
-
+.vscode/settings.json

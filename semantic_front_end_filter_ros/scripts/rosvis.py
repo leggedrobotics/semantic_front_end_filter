@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 Chenyu 2022-05-16
 The visulizer in RVIZ
@@ -9,8 +10,9 @@ A node with two modes,
 
 
 import os
+import sys
 from ruamel.yaml import YAML
-from argparse import ArgumentParser
+from simple_parsing import ArgumentParser
 import struct
 
 import cv2
@@ -24,6 +26,8 @@ import msgpack_numpy as m
 m.patch()
 import math
 from scipy.spatial.transform import Rotation 
+import torch
+import torch.nn as nn
 try:
     from cv_bridge import CvBridge
     from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
@@ -42,11 +46,12 @@ except ModuleNotFoundError as ex:
 
 from threading import Lock
 
-import sys
-from scipy.spatial.transform import Rotation
-from train import *
 
-from pointcloudUtils import RaycastCamera
+from semantic_front_end_filter.adabins.cfgUtils import parse_args
+from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
+# import semantic_front_end_filter.adabins.models as models
+from semantic_front_end_filter.adabins import model_io, models
+from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -216,6 +221,7 @@ def vis_from_dataset(sample):
 
     checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
     model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+                                            input_channel=4, 
                                             norm=args.modelconfig.norm, use_adabins = True)
     model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
 
@@ -233,8 +239,9 @@ if __name__ == "__main__":
 
     MODE = "MODE_NODE"
     rosv = RosVisulizer("pointcloud")
+    parser = ArgumentParser()
     parser.add_argument("--model", default="")
-    args = parse_args()
+    args = parse_args(parser )
     if(MODE=="MODE_DATASET"):
         # checkpoint_path = args.models
         # model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
@@ -251,8 +258,13 @@ if __name__ == "__main__":
         vis_from_dataset(sample)
 
     elif(MODE=="MODE_NODE"):
-        checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
+        
+        checkpoint_path = os.path.join(
+            SEMANTIC_FRONT_END_FILTER_ROOT_PATH,
+            "adabins", 
+            "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt")
         model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+                                                input_channel = 4,
                                                 norm=args.modelconfig.norm, use_adabins = True)
         model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
         model.to(device)

@@ -20,7 +20,6 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   cv_bridge
-  octomap_msgs
   filters
 )
 
@@ -30,7 +29,6 @@ find_package(OpenCV REQUIRED
   CONFIG
 )
 
-find_package(octomap REQUIRED)
 
 catkin_package(
 #  INCLUDE_DIRS include
@@ -52,32 +50,31 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
-  ${OCTOMAP_INCLUDE_DIR}
 )
-add_executable(simple_demo
-  src/simple_demo_node.cpp
-)
-target_link_libraries(
-  simple_demo
-  ${catkin_LIBRARIES}
-)
-#==
-# Package installation
-#==
+# add_executable(simple_demo
+#   src/simple_demo_node.cpp
+# )
+# target_link_libraries(
+#   simple_demo
+#   ${catkin_LIBRARIES}
+# )
+# #==
+# # Package installation
+# #==
 
-install(
-  DIRECTORY
-    config
-    launch
-    urdf
-  DESTINATION
-    ${CATKIN_PACKAGE_SHARE_DESTINATION}
-)
-install(
-  TARGETS 
-    simple_demo
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+# install(
+#   DIRECTORY
+#     config
+#     launch
+#     urdf
+#   DESTINATION
+#     ${CATKIN_PACKAGE_SHARE_DESTINATION}
+# )
+# install(
+#   TARGETS 
+#     simple_demo
+#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
 # EOF

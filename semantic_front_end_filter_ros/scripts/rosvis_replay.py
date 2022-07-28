@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # filters the topics in replay stack for the rosvis node
 # topics: 
 # - front camera
@@ -24,9 +25,9 @@ assert rosgraph.is_master_online()
 
 import sys
 sys.path.append("../Labelling/")
-from messages.imageMessage import rgb_msg_to_image
-from messages.pointcloudMessage import rospcmsg_to_pcarray
-from messages.messageToVectors import msg_to_pose
+from semantic_front_end_filter.Labelling.messages.imageMessage import rgb_msg_to_image
+from semantic_front_end_filter.Labelling.messages.pointcloudMessage import rospcmsg_to_pcarray
+from semantic_front_end_filter.Labelling.messages.messageToVectors import msg_to_pose
 import tf
 
 # import matplotlib.pyplot as plt
