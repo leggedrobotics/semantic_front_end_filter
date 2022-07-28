@@ -8,7 +8,7 @@
 # See the License for more information.
 #=============================================================================
 cmake_minimum_required(VERSION 3.10)
-project(semantic_front_end_filter)
+project(semantic_front_end_filter_ros)
 
 #==
 # Dependencies
