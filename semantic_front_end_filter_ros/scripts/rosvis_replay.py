@@ -32,7 +32,8 @@ import tf
 
 # import matplotlib.pyplot as plt
 
-image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
+# image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
+image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
 pointcloud_topic = "/bpearl_rear/point_cloud"
 TF_BASE = "base"
 
@@ -45,7 +46,9 @@ points_pub = rospy.Publisher("/semantic_filter_points", Float64MultiArray, queue
 
 def image_callback(data):
     print("image received data")
-    img = rgb_msg_to_image(data, ("debayered" in image_topic), False, ("compressed" in image_topic))
+    # img = rgb_msg_to_image(data, ("debayered" in image_topic), False, ("compressed" in image_topic))
+    img = rgb_msg_to_image(data, True, False, ("compressed" in image_topic))
+
     img = np.moveaxis(img, 2, 0)
 
     img_msg = Float64MultiArray(data = img.reshape(-1))

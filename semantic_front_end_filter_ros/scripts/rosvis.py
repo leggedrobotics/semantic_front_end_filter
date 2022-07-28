@@ -16,6 +16,7 @@ from simple_parsing import ArgumentParser
 import struct
 
 import cv2
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt 
@@ -54,9 +55,10 @@ from semantic_front_end_filter.adabins import model_io, models
 from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+DEBUG_MODE=True
 
 class RosVisulizer:
-    def __init__(self, topic, camera_calibration_path="/ros/catkin_ws/src/mnt/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense/"):
+    def __init__(self, topic, camera_calibration_path="/home/anqiao/anymal_ws/src/anymal_rsl/anymal_c_rsl/anymal_cerberus_rsl/anymal_cerberus_rsl/calibration/alphasense/intrinsic/"):        
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
@@ -241,11 +243,11 @@ if __name__ == "__main__":
         checkpoint_path = os.path.join(
             SEMANTIC_FRONT_END_FILTER_ROOT_PATH,
             "adabins", 
-            "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt")
+            "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-07-26-00-11-50/UnetAdaptiveBins_latest.pt")
         model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                                 input_channel = 4,
-                                                norm=args.modelconfig.norm, use_adabins = True)
-        model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
+                                                norm=args.modelconfig.norm, use_adabins = False)
+        # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
         model.to(device)
 
         # the place holders for the values
@@ -305,6 +307,8 @@ if __name__ == "__main__":
         rate = rospy.Rate(1000) # 1hz
         while not rospy.is_shutdown():
             rate.sleep()
+            
+            start = time.time()
             image_mutex.acquire()
             image = image_ph.clone() if image_ph is not None else image_ph
             image_mutex.release()
@@ -317,6 +321,10 @@ if __name__ == "__main__":
             points_mutex.acquire()
             points = points_ph.copy() if points_ph is not None else points_ph
             points_mutex.release()
+            update_end = time.time()
+            if(DEBUG_MODE):
+                print("update cost: ", update_end-start)
+            
             if(show_depth_flag and depth is not None and image is not None and pose is not None):
                 _depth = depth.T
                 _image = np.transpose(image.numpy(),(2,1,0))
@@ -324,7 +332,10 @@ if __name__ == "__main__":
                 cloud = rosv.build_could_from_depth_image(pose, _depth, _image)
                 print("terrainpub", cloud.height, cloud.width)
                 terrainpub.publish(cloud)
-
+            projection_end = time.time()
+            if(DEBUG_MODE):
+                print("projection cost: ", projection_end-update_end)
+            
             if(show_pred_flag and image is not None and pose is not None):
                 pc_img = torch.zeros_like(image[:1,...]).numpy()
                 if(points is not None):
@@ -342,13 +353,19 @@ if __name__ == "__main__":
                 #normalize
                 for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
                     _image[0,i,...] = (_image[0,i,...] - m)/s
-                _, pred = model(_image)
+                pred = model(_image)
                 pred = pred[0].detach()
                 pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
                 pred = pred[0][0].T
                 # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
                 # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
                 cloud = rosv.build_could_from_depth_image(pose, pred, None)
+                predction_end = time.time()
+                if(DEBUG_MODE):                
+                    print("prediction & projection cost: ", predction_end-projection_end)    
+                    print("one loop cost: ", predction_end-start)      
+                    print("-------------------------------------------------------")      
+                
                 predpub.publish(cloud)
                 pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
                 pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
