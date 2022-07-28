@@ -63,27 +63,6 @@ class RosVisulizer:
         self.raycastCamera = RaycastCamera(self.camera_calibration_path, device)
         self.image_cv_bridge = CvBridge()
     
-    
-    def project_depth_to_cloud(self, pose, depth):
-        """
-        depth: a torch tensor depth image
-        image: the color image, can be numpy or torch
-        """
-        self.camera.update_pose_from_base_pose(pose)
-        W,H = self.camera.image_width,self.camera.image_height
-
-        position = self.camera.pose[0]
-        euler = euler_from_matrix(self.camera.pose[1][:3,:3])
-            
-        H_map_cam = calculate_H_map_cam(position, euler)
-        R = torch.from_numpy( H_map_cam )[:3,:3]
-        directions = self.ray_dir
-        directions = (directions @ R.to(device))
-        start_points = torch.from_numpy( H_map_cam[:3,3]).to(device)
-        pts = start_points + depth.reshape(-1,1)*directions
-        height_mask = pts[:,2] < pose[2]
-        pts = pts[height_mask]
-        return pts
 
     def build_could_from_depth_image(self, pose, depth, image = None):
         """
@@ -351,19 +330,7 @@ if __name__ == "__main__":
                 if(points is not None):
                     try:
                         time_count = -time.time()
-                        rosv.camera.update_pose_from_base_pose(pose)
-                        proj_point, proj_jac = rosv.camera.project_point(points[:,:3].astype(np.float32))
-                        proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)
-                        camera_heading = rosv.camera.pose[1][:3, 2]
-                        point_dir = points[:, :3] - rosv.camera.pose[0]
-                        visible = np.dot(point_dir, camera_heading) > 1.0
-                        visible = (visible & (0.0 <= proj_point[:,0])
-                                & (proj_point[:,0] < rosv.camera.image_width)
-                                & (0.0 <= proj_point[:, 1])
-                                & (proj_point[:, 1] < rosv.camera.image_height))
-                        proj_point = proj_point[visible]
-                        pc_distance = np.sqrt(np.sum((points[visible,:3] - pose[:3].numpy())**2, axis = 1))
-                        pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
+                        pc_img = rosv.raycastCamera.project_cloud_to_depth(pose, points, pc_img)
                         ## TODO: normalize the input
                     except Exception as e:
                         print("PC IMAGE ERROR", e)
