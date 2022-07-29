@@ -6,15 +6,34 @@ This file defines a class raycastCamera
 
 import sys
 import os
+
+from cv2 import projectPoints
 LabellingPath = os.path.join(os.path.dirname(os.path.dirname(__file__)),"Labelling")
 sys.path.append(LabellingPath)
 from messages.imageMessage import Camera
+
 import numpy as np
 import torch
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
 from scipy.spatial.transform import Rotation
 import math
+
+class Timer:
+    def __init__(self, name="") -> None:
+        self.name = name
+
+    def __enter__(self):
+        self.start = torch.cuda.Event(enable_timing=True)
+        self.end = torch.cuda.Event(enable_timing=True)
+        self.start.record()
+        return "Hello, World!"
+    
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.end.record()
+        torch.cuda.synchronize()
+        print(f"Time {self.name}", self.start.elapsed_time(self.end))
 
 def calculate_H_map_cam(transition, rotation):
     
@@ -80,16 +99,25 @@ class RaycastCamera:
 
     def project_cloud_to_depth(self, pose, points, pc_img):
         self.camera.update_pose_from_base_pose(pose)
-        proj_point, proj_jac = self.camera.project_point(points[:,:3].astype(np.float32))
-        proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)
-        camera_heading = self.camera.pose[1][:3, 2]
-        point_dir = points[:, :3] - self.camera.pose[0]
-        visible = np.dot(point_dir, camera_heading) > 1.0
+        camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
+        p = torch.Tensor(self.camera.tvec).to(device)
+        H = torch.inverse(torch.Tensor(self.camera.pose[1]).to(device))
+        R = H[:3, :3]
+        p = H[:3, 3]
+        h = torch.Tensor(self.camera.pose[0]).to(device)
+        # TODO check this
+        proj_point = torch.matmul(torch.matmul((points ), R.transpose(0, 1)) + p, camera_matrix.transpose(0, 1))
+        proj_point = (proj_point/proj_point[:, 2:].repeat(1, 3)).long()
+        # proj_point, proj_jac = self.camera.project_point(points[:,:3].astype(np.float32))#150ms
+        # proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)#80ms
+        camera_heading = torch.Tensor(self.camera.pose[1][:3, 2]).to(device)
+        point_dir = points[:, :3] - h
+        visible = torch.matmul(point_dir, camera_heading) > 1.0
         visible = (visible & (0.0 <= proj_point[:,0])
                 & (proj_point[:,0] < self.camera.image_width)
                 & (0.0 <= proj_point[:, 1])
                 & (proj_point[:, 1] < self.camera.image_height))
         proj_point = proj_point[visible]
-        pc_distance = np.sqrt(np.sum((points[visible,:3] - pose[:3].numpy())**2, axis = 1))
+        pc_distance = torch.sqrt(torch.sum((points[visible,:3] - pose[:3])**2, axis = 1))
         pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
         return pc_img

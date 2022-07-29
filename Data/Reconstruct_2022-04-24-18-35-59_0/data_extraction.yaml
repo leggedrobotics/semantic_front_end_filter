@@ -1,0 +1,45 @@
+#bagfile: /home/jolee/nav_data/bags/processed/2021-10-10-16-36-47_anymal-chimera_mission_2021-10-13-05-13-06_0.bag
+bagfile: /Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_07/mission5/Reconstruct_2022-04-24-18-35-59_0.bag
+outdir: /Data/extract_trajectories
+calibration: /ros/catkin_ws/src/mnt/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense/
+
+save_proprioception: false
+skip_no_patch: true
+visualize: false
+dt: 0.5
+
+max_traj_len: 100  # to avoid filling up memory (number of max time steps to process at once)
+min_traj_len: 10
+image_patch_shape: [64, 64]
+
+## Configimage_patchess for proprioceptive data -> used for contact detection & etc
+proprioception_dt: 0.0025
+proprioception_history_half_length: 10 # +- current time
+
+### Elevation map config
+local_map_shape: [5.0, 5.0, 100, 100] # x width, y width, x grid n, y grid n
+foot_projection_range: 5.0
+ray_col_margin: 0.05
+map_idx: 1 # 0: traversability
+
+### configuring topic names
+CAM_PREFIX: /alphasense_driver_ros/
+CAM_NAMES: [cam3, cam4, cam5]
+#CAM_NAMES: ['cam3']
+CAM_SUFFIX: /dropped/debayered/compressed
+CAM_RBSWAP: ['']
+
+ELEVATION_MAP_TOPIC: /elevation_mapping/elevation_map_recordable
+
+TF_BASE: base
+TF_POSE_REF_LIST:
+- odom
+- map
+- msf_body_imu_map
+- vio_map
+
+STATE_TOPIC: /state_estimator/anymal_state
+COMMAND_TOPIC: /twist_mux/twist
+POINT_CLOUD_SUFFIX: /point_cloud
+POINT_CLOUD_NAMES: [/bpearl_front, /bpearl_rear]
+bag_file_name: /Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_07/mission5/Reconstruct_2022-04-24-18-35-59_0.bag

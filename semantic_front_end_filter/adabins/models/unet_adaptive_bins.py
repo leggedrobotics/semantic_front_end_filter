@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-import geffnet
+# import geffnet
 from .miniViT import mViT
 import os
 
@@ -150,7 +150,9 @@ class UnetAdaptiveBins(nn.Module):
         if(input_channel == 4):
             # Change first layer to 4 channel
             orginal_first_layer_weight = basemodel.conv_stem.weight
-            basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+            # basemodel.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+            basemodel.conv_stem= torch.nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+
             with torch.no_grad():
                 basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
                 # basemodel.conv_stem.weight[:, 0:3, :, :] = 0
@@ -169,7 +171,9 @@ class UnetAdaptiveBins(nn.Module):
     
     def transform(self):
         orginal_first_layer_weight = self.encoder.original_model.conv_stem.weight
-        self.encoder.original_model.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+        # self.encoder.original_model.conv_stem = geffnet.conv2d_layers.Conv2dSame(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+        self.encoder.original_model.conv_stem = torch.nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
+
         with torch.no_grad():
             self.encoder.original_model.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
             # self.encoder.original_model.conv_stem.weight[:, 3:, :, :] = 0

@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
-from ruamel.yaml import YAML
+# from ruamel.yaml import YAML
+import yaml
 from scipy.spatial.transform import Rotation 
 try:
     from .messageToVectors import msg_to_pose
@@ -29,7 +30,7 @@ class Camera:
         self.is_debayered = ('debayered' in cfg['CAM_SUFFIX'])
 
         # calibration data
-        self.calibration = YAML().load(open(cali_path, 'r'))
+        self.calibration = yaml.load(open(cali_path, 'r'), Loader=yaml.FullLoader)
         self.camera_matrix = np.array(self.calibration['camera_matrix']['data']).reshape([3, 3])
         self.distortion = np.array(self.calibration['distortion_coefficients']['data'])
 
@@ -56,9 +57,9 @@ class Camera:
 
     def update_pose_from_base_pose(self, base_in_world):
 
-        position = np.array(base_in_world[:3])
+        position = np.array(base_in_world[:3].cpu())
         # R_bak = np.array(quaternion_matrix(base_in_world[3:]))
-        rotation = Rotation.from_quat(base_in_world[3:])
+        rotation = Rotation.from_quat(base_in_world[3:].cpu())
         R = np.eye(4)
         R[:3,:3] = rotation.as_matrix()
         # assert(np.sum((R_bak - R)**2) < 1e-10)
