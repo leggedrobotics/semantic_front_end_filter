@@ -1,3 +1,6 @@
 [submodule "pyenv"]
 	path = pyenv
 	url = git@bitbucket.org:leggedrobotics/pyenv.git
+[submodule "elevation_mapping_cupy"]
+	path = elevation_mapping_cupy
+	url = git@github.com:leggedrobotics/elevation_mapping_cupy.git

@@ -20,6 +20,8 @@ class ModelConfig:
     normalize_output_std: float = 1.17
     use_adabins: bool = True
 
+    use_batch_norm: bool = True
+
 @dataclass
 class TrainConfig:
     """ 

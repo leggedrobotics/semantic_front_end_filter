@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
-from .cfgUtils import parse_args
+from .cfgUtils import parse_args,TrainConfig,ModelConfig
 from experimentSaver import ConfigurationSaver
 import matplotlib.pyplot as plt
 
@@ -28,7 +28,6 @@ from dataloader import DepthDataLoader
 from loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
 from utils import RunningAverage, colorize
 import time
-from dataclasses import asdict
 
 from datetime import datetime
 
@@ -153,7 +152,7 @@ def main_worker(gpu, ngpus_per_node, args):
     input_channel = 3 if args.load_pretrained else 4
 
     model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.modelconfig.norm)
+                                          norm=args.modelconfig.norm, useBN = args.modelconfig.use_batch_norm)
 
     ## Load pretrained kitti
     if args.load_pretrained:
@@ -225,8 +224,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
-        # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        # wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
 
         # wandb.watch(model)
     ################################################################################################
@@ -464,7 +463,7 @@ if __name__ == '__main__':
 
 
     ngpus_per_node = torch.cuda.device_count()
-    args.num_workers = args.workers
+    args.num_workers = args.trainconfig.workers
     args.ngpus_per_node = ngpus_per_node
     
     saver_dir = os.path.join(args.root,"checkpoints")
