@@ -11,10 +11,10 @@ class UpSampleBN(nn.Module):
         super(UpSampleBN, self).__init__()
 
         self._net = nn.Sequential(nn.Conv2d(skip_input, output_features, kernel_size=3, stride=1, padding=1),
-                                  nn.BatchNorm2d(output_features),
+                                #   nn.BatchNorm2d(output_features),
                                   nn.LeakyReLU(),
                                   nn.Conv2d(output_features, output_features, kernel_size=3, stride=1, padding=1),
-                                  nn.BatchNorm2d(output_features),
+                                #   nn.BatchNorm2d(output_features),
                                   nn.LeakyReLU())
 
     def forward(self, x, concat_with):
@@ -58,6 +58,13 @@ class DecoderBN(nn.Module):
         #     return out, [x_block0, x_block1, x_block2, x_block3, x_block4, x_d1, x_d2, x_d3, x_d4]
         return out
 
+def deactivate_batchnorm(m):
+    if isinstance(m, nn.BatchNorm2d):
+        m.reset_parameters()
+        m.eval()
+        with torch.no_grad():
+            m.weight.fill_(1.0)
+            m.bias.zero_()
 
 class Encoder(nn.Module):
     def __init__(self, backend):
@@ -163,6 +170,7 @@ class UnetAdaptiveBins(nn.Module):
 
         # Building Encoder-Decoder model
         print('Building Encoder-Decoder model..', end='')
+        basemodel.apply(deactivate_batchnorm)
         m = cls(basemodel, n_bins=n_bins, use_adabins=use_adabins, **kwargs)
         print('Done.')
         return m
