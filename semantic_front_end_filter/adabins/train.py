@@ -2,8 +2,10 @@ import argparse
 import os
 import sys
 import uuid
-from datetime import datetime as dt
 from matplotlib import image
+import time
+from datetime import datetime
+
 
 import numpy as np
 from scipy import ndimage # this has to happend before import torch on euler
@@ -17,20 +19,16 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
-from .cfgUtils import parse_args
-from experimentSaver import ConfigurationSaver
 import matplotlib.pyplot as plt
 
-import model_io
-import models
-import utils
-from dataloader import DepthDataLoader
-from loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
-from utils import RunningAverage, colorize
-import time
-from dataclasses import asdict
-
-from datetime import datetime
+from . import model_io
+from . import models
+from . import utils
+from .cfgUtils import parse_args, TrainConfig, ModelConfig
+from .experimentSaver import ConfigurationSaver
+from .dataloader import DepthDataLoader
+from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
+from .utils import RunningAverage, colorize
 
 DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 PROJECT = "semantic_front_end_filter-adabins"
@@ -464,7 +462,7 @@ if __name__ == '__main__':
 
 
     ngpus_per_node = torch.cuda.device_count()
-    args.num_workers = args.workers
+    args.num_workers = args.trainconfig.workers
     args.ngpus_per_node = ngpus_per_node
     
     saver_dir = os.path.join(args.root,"checkpoints")

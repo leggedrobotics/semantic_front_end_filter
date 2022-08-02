@@ -13,6 +13,14 @@ pip3 install -e .
 ```
 
 
+## Train
+
+```bash
+python3 -m semantic_front_end_filter.adabins.train
+```
+
+> consult semantic_front_end_filter/adabins/cfg.py for the command line configurations.
+
 
 ## Rviz Replay
 
