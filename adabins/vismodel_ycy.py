@@ -172,7 +172,7 @@ if __name__=="__main__":
     
     model_cfgs = [load_param_from_path(os.path.dirname(checkpoint_path)) for checkpoint_path in checkpoint_paths]
     model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"], deactivate_bn = True) for cfg in model_cfgs]
+                                            norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"], deactivate_bn = True, skip_connection = cfg["skip_connection"]) for cfg in model_cfgs]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
@@ -181,7 +181,7 @@ if __name__=="__main__":
     #     model.transform()
 
     for i in range(20):
-        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
+        vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()

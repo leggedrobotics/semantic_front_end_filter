@@ -31,22 +31,23 @@ class UpSampleBN(nn.Module):
 
 
 class DecoderBN(nn.Module):
-    def __init__(self, num_features=2048, num_classes=1, bottleneck_features=2048, deactivate_bn = False):
+    def __init__(self, num_features=2048, num_classes=1, bottleneck_features=2048, deactivate_bn = False, skip_connection = False):
         super(DecoderBN, self).__init__()
         features = int(num_features)
-
+        self.skip_connection = skip_connection
         self.conv2 = nn.Conv2d(bottleneck_features, features, kernel_size=1, stride=1, padding=1)
 
         self.up1 = UpSampleBN(skip_input=features // 1 + 112 + 64, output_features=features // 2, deactivate_bn = deactivate_bn)
         self.up2 = UpSampleBN(skip_input=features // 2 + 40 + 24, output_features=features // 4, deactivate_bn = deactivate_bn)
         self.up3 = UpSampleBN(skip_input=features // 4 + 24 + 16, output_features=features // 8, deactivate_bn = deactivate_bn)
         self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16, deactivate_bn = deactivate_bn)
-        # self.up5_add = UpSampleBN(skip_input=features // 16 + 4, output_features=features // 32, deactivate_bn = deactivate_bn)
-
-
-        #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
-        # self.conv3 = nn.Conv2d(features // 32, num_classes, kernel_size=3, stride=1, padding=1)
+        self.up5_add = UpSampleBN(skip_input=features // 16 + 1, output_features=features // 32, deactivate_bn = deactivate_bn)
         self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
+        #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
+        # if(self.skip_connection):
+        #     self.conv3 = nn.Conv2d(features // 32, num_classes, kernel_size=3, stride=1, padding=1)
+        # else:
+        #     self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
         # self.act_out = nn.Softmax(dim=1) if output_activation == 'softmax' else nn.Identity()
 
     def forward(self, features):
@@ -59,9 +60,12 @@ class DecoderBN(nn.Module):
         x_d2 = self.up2(x_d1, x_block2)
         x_d3 = self.up3(x_d2, x_block1)
         x_d4 = self.up4(x_d3, x_block0)
-        
-        # x_d5 = self.up5_add(x_d4, x_block_skip)
-        out = self.conv3(x_d4)
+        if(self.skip_connection):
+            # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
+            x_d5 = self.conv3(x_d4)
+            out = x_block_skip[:, 3:, :, :] + F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='bilinear', align_corners=True)
+        else:
+            out = self.conv3(x_d4)
         # out = self.act_out(out)
         # if with_features:
         #     return out, features[-1]
@@ -95,21 +99,22 @@ class Encoder(nn.Module):
 
 class UnetAdaptiveBins(nn.Module):
     def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear',
-                    output_norm_mean = 0, output_norm_std = 1., use_adabins = True, deactivate_bn = False):
+                    output_norm_mean = 0, output_norm_std = 1., use_adabins = True, deactivate_bn = False, skip_connection = False):
         super(UnetAdaptiveBins, self).__init__()
         self.use_adabins = use_adabins
         self.num_classes = n_bins
         self.min_val = min_val
         self.max_val = max_val
         self.encoder = Encoder(backend)
+        self.skip_connection = skip_connection
         self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
                                         dim_out=n_bins,
                                         embedding_dim=128, norm=norm)
 
         if(use_adabins):
-            self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn)
+            self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
         else:
-            self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn)
+            self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
 
         self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
                                       nn.Softmax(dim=1))

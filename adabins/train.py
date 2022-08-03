@@ -151,7 +151,7 @@ def main_worker(gpu, ngpus_per_node, args):
     input_channel = 3 if args.load_pretrained else 4
 
     model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.modelconfig.norm, deactivate_bn = args.modelconfig.deactivate_bn)
+                                          norm=args.modelconfig.norm, deactivate_bn = args.modelconfig.deactivate_bn, skip_connection = args.modelconfig.skip_connection)
 
     ## Load pretrained kitti
     if args.load_pretrained:
@@ -194,7 +194,10 @@ def main_worker(gpu, ngpus_per_node, args):
 
 def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, image):
 
-    mask = (depth > args.min_depth) & (depth < args.max_depth)
+    if(args.trainconfig.sprase_traj_mask):
+        mask = (depth > args.min_depth) & (depth < args.max_depth) & (pc_image > 1e-9)
+    else:
+        mask = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~mask] = 0.
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
