@@ -8,10 +8,10 @@
             "name": "train",
             "type": "python",
             "request": "launch",
-            "cwd": "/home/anqiao/semantic_front_end_filter/adabins",
-            "program": "/home/anqiao/semantic_front_end_filter/adabins/train.py",
+            "cwd": "/home/anqiao/tmp/semantic_front_end_filter/adabins",
+            "program": "/home/anqiao/tmp/semantic_front_end_filter/adabins/train.py",
             "console": "integratedTerminal",
-            "args": ["--traj_label_W", "0", "--validate_every", "10", "--data_path", "/media/anqiao/Semantic/Data/extract_trajectories_003_slim", "--tqdm", "--bs", "1",],
+            "args": ["--traj_label_W", "0", "--validate_every", "400", "--data_path", "/media/anqiao/Semantic/Data/extract_trajectories_Italy_augment", "--tqdm", "--bs", "1", "--use_adabins", "False"],
             "justMyCode": true
         }
     ]
