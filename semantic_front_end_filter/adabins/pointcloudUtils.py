@@ -103,11 +103,14 @@ class RaycastCamera:
         p = torch.Tensor(self.camera.tvec).to(device)
         H = torch.inverse(torch.Tensor(self.camera.pose[1]).to(device))
         R = H[:3, :3]
-        p = H[:3, 3]
+        # p = H[:3, 3]
+        p = torch.Tensor(self.camera.tvec).to(device)
+        # p = torch.matmul(R, p)
         h = torch.Tensor(self.camera.pose[0]).to(device)
         # TODO check this
         proj_point = torch.matmul(torch.matmul((points ), R.transpose(0, 1)) + p, camera_matrix.transpose(0, 1))
         proj_point = (proj_point/proj_point[:, 2:].repeat(1, 3)).long()
+        # proj_point = proj_point.long()
         # proj_point, proj_jac = self.camera.project_point(points[:,:3].astype(np.float32))#150ms
         # proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)#80ms
         camera_heading = torch.Tensor(self.camera.pose[1][:3, 2]).to(device)
