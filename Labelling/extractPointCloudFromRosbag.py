@@ -320,25 +320,44 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     proprio_data.append(msg.header.stamp.to_sec(), proprio_state, 'proprio')
 
             # RGB images.
+            # if CAM_PREFIX in topic:
+            #     success, cam_id = getImageId(topic, CAM_NAMES)
+            #     map_frame_id = "map"
+            #     if(not success):
+            #         print('Unknown RGB image topic: ' + topic)
+            #         continue
+            #     if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)[0]): continue
+
+            #     img = rgb_msg_to_image(msg, cameras[cam_id].is_debayered, cameras[cam_id].rb_swap, ("compressed" in topic))
+            #     image_data.append(msg.header.stamp.to_sec(), img, cam_id)
+
+            #     tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)
+            #     pose = msg_to_pose(tf)
+            #     position = np.array(pose[:3])
+            #     euler = np.array(euler_from_quaternion(pose[3:]))
+
+            #     d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
+            #     d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
+            #     image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
             if CAM_PREFIX in topic:
                 success, cam_id = getImageId(topic, CAM_NAMES)
                 map_frame_id = "map"
                 if(not success):
                     print('Unknown RGB image topic: ' + topic)
                     continue
-                if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)[0]): continue
+                if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  t)[0]): continue
 
                 img = rgb_msg_to_image(msg, cameras[cam_id].is_debayered, cameras[cam_id].rb_swap, ("compressed" in topic))
-                image_data.append(msg.header.stamp.to_sec(), img, cam_id)
+                image_data.append(t.to_sec(), img, cam_id)
 
-                tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)
+                tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  t)
                 pose = msg_to_pose(tf)
                 position = np.array(pose[:3])
                 euler = np.array(euler_from_quaternion(pose[3:]))
 
                 d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
                 d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
-                image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
+                image_data.append(t.to_sec(), d_img, cam_id+'depth')
                 
 
             # Elevation map
@@ -446,6 +465,9 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         else:
             state_df = resample_ffill(state_data, resampled_idx, dt.to_sec())
 
+        if(image_data.data=={}):
+            print("No images in this traj")
+            continue
         img_df = resample_dataid_ffill(image_data, resampled_idx, 1.0)  # tol > 0.7 second (darpa: img updates ~ 1.5 Hz)
         map_df = resample_dataid_ffill(map_data, resampled_idx, 0.3)  # tol > 0.2 second (map updates ~ 5 Hz)
         if(pointcloud_data.data=={}):
@@ -617,14 +639,14 @@ def main():
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
-    parser.add_argument('--bag_path', default='', help = 'bag file path')
+    # parser.add_argument('--bag_path', default='', help = 'bag file path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    # bag_file_path = cfg['bagfile']
-    bag_file_path = args.bag_path
+    bag_file_path = cfg['bagfile']
+    # bag_file_path = args.bag_path
     print("Extracting file: " + bag_file_path)
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
