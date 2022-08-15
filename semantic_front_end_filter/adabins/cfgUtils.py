@@ -1,12 +1,12 @@
 from .cfg import TrainConfig, ModelConfig
 from dataclasses import asdict
 
-def parse_args(parser, flatten = False):
+def parse_args(parser, flatten = False, argstr = None):
 
     parser.add_arguments(TrainConfig, dest="trainconfig")
     parser.add_arguments(ModelConfig, dest="modelconfig")
     
-    args = parser.parse_args()
+    args = parser.parse_args() if argstr is None else parser.parse_args(argstr)
     args.batch_size = args.trainconfig.bs
     args.num_threads = args.trainconfig.workers
     args.mode = 'train'

@@ -4,7 +4,8 @@ visulization of the network using elevation_mapping_cupy
 """
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "elevation_mapping_cupy", "elevation_mapping_cupy", "script"))
+from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
+sys.path.append(os.path.join(os.path.dirname(SEMANTIC_FRONT_END_FILTER_ROOT_PATH), "elevation_mapping_cupy", "elevation_mapping_cupy", "script"))
 import cupy as xp
 from elevation_mapping_cupy.parameter import Parameter
 from elevation_mapping_cupy.elevation_mapping import ElevationMap
@@ -12,11 +13,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation as Rotation
 
 # Load modules for the GFT
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "Labelling"))
-from GroundfromTrajs import GFT
 
-
-from pointcloudUtils import RaycastCamera
+from semantic_front_end_filter.Labelling.GroundfromTrajs import GFT
+from .pointcloudUtils import RaycastCamera
 
 
 # Define a function to draw a marker of the robot on plot
