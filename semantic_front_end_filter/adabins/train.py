@@ -194,9 +194,12 @@ def main_worker(gpu, ngpus_per_node, args):
 
 def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, image):
 
-    mask = (depth > args.min_depth) & (depth < args.max_depth)
-    depth[~mask] = 0.
-    l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=mask.to(torch.bool), interpolate=True)
+    if(args.trainconfig.sprase_traj_mask):
+        masktraj = (depth > args.min_depth) & (depth < args.max_depth) & (pc_image > 1e-9)
+    else:
+        masktraj = (depth > args.min_depth) & (depth < args.max_depth)
+    depth[~masktraj] = 0.
+    l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
@@ -207,7 +210,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_e
         l_chamfer = criterion_bins(bin_edges, depth)
     else:
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
-    return l_dense, l_chamfer, l_edge
+    return l_dense, l_chamfer, l_edge, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -257,7 +260,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     ################################################################################################
     # some globals
     iters = len(train_loader)
-    step = args.epoch * iters
+    step_count = 0
     best_loss = np.inf
 
     ###################################### Scheduler ###############################################
@@ -275,8 +278,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         print("EPOCH:", epoch)
         time_core = 0.
         time_total = -time.time()
+        train_metrics = utils.RunningAverageDict()
         ################################# Train loop ##########################################################
-        if should_log: wandb.log({"Epoch": epoch}, step=step)
+        if should_log: wandb.log({"Epoch": epoch}, step=step_count)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
                              total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
@@ -294,8 +298,15 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             else:
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer, l_edge = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+            l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+
+            if(pred.shape != depth.shape): # need to enlarge the output prediction
+                pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
+            pred = pred.detach().cpu()
+            depth = depth.cpu()
+            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj]))
+
 
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -305,32 +316,32 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
-            if should_log and step % 5 == 0:
-                wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step)
-                wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step)
-                wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step)
-                wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step)
+            if should_log and step_count % 5 == 0:
+                wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
+                wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step_count)
+                wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step_count)
+                wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step_count)
 
-            step += 1
+            step_count += 1
             scheduler.step()
 
             time_core += time.time()
             ########################################################################################################
 
-            if should_write and step % args.trainconfig.validate_every == 0:
+            if should_write and step_count % args.trainconfig.validate_every == 0:
 
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
-                [writer.add_scalar("metrics/"+k, v, step) for k,v in metrics.items()]
+                [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     wandb.log({
                         f"Test/{criterion_ueff.name}": val_si.get_value(),
                         # f"Test/{criterion_bins.name}": val_bins.get_value()
-                    }, step=step)
+                    }, step=step_count)
 
-                    wandb.log({f"Metrics/{k}": v for k, v in metrics.items()}, step=step)
+                    wandb.log({f"test/{k}": v for k, v in metrics.items()}, step=step_count)
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
                                              root=saver.data_dir)
                                             
@@ -343,9 +354,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
+        wandb.log({f"test/{k}": v for k, v in metrics.items()}, step=step_count)
         if (epoch+1)%2==0:
-            log_images(test_loader, model, "vis/test", step, use_adabins=args.modelconfig.use_adabins)
-            log_images(train_loader, model, "vis/train", step, use_adabins=args.modelconfig.use_adabins)
+            log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
+            log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
     return model
 
 
@@ -367,7 +379,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             else:
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer, l_edge = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+            l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
             writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
@@ -404,6 +416,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                     int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                     
             valid_mask = np.logical_and(valid_mask, eval_mask)
+            valid_mask = np.logical_and(valid_mask, masktraj)
             metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
             metrics.update({ "test/l_chamfer": l_chamfer, "test/l_sum": loss, "test/l_dense": l_dense})
 

@@ -118,6 +118,7 @@ class TrainConfig:
     pc_image_label_W: float = 0.5
     traj_label_W: float = 1
     edge_aware_label_W: float = 1
+    sprase_traj_mask: bool = True
 
     traj_distance_variance_ratio: float = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
