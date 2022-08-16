@@ -78,6 +78,11 @@ def count_parameters(model):
 
 
 def compute_errors(gt, pred):
+    """
+    gt and pred should be turned to np
+    """
+    gt = np.array(gt)
+    pred = np.array(pred)
     thresh = np.maximum((gt / pred), (pred / gt))
     a1 = (thresh < 1.25).mean()
     a2 = (thresh < 1.25 ** 2).mean()

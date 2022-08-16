@@ -303,6 +303,12 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
+
+            pred[pred < args.min_depth] = args.min_depth
+            pred[pred > args.max_depth] = args.max_depth
+            pred[torch.isinf(pred)] = args.max_depth
+            pred[torch.isnan(pred)] = args.min_depth
+
             pred = pred.detach().cpu()
             depth = depth.cpu()
             train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj]))
@@ -401,6 +407,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             pred[np.isnan(pred)] = args.min_depth_eval
 
             gt_depth = depth.squeeze().cpu().numpy()
+            masktraj = masktraj.squeeze().squeeze()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
             if args.trainconfig.garg_crop or args.trainconfig.eigen_crop:
                 gt_height, gt_width = gt_depth.shape
@@ -416,7 +423,8 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                     int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                     
             valid_mask = np.logical_and(valid_mask, eval_mask)
-            valid_mask = np.logical_and(valid_mask, masktraj)
+            valid_mask = np.logical_and(valid_mask, masktraj.cpu().numpy())
+            if(not valid_mask.any()): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
             metrics.update({ "test/l_chamfer": l_chamfer, "test/l_sum": loss, "test/l_dense": l_dense})
 
