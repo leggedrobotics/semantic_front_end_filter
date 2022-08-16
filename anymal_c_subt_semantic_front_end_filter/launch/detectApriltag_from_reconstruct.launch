@@ -1,0 +1,60 @@
+<launch>
+  <!-- Main settings with rosbag name and rosparam dumped file -->
+  <arg name="bagfile"                               default=""/>
+
+  <!-- Other settings -->
+  <arg name="publish_rate_multiplier"               default="1.0"/>
+  <arg name="seconds_into_the_bag"                  default="0.0"/>
+  <arg name="pause_playback_on_launch"              default="true"/>
+  <arg name="run_visualization"                     default="true"/>
+  <arg name="rviz_config_path"                      default="$(dirname)/../config/ui/config.rviz"/>
+  <arg name="rviz_splash_screen"                    default="$(find anymal_c_subt)/config/ui/splash_replay.png"/>
+  <arg name="output_file"                           default="$(arg bagfile)_apriltf.bag"/>
+  
+  <!-- Rosbag -->
+  <group if="$(arg pause_playback_on_launch)">
+    <node name="play_rosbag" pkg="rosbag" type="play" output="screen"
+      args="--clock $(arg bagfile) --pause -r $(arg publish_rate_multiplier) -s $(arg seconds_into_the_bag)">
+    </node>
+  </group>
+  <group unless="$(arg pause_playback_on_launch)">
+    <node name="play_rosbag" pkg="rosbag" type="play" output="screen"
+      args="--clock $(arg bagfile) -r $(arg publish_rate_multiplier) -s $(arg seconds_into_the_bag)">
+    </node>
+  </group>
+
+  <group if="$(arg run_visualization)">
+    <node name="rviz" pkg="rviz" type="rviz"
+          args="-d $(arg rviz_config_path) --s $(arg rviz_splash_screen)" output="screen" respawn="true" launch-prefix=""/>
+
+    <node name="rqt_gui_replay" pkg="rqt_gui" type="rqt_gui"
+          args="--force-discover --clear-config --perspective-file $(find anymal_c_subt)/config/ui/replay/rqt.perspective" output="screen" respawn="true" launch-prefix=""/>
+  </group>
+
+  <!-- Run a python node to broad cast the camera_info -->
+  <node name="camera_info" pkg="semantic_front_end_filter_ros" type="camera_info_publisher.py"/>
+
+  <node pkg="apriltag_ros" type="apriltag_ros_continuous_node" name="apriltag_ros_continuous_node" clear_params="true" output="screen" >
+    <!-- Remap topics from those used in code to those on the ROS network -->
+    <remap from="image_rect" to="/alphasense_driver_ros/cam4/debayered" />
+    <remap from="camera_info" to="/alphasense_driver_ros/cam4/camera_info" />
+    
+    <param name="publish_tf" value="true" />
+    <!-- <param name="camera_frame" value="camera"/> -->
+    <param name="publish_tag_detections_image" type="bool" value="true" />
+    <rosparam>
+            standalone_tags:
+                [
+                    {id: 2, size: 0.18, name: init_tag}
+                ]
+    </rosparam>       
+  </node>
+
+  <node name="record_tf_rosbag" pkg="rosbag" type="record" output="screen"
+      args="--lz4 --split --duration=10m -o '$(arg output_file)'
+        /tf
+	      /tf_static
+        /tag_detections
+       ">
+  </node>
+</launch>
