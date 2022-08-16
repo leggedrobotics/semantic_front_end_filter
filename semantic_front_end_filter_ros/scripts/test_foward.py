@@ -11,6 +11,7 @@
 # - pose (pose in map frame)
 #   - subscribe: /tf
 #   - broadcast: /semantic_filter_pose
+from pip import main
 from scipy.spatial.transform import Rotation
 import message_filters
 import tf
@@ -63,7 +64,8 @@ try:
     from std_msgs.msg import Header
     from std_msgs.msg import Float64MultiArray
     import rosgraph
-    assert rosgraph.is_master_online()
+    if __name__ == '__main__':
+        assert rosgraph.is_master_online()
 except ModuleNotFoundError as ex:
     print("rosvis Warning: ros package fails to load")
     print(ex)
@@ -71,8 +73,8 @@ except ModuleNotFoundError as ex:
 
 # import semantic_front_end_filter.adabins.models as models
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-assert rosgraph.is_master_online()
+if __name__ == '__main__':
+    assert rosgraph.is_master_online()
 
 sys.path.append("../Labelling/")
 
@@ -265,10 +267,10 @@ def callback(image, point_cloud):
             if(points is not None):
                 pc_img = rosv.raycastCamera.project_cloud_to_depth(
                     pose, points, pc_img)
-                fig, axs = plt.subplots(1, 2,figsize=(20, 20))
+                # fig, axs = plt.subplots(1, 2,figsize=(20, 20))
 
-                axs[0].imshow(pc_img[0].cpu().numpy())
-                axs[1].imshow(image.moveaxis(0, 2).numpy())
+                # axs[0].imshow(pc_img[0].cpu().numpy())
+                # axs[1].imshow(image.moveaxis(0, 2).numpy())
             # pc_img = torch.tensor(pc_img).to(device)
             _image = image.to(device)
             _image = torch.cat([_image/255., pc_img],
