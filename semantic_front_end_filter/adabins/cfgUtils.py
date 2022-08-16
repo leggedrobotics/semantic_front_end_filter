@@ -1,4 +1,5 @@
-from .cfg import TrainConfig, ModelConfig
+from cfg import TrainConfig, ModelConfig
+from dataclasses import asdict
 
 def parse_args(parser, flatten = False):
 

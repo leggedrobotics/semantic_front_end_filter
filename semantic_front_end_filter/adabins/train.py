@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
-from .cfgUtils import parse_args
+from cfgUtils import parse_args, TrainConfig, ModelConfig
 from experimentSaver import ConfigurationSaver
 import matplotlib.pyplot as plt
 
@@ -420,53 +420,54 @@ def convert_arg_line_to_args(arg_line):
 
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     # Arguments
-    parser = ArgumentParser()
-    parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
-    parser.add_argument("--name", default="UnetAdaptiveBins")
-    parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
-    parser.add_argument("--root", default=".", type=str,
-                        help="Root folder to save data in")
-    parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
-    parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
+parser = ArgumentParser()
+parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
+parser.add_argument("--name", default="UnetAdaptiveBins")
+parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
+parser.add_argument("--root", default=".", type=str,
+                    help="Root folder to save data in")
+parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
+parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
-    parser.add_argument("--notes", default='', type=str, help="Wandb notes")
-    parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
+parser.add_argument("--notes", default='', type=str, help="Wandb notes")
+parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
 
-    args = parse_args(parser, flatten = True)
+args = parse_args(parser, flatten = True)
 
-    if args.root != "." and not os.path.isdir(args.root):
-        os.makedirs(args.root)
+if args.root != "." and not os.path.isdir(args.root):
+    os.makedirs(args.root)
 
-    try:
-        node_str = os.environ['SLURM_JOB_NODELIST'].replace('[', '').replace(']', '')
-        nodes = node_str.split(',')
+try:
+    node_str = os.environ['SLURM_JOB_NODELIST'].replace('[', '').replace(']', '')
+    nodes = node_str.split(',')
 
-        args.world_size = len(nodes)
-        args.rank = int(os.environ['SLURM_PROCID'])
+    args.world_size = len(nodes)
+    args.rank = int(os.environ['SLURM_PROCID'])
 
-    except KeyError as e:
-        # We are NOT using SLURM
-        args.world_size = 1
-        args.rank = 0
-        nodes = ["127.0.0.1"]
+except KeyError as e:
+    # We are NOT using SLURM
+    args.world_size = 1
+    args.rank = 0
+    nodes = ["127.0.0.1"]
 
-    if args.distributed:
-        mp.set_start_method('forkserver')
+if args.distributed:
+    mp.set_start_method('forkserver')
 
-        print(args.rank)
-        port = np.random.randint(15000, 15025)
-        args.dist_url = 'tcp://{}:{}'.format(nodes[0], port)
-        print(args.dist_url)
-        args.dist_backend = 'nccl'
-        args.gpu = None
+    print(args.rank)
+    port = np.random.randint(15000, 15025)
+    args.dist_url = 'tcp://{}:{}'.format(nodes[0], port)
+    print(args.dist_url)
+    args.dist_backend = 'nccl'
+    args.gpu = None
 
 
-    ngpus_per_node = torch.cuda.device_count()
-    args.num_workers = args.workers
-    args.ngpus_per_node = ngpus_per_node
-    
+ngpus_per_node = torch.cuda.device_count()
+args.num_workers = args.trainconfig.workers
+args.ngpus_per_node = ngpus_per_node
+
+if __name__ == '__main__':
     saver_dir = os.path.join(args.root,"checkpoints")
     saver = ConfigurationSaver(log_dir=saver_dir,
                             save_items=[os.path.realpath(__file__)],

@@ -124,4 +124,4 @@ class TrainConfig:
     scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
-    testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-22-10-36-29_0"])
+    testing: list = field(default_factory=lambda: ["Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"])
