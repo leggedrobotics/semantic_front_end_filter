@@ -91,6 +91,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         # inputimg = np.moveaxis(sample["image"][0].numpy(),0,2)
         inputimg.max(), inputimg.min()
         inputimg = (inputimg-inputimg.min())/(inputimg.max()- inputimg.min())
+        inputimg = inputimg[:,:,::-1] # the changing between RGB and BGR
         inputimgs.append(wandb.Image(inputimg[:,:,:3]))
         filepaths.append(sample["path"][:1])
         depth = sample["depth"][0][0].numpy()
@@ -360,7 +361,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-        wandb.log({f"test/{k}": v for k, v in metrics.items()}, step=step_count)
+        wandb.log({f"train/{k}": v for k, v in metrics.items()}, step=step_count)
         if (epoch+1)%2==0:
             log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
@@ -426,7 +427,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask = np.logical_and(valid_mask, masktraj.cpu().numpy())
             if(not valid_mask.any()): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
-            metrics.update({ "test/l_chamfer": l_chamfer, "test/l_sum": loss, "test/l_dense": l_dense})
+            metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
 
