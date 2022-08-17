@@ -152,7 +152,7 @@ def main_worker(gpu, ngpus_per_node, args):
     input_channel = 3 if args.load_pretrained else 4
 
     model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.modelconfig.norm)
+                                          norm=args.modelconfig.norm, deactivate_bn = args.modelconfig.deactivate_bn, skip_connection = args.modelconfig.skip_connection)
 
     ## Load pretrained kitti
     if args.load_pretrained:

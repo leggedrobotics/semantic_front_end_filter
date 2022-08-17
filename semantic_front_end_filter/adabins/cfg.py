@@ -19,6 +19,8 @@ class ModelConfig:
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
     use_adabins: bool = True
+    deactivate_bn: bool = True
+    skip_connection: bool = True
 
 @dataclass
 class TrainConfig:
