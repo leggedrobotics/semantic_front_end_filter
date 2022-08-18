@@ -7,6 +7,7 @@ import msgpack
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import rotate
 
 class ElevationMapEvaluator:
     """
@@ -70,18 +71,19 @@ class ElevationMapEvaluator:
         elevmap_gt = self.gpmap_interp(xypoints).reshape(self.cell_n-2, self.cell_n-2)
         return elevmap_gt
 
-    def compute_error_against_gpmap(self, elevmap, xy, r):
+    def compute_error_against_gpmap(self, elevmap, xy, r=0):
         """compute the rmse error between elevmap and self.gpmap, record the error
+            The returned and recorded error will be rotated into the robot frame, by r. r can be set_to 0 if not intended to rotate it
         arg elevmap: 2d np array, the elevation map around the robot, oriented in the world frame
-        arg xy, r: the transition and z-axis angle of the robot
+        arg xy, r: the transition and z-axis angle of the robot, r is in rad
         """
         
         elevmap_gt = self.get_gpmap_at_xy(xy)
         error = elevmap - elevmap_gt
 
         # update the error_sum error count
-        # TODO Rotate the error array into the robot frame
         mask = ~np.isnan(error)
+        error = rotate(error, angle=-r/np.pi*180, reshape=False, order = 0, mode='constant', cval = np.nan)
         self.error_sum[mask] += abs(error[mask])
         self.error_count[mask] += 1
         self.error_list.append(error)
@@ -124,10 +126,13 @@ if __name__ == "__main__":
     print("EMPYT foot hold elev map?",np.isnan(elev_map_foot_holds).all())
 
     #compute error
-    error = evaluator.compute_error_against_gpmap(elev_map_foot_holds, target_pos, 0)
+    error = evaluator.compute_error_against_gpmap(elev_map_foot_holds, target_pos, np.pi/6)
+    ## If not to rotate, pass the robot angle argument as r
+    # error = evaluator.compute_error_against_gpmap(elev_map_foot_holds, target_pos)
+
     elev_gt = evaluator.get_gpmap_at_xy(target_pos)
     print(abs(error)[~np.isnan(error)].mean())
-    print(elev_gt[~np.isnan(error)].mean())
+    print(elev_gt[~np.isnan(elev_gt)].mean())
     print(elev_map_foot_holds[~np.isnan(elev_map_foot_holds)].mean())
     fig, axs = plt.subplots(1,2,figsize=(20,10))
     axs[0].imshow(elev_map_foot_holds,vmin = -5, vmax = -4)
