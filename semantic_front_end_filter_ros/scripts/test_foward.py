@@ -218,80 +218,70 @@ class RosVisulizer:
 
 
 def callback(image, point_cloud):
-    # print("call_back")
     # image
-    with Timer("Update"):
-        img = rgb_msg_to_image(image, True, False, False)
-        img = np.moveaxis(img, 2, 0)
-        img = torch.tensor(img)
-        # pointclouds
-        try:
-            listener.waitForTransform(
-                "map", point_cloud.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
-            (trans, rot) = listener.lookupTransform(
-                "map", point_cloud.header.frame_id, rospy.Time(0))
-        except Exception as e:
-            print(e)
-            return
-        pose = [*trans, *rot]
-        # pc_array = rospcmsg_to_pcarray(point_cloud, pose)[:,:3]
-        surf = ros_numpy.numpify(point_cloud)
-        pc_array = np.copy(np.frombuffer(surf.tobytes(), np.dtype(
-            np.float32)).reshape(surf.shape[0], -1)[:, :3])
-        global points_buffer
-        points_buffer.append(pc_array)
-        if(len(points_buffer) > 10):
-            points_buffer = points_buffer[-10:]
-        pc_array = np.concatenate(points_buffer, axis=0)
+    image = rgb_msg_to_image(image, True, False, False)
+    image = np.moveaxis(image, 2, 0)
+    image = torch.tensor(image).to(device)
 
-        global image_ph
-        global points_ph
-        points_ph = pc_array
-        image_ph = img
-
-        # update
+    # pose
+    try:
         listener.waitForTransform(
-            "map", TF_BASE, rospy.Time(0), rospy.Duration(1.0))
-        (trans, rot) = listener.lookupTransform("map", TF_BASE, rospy.Time(0))
-        image = image_ph.clone() if image_ph is not None else image_ph
-        points = points_ph.copy() if points_ph is not None else points_ph
-        # TODO change from the start
-        points = torch.Tensor(points).to(device)
-        pose = torch.Tensor(
-            np.array([*trans, *rot]).astype(np.float64)).to(device)
+            "map", point_cloud.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
+        (trans, rot) = listener.lookupTransform(
+            "map", point_cloud.header.frame_id, rospy.Time(0))
+    except Exception as e:
+        print(e)
+        return
+    pose = torch.Tensor(np.array([*trans, *rot]).astype(np.float64)).to(device)
+
+    # pointclouds
+    surf = ros_numpy.numpify(point_cloud)
+    pc_array = np.copy(np.frombuffer(surf.tobytes(), np.dtype(
+        np.float32)).reshape(surf.shape[0], -1)[:, :3])
+    points = torch.Tensor(pc_array).to(device)
+
+    # global points_buffer
+    # points_buffer.append(pc_array)
+    # if(len(points_buffer) > 10):
+    #     points_buffer = points_buffer[-10:]
+    # pc_array = np.concatenate(points_buffer, axis=0)
+
+    # global image_ph
+    # global points_ph
+    # points_ph = pc_array
+    # image_ph = img
+
+    # # update
+    # image = image_ph.clone() if image_ph is not None else image_ph
+    # points = points_ph.copy() if points_ph is not None else points_ph
+    # points = torch.Tensor(points).to(device)
+
 
     if(image is not None and pose is not None):
-        with Timer("pre foward"):
-            # Projection to get pc image
-            pc_img = torch.zeros_like(image[:1, ...]).to(device).float()
-            if(points is not None):
-                pc_img = rosv.raycastCamera.project_cloud_to_depth(
-                    pose, points, pc_img)
-                # fig, axs = plt.subplots(1, 2,figsize=(20, 20))
-
-                # axs[0].imshow(pc_img[0].cpu().numpy())
-                # axs[1].imshow(image.moveaxis(0, 2).numpy())
-            # pc_img = torch.tensor(pc_img).to(device)
-            _image = image.to(device)
-            _image = torch.cat([_image/255., pc_img],
-                               axis=0)  # add the pc channel
-            _image = _image[None, ...]
-            # normalize
-            for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
-                _image[0, i, ...] = (_image[0, i, ...] - m)/s
-
-        with Timer("forward"):
-            # global model
-            pred = model(_image)
-        with Timer("post forward"):
-            pred = pred[0].detach()
-            pred = nn.functional.interpolate(torch.tensor(pred).detach(
-            )[None, ...], _image.shape[-2:], mode='bilinear', align_corners=True)
-            pred = pred[0][0].T
-            # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
-            # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-            # cloud = rosv.build_could_from_depth_image(pose, pred, None)
-            predction_end = time.time()
+        # Projection to get pc image
+        pc_img = torch.zeros_like(image[:1, ...]).to(device).float()
+        if(points is not None):
+            pc_img = rosv.raycastCamera.project_cloud_to_depth(
+                pose, points, pc_img)
+            # fig, axs = plt.subplots(1, 2,figsize=(20, 20))
+            # axs[0].imshow(pc_img[0].cpu().numpy())
+            # axs[1].imshow(image.moveaxis(0, 2).numpy())
+        _image = torch.cat([image/255., pc_img],
+                            axis=0)  # add the pc channel
+        _image = _image[None, ...]
+        # normalize
+        for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
+            _image[0, i, ...] = (_image[0, i, ...] - m)/s
+        # global model
+        pred = model(_image)
+        pred = pred[0].detach()
+        # pred = nn.functional.interpolate(torch.tensor(pred).detach(
+        # )[None, ...], _image.shape[-2:], mode='bilinear', align_corners=True)
+        pred = pred[0][0].T
+        # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
+        # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
+        cloud = rosv.build_could_from_depth_image(pose, pred, None)
+        predction_end = time.time()
         print("---------------------------------------------------------------------")
 
 
@@ -319,7 +309,7 @@ parser.add_argument("--model", default="")
 args = parse_args(parser)
 model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                       input_channel=4,
-                                      norm=args.modelconfig.norm, use_adabins=False)
+                                      norm=args.modelconfig.norm, use_adabins=False, deactivate_bn = True, skip_connection = True)
 model.to(device)
 
 ts.registerCallback(callback)
@@ -327,44 +317,3 @@ ts.registerCallback(callback)
 rate = rospy.Rate(30)
 while not rospy.is_shutdown():
     rate.sleep()
-# rate = rospy.Rate(10) # 1hz
-# while not rospy.is_shutdown():
-#     rate.sleep()
-#     with Timer("Update"):
-#         # update
-#         listener.waitForTransform("map", TF_BASE, rospy.Time(0), rospy.Duration(1.0))
-#         (trans,rot) = listener.lookupTransform("map", TF_BASE, rospy.Time(0))
-#         image = image_ph.clone() if image_ph is not None else image_ph
-#         points = points_ph.copy() if points_ph is not None else points_ph
-#         pose = torch.Tensor(np.array([*trans, *rot]).astype(np.float64))
-
-
-#     if(image is not None and pose is not None):
-#         with Timer("pre foward"):
-#             # Projection to get pc image
-#             pc_img = torch.zeros_like(image[:1,...]).numpy()
-#             if(points is not None):
-#                 pc_img = rosv.raycastCamera.project_cloud_to_depth(pose, points, pc_img)
-#             pc_img = torch.tensor(pc_img).to(device)
-#             _image = image.to(device)
-#             _image = torch.cat([_image/255., pc_img], axis = 0) # add the pc channel
-#             _image = _image[None,...]
-#             #normalize
-#             for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
-#                 _image[0,i,...] = (_image[0,i,...] - m)/s
-
-#         with Timer("forward"):
-#             pred = model(_image)
-#         with Timer("post forward"):
-#             pred = pred[0].detach()
-#             pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
-#             pred = pred[0][0].T
-#             # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
-#             # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-#             cloud = rosv.build_could_from_depth_image(pose, pred, None)
-#             predction_end = time.time()
-#         print("---------------------------------------------------------------------")
-
-    # predpub.publish(cloud)
-    # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
-    # pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
