@@ -212,15 +212,19 @@ def saveOnePic(pack_path, path):
     # get elevation from prediction
     pts = raycastCamera.project_depth_to_cloud(pose, pred)
     pts = pts[~torch.isnan(pts[:,0])]
-    height_mask = (pts[:,2] < pose[2]) & (pose[0]-5 < pts[:,0]) & (pts[:,0] < pose[0]+5) & (pose[1]-5 < pts[:,1]) & (pts[:,1] < pose[1]+5)
-    pred_points = pts[height_mask].detach().cpu().numpy()
+    # height_mask = (pts[:,2] < pose[2]) & (pose[0]-5 < pts[:,0]) & (pts[:,0] < pose[0]+5) & (pose[1]-5 < pts[:,1]) & (pts[:,1] < pose[1]+5)
+    pred_points = pts.detach().cpu().numpy()
     elevation_pred_fusion.move_to_and_input(pose_array[0:3], pred_points)
     map_pred_fusion = elevation_pred_fusion.get_elevation_map()
 
     # get elevation map from only pc
     # mask = (data["pointcloud"][:, 0]<pose_array[0]+10) & (data["pointcloud"][:, 0]>pose_array[0]-10) & (data["pointcloud"][:, 1]<pose_array[1]+10) & (data["pointcloud"][:, 1]>pose_array[1]-10) & (data["pointcloud"][:, 2]<pose_array[2])
-    elevation_pc_fusion.move_to_and_input(pose_array[0:3], data["pointcloud"][:, :3])
+    test_points = data["pointcloud"][:, :3].copy()
+    test_points[:, 2] = 0
+    # elevation_pc_fusion.move_to_and_input(pose_array[0:3], data["pointcloud"][:, :3])
+    elevation_pc_fusion.move_to_and_input(pose_array[0:3], test_points)
     map_pc_fusion = elevation_pc_fusion.get_elevation_map()
+    print(map_pc_fusion[~np.isnan(map_pc_fusion)].mean())
     
     ## Plot
     fig, axs = plt.subplots(2, 3,figsize=(20, 20))
@@ -234,7 +238,7 @@ def saveOnePic(pack_path, path):
     axs[0, 2].imshow(data['images']['cam4depth'][0], vmin = 0, vmax=40)
     axs[0, 2].set_title("trajectory label")
 
-    axs[1, 0].imshow(pred_for_show.cpu().detach().numpy(), vmin = 0, vmax=40)
+    axs[1, 0].imshow(pred_for_show.cpu().detach().numpy())
     axs[1, 0].set_title("prediction")
 
     axs[1, 1].imshow(map_pred_fusion)
@@ -251,6 +255,7 @@ def saveOnePic(pack_path, path):
 
     # plt.show()
     plt.savefig(path)
+    print(path)
     plt.close(fig)
 
 def getKey(msg_path):
@@ -262,8 +267,8 @@ def visOneTraj(traj_path, model, args):
         os.makedirs(outdir)
     for i, pack in enumerate(sorted([f for f in os.listdir(traj_path) if 'traj' in f], key = getKey)):
         if('traj' in pack):
-            print(pack)
             pack_path = traj_path + '/' + pack
+            print(pack_path)
             saveOnePic(pack_path, path=outdir+'/%03d.jpg'%i)
 
     os.system("ffmpeg -framerate 2 -pattern_type glob -i '" +outdir+"/*.jpg' -c:v libx264 -pix_fmt yuv420p "+outdir+"/out.mp4")
@@ -275,9 +280,9 @@ if __name__=="__main__":
     elevation_pc_fusion = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
 
     parser = ArgumentParser()
-    # parser.add_argument("--model_path", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
-    parser.add_argument("--model_path", default="/media/anqiao/Semantic/Models/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
-    parser.add_argument("--dataset_path", default="/media/anqiao/Semantic/Data/extract_trajectories_003/extract_trajectories")
+    parser.add_argument("--model_path", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
+    # parser.add_argument("--model_path", default="/media/anqiao/Semantic/Models/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
+    parser.add_argument("--dataset_path", default="/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories")
     # parser.add_argument("--dataset_path", default="/home/anqiao/tmp/semantic_front_end_filter/Labelling/extract_trajectories")
     # parser.add_argument("--outdir", default="visulization/results")
     args = parse_args(parser)
