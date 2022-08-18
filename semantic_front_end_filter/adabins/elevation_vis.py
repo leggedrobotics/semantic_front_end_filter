@@ -99,9 +99,12 @@ class WorldViewElevationMap:
     A convinent warper for ElevationMap
     """
     def __init__(self, resolution, map_length, init_with_initialize_map = True):
+        """
+        arg: init_with_initialize_map: (True, False, None, "nearest", "linear", "cubic")
+        """
         self.param = Parameter(
-            use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
-                plugin_config_file=os.path.join(os.path.dirname(__file__), "../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
+            use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
+                plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
             resolution = resolution, map_length=map_length, 
             min_valid_distance = 0, enable_visibility_cleanup = False, enable_edge_sharpen=False,
             enable_overlap_clearance = False,
@@ -110,7 +113,9 @@ class WorldViewElevationMap:
             # mahalanobis_thresh = 1000,
             dilation_size_initialize = 0.
         )
-        self.init_with_initialize_map = init_with_initialize_map
+        self.init_with_initialize_map = "cubic" if init_with_initialize_map == True else init_with_initialize_map
+        self.init_with_initialize_map = False if self.init_with_initialize_map is None else self.init_with_initialize_map
+        assert (self.init_with_initialize_map==False or self.init_with_initialize_map in ["nearest", "linear", "cubic"])
         self.reset()
         
     @property
@@ -134,16 +139,17 @@ class WorldViewElevationMap:
         Move to the pos(x,y,z) and input the points(in world frame)
         points is numpy array
         """
-        points = xp.array(points)
+        R = xp.eye(3,dtype = float)
+        t = xp.array(pos).astype(float)
+        points = xp.array(points)# change the frame of points, translate them into pos's frame
         self.elevation.move_to(pos)
-        R = xp.eye(3)
-        t = xp.zeros(3)
         if(not self.is_init):
             print("input called")
+            points -= t
             self.elevation.input(points, R, t, 0, 0)
         else:
             print("initialize_map called")
-            self.elevation.initialize_map(points.copy())
+            self.elevation.initialize_map(points.copy(), self.is_init)
             self.is_init = False
     
     def get_elevation_map(self):
