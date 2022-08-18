@@ -11,6 +11,8 @@ from elevation_mapping_cupy.elevation_mapping import ElevationMap
 import numpy as np
 from scipy.spatial.transform import Rotation as Rotation
 from ruamel.yaml import YAML
+import yaml
+# from dacite import from_dict
 
 # Load modules for the GFT
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "Labelling"))
@@ -101,17 +103,28 @@ class WorldViewElevationMap:
     A convinent warper for ElevationMap
     """
     def __init__(self, resolution, map_length, init_with_initialize_map = True):
-        self.param = Parameter(
-            use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
-                plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
-            resolution = resolution, map_length=map_length, 
-            min_valid_distance = 0, enable_visibility_cleanup = False, enable_edge_sharpen=False,
-            enable_overlap_clearance = False,
-            max_height_range=100, ramped_height_range_c=10000,
-            initial_variance= 1000, initialized_variance= 1000, max_variance=1000, sensor_noise_factor=0,
-            mahalanobis_thresh = 1000,
-            dilation_size_initialize = 0.
-        )
+        # self.param = Parameter(
+        #     use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
+        #         plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
+        #     resolution = resolution, map_length=map_length, 
+        #     min_valid_distance = 0, enable_visibility_cleanup = False, enable_edge_sharpen=False,
+        #     enable_overlap_clearance = False,
+        #     max_height_range=100, ramped_height_range_c=10000,
+        #     initial_variance= 1000, initialized_variance= 1000, max_variance=1000, sensor_noise_factor=0,
+        #     mahalanobis_thresh = 1000,
+        #     dilation_size_initialize = 0.
+        # )
+        self.param = Parameter()
+        with open('/home/anqiao/anymal_ws/src/anymal_rsl/anymal_c_rsl/anymal_c_rsl/anymal_c_rsl/config/default.yaml', 'rb') as f:
+            conf = yaml.safe_load(f.read())
+        for key, value in conf['elevation_mapping'].items():
+            self.param.set_value(key, value)
+        self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
+        self.param.plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml")
+        p = dict(enable_overlap_clearance = False, max_height_range = 10, ramped_height_range_c = 10)
+        for key, value in p.items():
+            self.param.set_value(key, value)
+
         self.init_with_initialize_map = init_with_initialize_map
         self.reset()
         
