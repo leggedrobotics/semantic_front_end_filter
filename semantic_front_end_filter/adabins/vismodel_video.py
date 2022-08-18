@@ -197,7 +197,7 @@ def saveOnePic(pack_path, path):
     # get pc image
     pc_img = torch.zeros_like(image[:1, ...]).to(device).float()
     pc_img = raycastCamera.project_cloud_to_depth(
-                    pose, points, pc_img)
+                    pose.cpu(), points, pc_img)
     # get prediction
     input = torch.cat([image/255., pc_img],axis=0)
     input = input[None, ...]
@@ -210,7 +210,7 @@ def saveOnePic(pack_path, path):
     pred = pred.T
 
     # get elevation from prediction
-    pts = raycastCamera.project_depth_to_cloud(pose, pred)
+    pts = raycastCamera.project_depth_to_cloud(pose.cpu(), pred)
     pts = pts[~torch.isnan(pts[:,0])]
     # height_mask = (pts[:,2] < pose[2]) & (pose[0]-5 < pts[:,0]) & (pts[:,0] < pose[0]+5) & (pose[1]-5 < pts[:,1]) & (pts[:,1] < pose[1]+5)
     pred_points = pts.detach().cpu().numpy()

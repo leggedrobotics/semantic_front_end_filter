@@ -121,6 +121,6 @@ class RaycastCamera:
                 & (0.0 <= proj_point[:, 1])
                 & (proj_point[:, 1] < self.camera.image_height))
         proj_point = proj_point[visible]
-        pc_distance = torch.sqrt(torch.sum((points[visible,:3] - pose[:3])**2, axis = 1))
+        pc_distance = torch.sqrt(torch.sum((points[visible,:3] - h)**2, axis = 1))
         pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
         return pc_img

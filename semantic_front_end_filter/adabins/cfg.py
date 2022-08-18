@@ -19,6 +19,8 @@ class ModelConfig:
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
     use_adabins: bool = True
+    deactivate_bn: bool = True
+    skip_connection: bool = True
 
 @dataclass
 class TrainConfig:
@@ -118,10 +120,14 @@ class TrainConfig:
     pc_image_label_W: float = 0.5
     traj_label_W: float = 1
     edge_aware_label_W: float = 1
+    sprase_traj_mask: bool = True
 
     traj_distance_variance_ratio: float = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
     scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
-    testing: list = field(default_factory=lambda: ["Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"])
+    testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-22-10-36-29_0", # This is Italy dataset
+                                                    "Reconstruct_2022-04-26-17-35-27_0",  "WithPointCloudReconstruct_2022-03-26-22-28-54_0", # This is SA dataset
+                                                    # "Reconstruct_2022-08-13-10-08-26_0" # this is Zurich dataset
+                                                    ]) 

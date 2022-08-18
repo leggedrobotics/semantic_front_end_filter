@@ -4,7 +4,8 @@ visulization of the network using elevation_mapping_cupy
 """
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "elevation_mapping_cupy", "elevation_mapping_cupy", "script"))
+from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
+sys.path.append(os.path.join(os.path.dirname(SEMANTIC_FRONT_END_FILTER_ROOT_PATH), "elevation_mapping_cupy", "elevation_mapping_cupy", "script"))
 import cupy as xp
 from elevation_mapping_cupy.parameter import Parameter
 from elevation_mapping_cupy.elevation_mapping import ElevationMap
@@ -15,11 +16,9 @@ import yaml
 # from dacite import from_dict
 
 # Load modules for the GFT
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "Labelling"))
-from GroundfromTrajs import GFT
 
-
-from pointcloudUtils import RaycastCamera
+from semantic_front_end_filter.Labelling.GroundfromTrajs import GFT
+from .pointcloudUtils import RaycastCamera
 
 
 # Define a function to draw a marker of the robot on plot
@@ -103,20 +102,23 @@ class WorldViewElevationMap:
     A convinent warper for ElevationMap
     """
     def __init__(self, resolution, map_length, init_with_initialize_map = True):
+        """
+        arg: init_with_initialize_map: (True, False, None, "nearest", "linear", "cubic")
+        """
         # self.param = Parameter(
         #     use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
         #         plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
         #     resolution = resolution, map_length=map_length, 
         #     min_valid_distance = 0, enable_visibility_cleanup = False, enable_edge_sharpen=False,
         #     enable_overlap_clearance = False,
-        #     max_height_range=100, ramped_height_range_c=10000,
-        #     initial_variance= 1000, initialized_variance= 1000, max_variance=1000, sensor_noise_factor=0,
-        #     mahalanobis_thresh = 1000,
+        #     # max_height_range=100, ramped_height_range_c=10000,
+        #     # initial_variance= 1000, initialized_variance= 1000, max_variance=1000, sensor_noise_factor=0,
+        #     # mahalanobis_thresh = 1000,
         #     dilation_size_initialize = 0.
         # )
-        self.param = Parameter()
-        with open('/home/anqiao/anymal_ws/src/anymal_rsl/anymal_c_rsl/anymal_c_rsl/anymal_c_rsl/config/default.yaml', 'rb') as f:
+        with open(os.path.join(os.path.dirname(__file__),"cfgs/elevation_mapping_cupy.yaml"), 'rb') as f:
             conf = yaml.safe_load(f.read())
+        self.param = Parameter()
         for key, value in conf['elevation_mapping'].items():
             self.param.set_value(key, value)
         self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
@@ -125,7 +127,9 @@ class WorldViewElevationMap:
         for key, value in p.items():
             self.param.set_value(key, value)
 
-        self.init_with_initialize_map = init_with_initialize_map
+        self.init_with_initialize_map = "cubic" if init_with_initialize_map == True else init_with_initialize_map
+        self.init_with_initialize_map = False if self.init_with_initialize_map is None else self.init_with_initialize_map
+        assert (self.init_with_initialize_map==False or self.init_with_initialize_map in ["nearest", "linear", "cubic"])
         self.reset()
         
     @property
@@ -149,16 +153,17 @@ class WorldViewElevationMap:
         Move to the pos(x,y,z) and input the points(in world frame)
         points is numpy array
         """
-        points = xp.array(points)
+        R = xp.eye(3,dtype = float)
+        t = xp.array(pos).astype(float)
+        points = xp.array(points)# change the frame of points, translate them into pos's frame
         self.elevation.move_to(pos)
-        R = xp.eye(3)
-        t = xp.zeros(3)
         if(not self.is_init):
             print("input called")
+            points -= t
             self.elevation.input(points, R, t, 0, 0)
         else:
             print("initialize_map called")
-            self.elevation.initialize_map(points.copy())
+            self.elevation.initialize_map(points.copy(), self.is_init)
             self.is_init = False
     
     def get_elevation_map(self):
