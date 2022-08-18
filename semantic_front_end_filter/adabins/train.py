@@ -361,7 +361,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-        wandb.log({f"train/{k}": v for k, v in metrics.items()}, step=step_count)
+        wandb.log({f"train/{k}": v for k, v in train_metrics.items()}, step=step_count)
         if (epoch+1)%2==0:
             log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
