@@ -1,5 +1,5 @@
-# test the successful of import
-def test_dummy():
+# test to compute the error against ElevationMapEvaluator
+def test_elevation_eval_util():
     import os
     import numpy as np
     from semantic_front_end_filter.adabins.elevation_eval_util import ElevationMapEvaluator

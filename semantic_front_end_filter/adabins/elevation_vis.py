@@ -11,6 +11,9 @@ from elevation_mapping_cupy.parameter import Parameter
 from elevation_mapping_cupy.elevation_mapping import ElevationMap
 import numpy as np
 from scipy.spatial.transform import Rotation as Rotation
+from ruamel.yaml import YAML
+import yaml
+# from dacite import from_dict
 
 # Load modules for the GFT
 
@@ -102,17 +105,28 @@ class WorldViewElevationMap:
         """
         arg: init_with_initialize_map: (True, False, None, "nearest", "linear", "cubic")
         """
-        self.param = Parameter(
-            use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
-                plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
-            resolution = resolution, map_length=map_length, 
-            min_valid_distance = 0, enable_visibility_cleanup = False, enable_edge_sharpen=False,
-            enable_overlap_clearance = False,
-            # max_height_range=100, ramped_height_range_c=10000,
-            # initial_variance= 1000, initialized_variance= 1000, max_variance=1000, sensor_noise_factor=0,
-            # mahalanobis_thresh = 1000,
-            dilation_size_initialize = 0.
-        )
+        # self.param = Parameter(
+        #     use_chainer=False, weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat"), 
+        #         plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml"),
+        #     resolution = resolution, map_length=map_length, 
+        #     min_valid_distance = 0, enable_visibility_cleanup = False, enable_edge_sharpen=False,
+        #     enable_overlap_clearance = False,
+        #     # max_height_range=100, ramped_height_range_c=10000,
+        #     # initial_variance= 1000, initialized_variance= 1000, max_variance=1000, sensor_noise_factor=0,
+        #     # mahalanobis_thresh = 1000,
+        #     dilation_size_initialize = 0.
+        # )
+        with open(os.path.join(os.path.dirname(__file__),"cfgs/elevation_mapping_cupy.yaml"), 'rb') as f:
+            conf = yaml.safe_load(f.read())
+        self.param = Parameter()
+        for key, value in conf['elevation_mapping'].items():
+            self.param.set_value(key, value)
+        self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
+        self.param.plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml")
+        p = dict(enable_overlap_clearance = False, max_height_range = 10, ramped_height_range_c = 10)
+        for key, value in p.items():
+            self.param.set_value(key, value)
+
         self.init_with_initialize_map = "cubic" if init_with_initialize_map == True else init_with_initialize_map
         self.init_with_initialize_map = False if self.init_with_initialize_map is None else self.init_with_initialize_map
         assert (self.init_with_initialize_map==False or self.init_with_initialize_map in ["nearest", "linear", "cubic"])
@@ -161,6 +175,9 @@ class WorldViewElevationMap:
         return xp.asnumpy(data)
 
 
+def load_param_from_path(data_path):
+    model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
+    return model_cfg
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
@@ -172,15 +189,38 @@ if __name__ == "__main__":
     import msgpack_numpy as m
 
     m.patch()
-    sys.argv = ["train.py","--data_path", "/media/chenyu/T7/Data/extract_trajectories_003_augment", 
+    sys.argv = ["train.py","--data_path", "/media/anqiao/Semantic/Data/extract_trajectories_003_augment", 
                 "--bs", "1", 
             "--slim_dataset", "True"]
-    args = parse_args()
+    # parser = ArgumentParser()
+    # parser.add_argument("--model_path", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
+   
+    args.model_path="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt" # parser.add_argument("--dataset_path", default="/home/anqiao/tmp/semantic_front_end_filter/Labelling/extract_trajectories")   
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_003_augment"
+    args.slim_dataset = "True"
+    # parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
+    # parser.add_argument("--name", default="UnetAdaptiveBins")
+    # parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
+    # parser.add_argument("--root", default=".", type=str,
+    #                     help="Root folder to save data in")
+    # parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
+    # parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
+
+    # parser.add_argument("--notes", default='', type=str, help="Wandb notes")
+    # parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")     
+    # args = parse_args(parser)
+    model_cfg = load_param_from_path(os.path.dirname(args.model_path))
+
     # from rosvis import *
-    checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm, use_adabins=True)
-    model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
+    # checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
+    # args = parse_args(parser)
+    checkpoint_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt"
+    # model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    #                                         norm=args.modelconfig.norm, use_adabins=True)
+    # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model)
+    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
+                                            norm=args.modelconfig.norm, use_adabins=model_cfg["use_adabins"], deactivate_bn = model_cfg["deactivate_bn"], skip_connection = model_cfg["skip_connection"])
+    model = model_io.load_checkpoint(args.model_path ,model)[0] 
     model.cuda()
 
     ## Loader
@@ -188,11 +228,11 @@ if __name__ == "__main__":
     # sample = next(iter(data_loader))
     data_iter = iter(data_loader)
     sample = next(data_iter)
-    rawdatapath = sample["path"][0].replace("extract_trajectories_003_augment", "extract_trajectories_002")
+    rawdatapath = sample["path"][0].replace("extract_trajectories_003_augment", "extract_trajectories_003/extract_trajectories")
     ground_map_filepath = os.path.join(os.path.dirname(rawdatapath), "GroundMap.msgpack")
 
     data_loader.dataset.filenames[0]
-    filenames = [f'/media/chenyu/T7/Data/extract_trajectories_003_augment/WithPointCloudReconstruct_2022-03-26-22-28-54_0/traj_0_datum_{i}.msgpack' for i in range(100)]
+    filenames = [f'/media/anqiao/Semantic/Data/extract_trajectories_003_augment/WithPointCloudReconstruct_2022-03-26-22-28-54_0/traj_0_datum_{i}.msgpack' for i in range(50)]
     filenames = list(filter(lambda f: os.path.exists(f),filenames))
     data_loader.dataset.filenames = filenames
     data_iter = iter(data_loader)
@@ -200,7 +240,8 @@ if __name__ == "__main__":
 
 
     gft = GFT(GroundMapFile = ground_map_filepath)
-    camera = RaycastCamera("../Labelling/configs")
+    # camera = RaycastCamera("../Labelling/configs")
+    camera = RaycastCamera("/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense")
     elevation = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = True)
     elevation_pred_fusion = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
     elevation_pc_fusion = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
@@ -381,7 +422,7 @@ if __name__ == "__main__":
                 print(e)
                 self.data_iter = iter(self.data_loader)
                 sample = next(self.data_iter)
-            rawdatapath = sample["path"][0].replace("extract_trajectories_003_augment", "extract_trajectories_002")
+            rawdatapath = sample["path"][0].replace("extract_trajectories_003_augment", "extract_trajectories_003/extract_trajectories")
             with open(rawdatapath, "rb") as data_file:
                 byte_data = data_file.read()
                 rawdata = msgpack.unpackb(byte_data)
@@ -400,14 +441,14 @@ if __name__ == "__main__":
             map_pc_fusion = elevation_pc_fusion.get_elevation_map()
 
             elevation.reset()
-            _, pred = model(sample["image"].cuda())
+            pred = model(sample["image"].cuda())
             depth = sample["depth"][0][0].T
             pred = pred[0].detach()#.numpy()
             pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], torch.tensor(depth.T).shape[-2:], mode='bilinear', align_corners=True)
             pred = pred[0][0].T
             
             pose = rawdata["pose"]["map"] # xyzw
-            pts = camera.project_depth_to_cloud(pose, pred)
+            pts = camera.project_depth_to_cloud(torch.Tensor(pose), pred)
 
             height_mask = pts[:,2] < pose[2]
             pred_points = pts[height_mask].cpu()

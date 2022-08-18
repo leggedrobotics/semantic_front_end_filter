@@ -11,11 +11,13 @@ A node with two modes,
 
 import os
 import sys
-from ruamel.yaml import YAML
+# from ruamel.yaml import YAML
+import yaml
 from simple_parsing import ArgumentParser
 import struct
 
 import cv2
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt 
@@ -54,9 +56,25 @@ from semantic_front_end_filter.adabins import model_io, models
 from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+DEBUG_MODE=True
+
+class Timer:
+    def __init__(self, name="") -> None:
+        self.name = name
+
+    def __enter__(self):
+        self.start = torch.cuda.Event(enable_timing=True)
+        self.end = torch.cuda.Event(enable_timing=True)
+        self.start.record()
+        return "Hello, World!"
+    
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.end.record()
+        torch.cuda.synchronize()
+        print(f"Time {self.name}", self.start.elapsed_time(self.end))
 
 class RosVisulizer:
-    def __init__(self, topic, camera_calibration_path="/ros/catkin_ws/src/mnt/darpa_subt/anymal/anymal_chimera_subt/anymal_chimera_subt/config/calibrations/alphasense/"):
+    def __init__(self, topic, camera_calibration_path="/home/integration/git/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"):        
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
@@ -241,11 +259,11 @@ if __name__ == "__main__":
         checkpoint_path = os.path.join(
             SEMANTIC_FRONT_END_FILTER_ROOT_PATH,
             "adabins", 
-            "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt")
+            "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-07-26-00-11-50/UnetAdaptiveBins_latest.pt")
         model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                                 input_channel = 4,
-                                                norm=args.modelconfig.norm, use_adabins = True)
-        model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
+                                                norm=args.modelconfig.norm, use_adabins = False)
+        # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
         model.to(device)
 
         # the place holders for the values
@@ -302,56 +320,79 @@ if __name__ == "__main__":
         rospy.Subscriber("semantic_filter_image", Float64MultiArray, image_callback)
         rospy.Subscriber("semantic_filter_points", Float64MultiArray, points_callback)
 
-        rate = rospy.Rate(1000) # 1hz
+        rate = rospy.Rate(1000) # 1000hz
         while not rospy.is_shutdown():
             rate.sleep()
-            image_mutex.acquire()
-            image = image_ph.clone() if image_ph is not None else image_ph
-            image_mutex.release()
-            depth_mutex.acquire()
-            depth = depth_ph.clone() if depth_ph is not None else depth_ph
-            depth_mutex.release()
-            pose_mutex.acquire()
-            pose = pose_ph.clone() if pose_ph is not None else pose_ph
-            pose_mutex.release()
-            points_mutex.acquire()
-            points = points_ph.copy() if points_ph is not None else points_ph
-            points_mutex.release()
-            if(show_depth_flag and depth is not None and image is not None and pose is not None):
-                _depth = depth.T
-                _image = np.transpose(image.numpy(),(2,1,0))
-                _image = (_image-_image.min())/(_image.max()-_image.min())
-                cloud = rosv.build_could_from_depth_image(pose, _depth, _image)
-                print("terrainpub", cloud.height, cloud.width)
-                terrainpub.publish(cloud)
+            with Timer("full"):
+                # start = time.time()
+                # image_mutex.acquire()
+                # image = image_ph.clone() if image_ph is not None else image_ph
+                # image_mutex.release()
+                # depth_mutex.acquire()
+                # depth = depth_ph.clone() if depth_ph is not None else depth_ph
+                # depth_mutex.release()
+                # pose_mutex.acquire()
+                # pose = pose_ph.clone() if pose_ph is not None else pose_ph
+                # pose_mutex.release()
+                # points_mutex.acquire()
+                # points = points_ph.copy() if points_ph is not None else points_ph
+                # points_mutex.release()
+                start = time.time()
+                image = image_ph.clone() if image_ph is not None else image_ph
+                depth = depth_ph.clone() if depth_ph is not None else depth_ph
+                pose = pose_ph.clone() if pose_ph is not None else pose_ph
+                points = points_ph.copy() if points_ph is not None else points_ph
+                update_end = time.time()
+                if(DEBUG_MODE):
+                    print("update cost: ", update_end-start)
+                
+                if(show_depth_flag and depth is not None and image is not None and pose is not None):
+                    _depth = depth.T
+                    _image = np.transpose(image.numpy(),(2,1,0))
+                    _image = (_image-_image.min())/(_image.max()-_image.min())
+                    cloud = rosv.build_could_from_depth_image(pose, _depth, _image)
+                    print("terrainpub", cloud.height, cloud.width)
+                    terrainpub.publish(cloud)
+                projection_end = time.time()
+                if(DEBUG_MODE):
+                    print("projection cost: ", projection_end-update_end)
+                
+                if(show_pred_flag and image is not None and pose is not None):
+                    pc_img = torch.zeros_like(image[:1,...]).numpy()
+                    if(points is not None):
+                        try:
+                            time_count = -time.time()
+                            pc_img = rosv.raycastCamera.project_cloud_to_depth(pose, points, pc_img)
+                            ## TODO: normalize the input
+                        except Exception as e:
+                            print("PC IMAGE ERROR", e)
 
-            if(show_pred_flag and image is not None and pose is not None):
-                pc_img = torch.zeros_like(image[:1,...]).numpy()
-                if(points is not None):
-                    try:
-                        time_count = -time.time()
-                        pc_img = rosv.raycastCamera.project_cloud_to_depth(pose, points, pc_img)
-                        ## TODO: normalize the input
-                    except Exception as e:
-                        print("PC IMAGE ERROR", e)
+                    pc_img = torch.tensor(pc_img).to(device)
+                    _image = image.to(device)
+                    _image = torch.cat([_image/255., pc_img], axis = 0) # add the pc channel
+                    _image = _image[None,...]
+                    #normalize
+                    for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
+                        _image[0,i,...] = (_image[0,i,...] - m)/s
 
-                pc_img = torch.tensor(pc_img).to(device)
-                _image = image.to(device)
-                _image = torch.cat([_image/255., pc_img], axis = 0) # add the pc channel
-                _image = _image[None,...]
-                #normalize
-                for i,(m,s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
-                    _image[0,i,...] = (_image[0,i,...] - m)/s
-                _, pred = model(_image)
-                pred = pred[0].detach()
-                pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
-                pred = pred[0][0].T
-                # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
-                # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-                cloud = rosv.build_could_from_depth_image(pose, pred, None)
-                predpub.publish(cloud)
-                pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
-                pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
+                    with Timer("forward"):
+                        pred = model(_image)
+                    with Timer("post forward"):
+                        pred = pred[0].detach()
+                        pred = nn.functional.interpolate(torch.tensor(pred).detach()[None,...], _image.shape[-2:], mode='bilinear', align_corners=True)
+                        pred = pred[0][0].T
+                        # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
+                        # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
+                        cloud = rosv.build_could_from_depth_image(pose, pred, None)
+                        predction_end = time.time()
+                        if(DEBUG_MODE):                
+                            print("prediction & projection cost: ", predction_end-projection_end)    
+                            print("one loop cost: ", predction_end-start)      
+                            print("-------------------------------------------------------")      
+                        
+                        predpub.publish(cloud)
+                        pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
+                        pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
 
 """
 This ros node mode can work with a publisher as the following

@@ -103,18 +103,13 @@ if __name__ == "__main__":
 
     from elevation_mapping_cupy.parameter import Parameter
 
-    ## Initiate the elevation map evaluater
-    ground_map_path = os.path.join(SEMANTIC_FRONT_END_FILTER_ROOT_PATH, "Labelling/Example_Files/GroundMap.msgpack")
-    param = Parameter(resolution=0.1)
-    evaluator = ElevationMapEvaluator(ground_map_path, param)
-
     ## Generate the input for elevationmap_cupy from FeetTrajs
     target_pos = np.array([130,425])
 
     FeetTrajs_filepath = os.path.join(SEMANTIC_FRONT_END_FILTER_ROOT_PATH, "Labelling/Example_Files/FeetTrajs.msgpack")
     gft = GFT(FeetTrajsFile = FeetTrajs_filepath, InitializeGP=False)
     foot_holds = {k : np.array(gft.getContactPoints(v)[0]) for k,v in gft.FeetTrajs.items()} # A dict of the contact points of each foot
-    foot_holds_array = np.vstack(foot_holds.values())
+    foot_holds_array = np.vstack(list(foot_holds.values()))
     foot_holds_array = foot_holds_array[np.sum((foot_holds_array[:,:2] - target_pos)**2, axis = 1)<10**2]
     print("foot_holds_array shape:", foot_holds_array.shape)
 
@@ -124,6 +119,11 @@ if __name__ == "__main__":
     elevation.move_to_and_input([*target_pos,-4.46], foot_holds_array)
     elev_map_foot_holds = elevation.get_elevation_map()
     print("EMPYT foot hold elev map?",np.isnan(elev_map_foot_holds).all())
+
+    ## Initiate the elevation map evaluater
+    ground_map_path = os.path.join(SEMANTIC_FRONT_END_FILTER_ROOT_PATH, "Labelling/Example_Files/GroundMap.msgpack")
+    param = elevation.param # use the parameter same as the elevation_map
+    evaluator = ElevationMapEvaluator(ground_map_path, param)
 
     #compute error
     error = evaluator.compute_error_against_gpmap(elev_map_foot_holds, target_pos, np.pi/6)

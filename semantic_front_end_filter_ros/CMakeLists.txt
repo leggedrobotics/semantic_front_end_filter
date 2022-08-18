@@ -20,7 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   cv_bridge
-  filters
+  #filters
 )
 
 find_package(OpenCV REQUIRED
