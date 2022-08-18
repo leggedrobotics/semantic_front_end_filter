@@ -109,7 +109,7 @@ if __name__ == "__main__":
     FeetTrajs_filepath = os.path.join(SEMANTIC_FRONT_END_FILTER_ROOT_PATH, "Labelling/Example_Files/FeetTrajs.msgpack")
     gft = GFT(FeetTrajsFile = FeetTrajs_filepath, InitializeGP=False)
     foot_holds = {k : np.array(gft.getContactPoints(v)[0]) for k,v in gft.FeetTrajs.items()} # A dict of the contact points of each foot
-    foot_holds_array = np.vstack(foot_holds.values())
+    foot_holds_array = np.vstack(list(foot_holds.values()))
     foot_holds_array = foot_holds_array[np.sum((foot_holds_array[:,:2] - target_pos)**2, axis = 1)<10**2]
     print("foot_holds_array shape:", foot_holds_array.shape)
 
