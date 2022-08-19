@@ -129,6 +129,8 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         plt.ylim((-20,20))
         plt.legend()
         errordistributions.append(wandb.Image(fig))
+        plt.cla()
+        plt.close(fig)
 
     columns = ["filepaths","image"]
     data = [[f, img ] for f,img in zip(filepaths,inputimgs)]
@@ -361,7 +363,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
-        wandb.log({f"train/{k}": v for k, v in train_metrics.items()}, step=step_count)
+        wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
         if (epoch+1)%2==0:
             log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
