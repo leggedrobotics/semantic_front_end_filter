@@ -129,6 +129,8 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         plt.ylim((-20,20))
         plt.legend()
         errordistributions.append(wandb.Image(fig))
+        plt.cla()
+        plt.close(fig)
 
     columns = ["filepaths","image"]
     data = [[f, img ] for f,img in zip(filepaths,inputimgs)]
