@@ -8,9 +8,9 @@ import sys
 import os
 
 from cv2 import projectPoints
-LabellingPath = os.path.join(os.path.dirname(os.path.dirname(__file__)),"Labelling")
-sys.path.append(LabellingPath)
-from messages.imageMessage import Camera
+from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
+LabellingPath = os.path.join(SEMANTIC_FRONT_END_FILTER_ROOT_PATH,"Labelling")
+from semantic_front_end_filter.Labelling.messages.imageMessage import Camera
 
 import numpy as np
 import torch
@@ -48,7 +48,7 @@ def calculate_H_map_cam(transition, rotation):
 
 class RaycastCamera:
     def __init__(self, camera_calibration_path = None, device = None):
-        self.camera_calibration_path = os.path.join(LabellingPath, configs) if camera_calibration_path is None else camera_calibration_path
+        self.camera_calibration_path = os.path.join(LabellingPath, "configs") if camera_calibration_path is None else camera_calibration_path
         cam_id = "cam4"
         cfg={}
         cfg["CAM_RBSWAP"]=['']
@@ -97,7 +97,7 @@ class RaycastCamera:
         pts = start_points + depth.reshape(-1,1)*directions
         return pts
 
-    def project_cloud_to_depth(self, pose, points, pc_img):
+    def project_cloud_to_depth(self, pose, points, pc_img, return_visible = False):
         self.camera.update_pose_from_base_pose(pose)
         camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
         p = torch.Tensor(self.camera.tvec).to(device)
@@ -123,4 +123,6 @@ class RaycastCamera:
         proj_point = proj_point[visible]
         pc_distance = torch.sqrt(torch.sum((points[visible,:3] - h)**2, axis = 1))
         pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
+        if return_visible:
+            return pc_img, visible
         return pc_img
