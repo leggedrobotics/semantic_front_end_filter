@@ -82,8 +82,8 @@ class ElevationMapEvaluator:
         error = elevmap - elevmap_gt
 
         # update the error_sum error count
-        mask = ~np.isnan(error)
         error = rotate(error, angle=-r/np.pi*180, reshape=False, order = 0, mode='constant', cval = np.nan)
+        mask = ~np.isnan(error)
         self.error_sum[mask] += abs(error[mask])
         self.error_count[mask] += 1
         self.error_list.append(error)

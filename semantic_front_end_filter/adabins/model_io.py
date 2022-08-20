@@ -73,6 +73,7 @@ def load_checkpoint(fpath, model, optimizer=None):
             # del load_dict[k]
         else:
             modified[k] = v  # else keep the original
-
+    if(not model.use_adabins):
+        modified = {k:v for k,v in modified.items() if not k.startswith('adaptive_bins_layer')}
     model.load_state_dict(modified)
     return model, optimizer, epoch
