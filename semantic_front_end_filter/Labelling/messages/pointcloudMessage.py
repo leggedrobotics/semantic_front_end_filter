@@ -1,6 +1,4 @@
 import sensor_msgs.point_cloud2 as ros_pc_msg2
-# from ruamel.yaml import YAML
-import yaml
 from .messageToVectors import msg_to_pose
 from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
 import os

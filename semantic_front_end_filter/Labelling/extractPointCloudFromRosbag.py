@@ -42,6 +42,7 @@ import yaml
 from ExtractDepthImage import DIFG
 from GroundfromTrajs import GFT
 
+DATASET_TYPE = "SA" # for Italy extraction, the branch `features/Italy` is more stable
 
 # https://stackoverflow.com/questions/41493282/in-python-pandas-how-can-i-re-sample-and-interpolate-a-dataframe
 # https://stackoverflow.com/questions/48068938/set-new-index-for-pandas-dataframe-interpolating
@@ -242,10 +243,24 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         for transform in msg.transforms:
             tf_buffer.set_transform_static(transform, 'rosbag')
 
-    for cam_id in cfg['CAM_NAMES']:
-        cameras[cam_id].update_static_tf(
-            tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
-        print(cam_id, cameras[cam_id].tf_base_to_sensor)
+    if(cfg['DATASET_TYPE']=="Italy"):
+        cameras["cam3"].tf_base_to_sensor = (np.array([-0.3496997 , -0.07530075,  0.24087976]), np.array([[-0.99997646,  0.00626061,  0.0028084 ,  0.        ],\
+        [-0.00386116, -0.17507344, -0.98454781,  0.        ],\
+        [-0.00567219, -0.98453547,  0.17509349,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        cameras["cam4"].tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],\
+        [ 0.99997436,  0.00386421, -0.00602859,  0.        ],\
+        [ 0.00385317, -0.99999088, -0.00184271,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        cameras["cam5"].tf_base_to_sensor = (np.array([-0.34988457,  0.07470715,  0.24034518]), np.array([[ 0.99999023,  0.00205021, -0.00391555,  0.        ],\
+        [ 0.00349934,  0.17390848,  0.9847556 ,  0.        ],\
+        [ 0.00269991, -0.98475969,  0.1738996 ,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+    else:
+        for cam_id in cfg['CAM_NAMES']:
+            cameras[cam_id].update_static_tf(
+                tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
+            print(cam_id, cameras[cam_id].tf_base_to_sensor)
 
     for topic, msg, t in bag.read_messages(topics=['/tf'], end_time=time_stamps_sequences[0][0]):
         for transform in msg.transforms:
@@ -431,8 +446,14 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         else:
             state_df = resample_ffill(state_data, resampled_idx, dt.to_sec())
 
+        if(not len(image_data.data)):
+            print("No images in this traj")
+            continue
         img_df = resample_dataid_ffill(image_data, resampled_idx, 1.0)  # tol > 0.7 second (darpa: img updates ~ 1.5 Hz)
         map_df = resample_dataid_ffill(map_data, resampled_idx, 0.3)  # tol > 0.2 second (map updates ~ 5 Hz)
+        if(not len(pointcloud_data.data)):
+            print("No point cloud in this traj")
+            continue
         pointcloud_df = resample_dataid_ffill(pointcloud_data, resampled_idx, 0.15)  # tol > 0.1 second (pointcloud updates ~ 9.9 Hz)
         pose_df = resample_ffill(pose_data, resampled_idx, dt.to_sec())
         vel_df = resample_ffill(velocity_data, resampled_idx, dt.to_sec())
@@ -595,7 +616,10 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
 
 def main():
     # Load cfg
-    cfg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)) , 'data_extraction_SA.yaml')
+    if DATASET_TYPE == "SA": 
+        cfg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)) , 'data_extraction_SA.yaml')
+    else:
+        cfg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)) , 'data_extraction_Italy.yaml')
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')

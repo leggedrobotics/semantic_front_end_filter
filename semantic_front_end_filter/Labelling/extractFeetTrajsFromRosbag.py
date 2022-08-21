@@ -215,13 +215,15 @@ def main():
     # Load cfg
     cfg_path = os.path.dirname(os.path.realpath(__file__)) + '/data_extraction_SA.yaml'
     parser = ArgumentParser()
+    parser.add_argument('--bag_path', default='', help = 'bag file path')
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    bag_file_path = cfg['bagfile']
+    # bag_file_path = cfg['bagfile']
+    bag_file_path = args.bag_path
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
 

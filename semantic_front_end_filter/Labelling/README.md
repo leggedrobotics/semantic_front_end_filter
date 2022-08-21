@@ -1,5 +1,7 @@
 # Construct Map from Robot Feet Trajectories
 
+> For Italy dataset generation, see the branch `features\Italy`
+
 ## Installation
 
 ### Depandencies
