@@ -237,7 +237,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
 
     print("Number of sub sequences: {}".format(len(time_stamps_sequences)))
 
-    tf_buffer = tf2_py.BufferCore(rospy.Duration.from_sec(max_traj_len * dt.to_sec() * 1.1))
+    tf_buffer = tf2_py.BufferCore(rospy.Duration.from_sec(max_traj_len * dt.to_sec() * 2.5))
 
     for topic, msg, t in bag.read_messages(topics=['/tf_static']):
         for transform in msg.transforms:
@@ -266,7 +266,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 tf_buffer.set_transform(transform, 'rosbag')
 
     # Process trajectories
-    for traj_idx, traj in enumerate(time_stamps_sequences[2:]):
+    for traj_idx, traj in enumerate(time_stamps_sequences[0:]):
         print(traj_idx, "-th sequence: ")
 
         start_time = traj[0]
@@ -547,7 +547,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
-                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 10)
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 1)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
@@ -590,9 +590,13 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 save_dict['velocity'] = {}
 
                 save_dict['images'] = {}
+                save_dict['time'] = 0
                 save_dict['map'] = None
 
                 save_dict['pointcloud'] = pointcloudinfo['pc'][time_idx]
+
+                #Save time
+                save_dict['time'] = df['map'].index[time_idx].value/1e9
 
                 # Save robot state
                 for key in cmd_keys:
@@ -639,16 +643,18 @@ def main():
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
-    # parser.add_argument('--bag_path', default='', help = 'bag file path')
+    parser.add_argument('--bag_path', default='/media/anqiao/Semantic/Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_11/mission8_locomotino/Reconstruct_2022-04-25-13-57-28_0.bag', help = 'bag file path')
+    parser.add_argument('--out_dir', default='/media/anqiao/Semantic/Data/extract_trajectories_006_SA/extract_trajectories/', help = 'output path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    bag_file_path = cfg['bagfile']
-    # bag_file_path = args.bag_path
+    # bag_file_path = cfg['bagfile']
+    bag_file_path = args.bag_path
     print("Extracting file: " + bag_file_path)
-    output_path = cfg['outdir']
+    # output_path = cfg['outdir']
+    output_path = args.out_dir
     camera_calibration_path = cfg['calibration']
     print("camera_calibration_path :",camera_calibration_path)
     
