@@ -122,7 +122,7 @@ class WorldViewElevationMap:
         for key, value in conf['elevation_mapping'].items():
             self.param.set_value(key, value)
         self.param.resolution = resolution
-        self.map_length = map_length
+        self.param.map_length = map_length
         self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
         self.param.plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml")
         p = dict(enable_overlap_clearance = False, max_height_range = 10, ramped_height_range_c = 10)
