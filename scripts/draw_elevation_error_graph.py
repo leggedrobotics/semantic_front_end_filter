@@ -117,12 +117,12 @@ if __name__ == "__main__":
     TF_BASE = "base"
     TF_MAP = "map"
 
-    GENERATE_VIDEO = True    
+    GENERATE_VIDEO = False
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     raycastCamera = RaycastCamera(device=device) # WARN: This raycastcamera is hard coded with `tf_base_to_sensor`, however, it seems to be constant
-    elevation_pred = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
-    elevation_pc = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
+    elevation_pred = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
+    elevation_pc = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
     # Evaluators used to evaluate the error
     evaluator_pred = ElevationMapEvaluator(groundmappath, elevation_pred.param)
     evaluator_pc = ElevationMapEvaluator(groundmappath, elevation_pc.param)
@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     ## Define shared variables
     pcbuffer=[]
-
+    elev_pred_buffer = []
     if(GENERATE_VIDEO):
         video_frame_count = 0
         video_frame_freq = 10
@@ -148,6 +148,7 @@ if __name__ == "__main__":
         pred_list=[]
         pred_elev_list=[]
         pc_elev_list=[]
+        gt_list=[]
         errer_list_count=[] # the length of current evaluator.error_list
 
     ###########
@@ -195,6 +196,7 @@ if __name__ == "__main__":
         error_pred = evaluator_pred.compute_error_against_gpmap(elevmap_pred, pose[:2], rz)
         error_pc = evaluator_pc.compute_error_against_gpmap(elevmap_pc, pose[:2], rz)
         
+        elev_pred_buffer.append((elevmap_pred, pose))
         if(GENERATE_VIDEO):
             global video_frame_count
             if(not video_frame_count):
@@ -203,6 +205,8 @@ if __name__ == "__main__":
                 pred_list.append(pred.detach().cpu().numpy().T)
                 pred_elev_list.append(elevmap_pred)
                 pc_elev_list.append(elevmap_pc)
+                gt=evaluator_pred.get_gpmap_at_xy(pose[:2])
+                gt_list.append(gt)
                 errer_list_count.append(len(evaluator_pred.error_list))
             video_frame_count -=1
 
@@ -242,13 +246,14 @@ if __name__ == "__main__":
     player.register_callback(pc_topic, pointcloud_cb)
 
     if(GENERATE_VIDEO): # video generation is expensive in memory
-        player.play(end_time=player.bag.get_start_time()+200)
+        player.play(end_time=player.bag.get_start_time()+70)
     else:
         player.play()# play from start to end
 
-    # with open("tmp/errorlist.pkl","wb") as f:
-    #     pkl.dump((evaluator_pred.error_list,
-    #               evaluator_pc.error_list), f)
+    with open("tmp/evaluators.pkl","wb") as f:
+        pkl.dump((evaluator_pred, evaluator_pc), f)
+    with open("tmp/elevations.pkl","wb") as f:
+        pkl.dump(elev_pred_buffer, f)
 
     ### Generate Animation
     if(GENERATE_VIDEO):
@@ -256,7 +261,7 @@ if __name__ == "__main__":
         fig, axs = plt.subplots(2,3, figsize=(30,20))
         image_to_show_list = [((np.moveaxis(im[:3,...], 0, 2)-im[:3,...].min())
                     /(im[:3,...].max()-im[:3,...].min()))[:,:,::-1] for im in image_list]
-        imgdatasource = [image_to_show_list, pred_list, pred_elev_list, pc_elev_list]
+        imgdatasource = [image_to_show_list, pred_list, pred_elev_list, pc_elev_list, gt_list]
         elevmin = np.min([m[~np.isnan(m)].min() for m in pred_elev_list+pc_elev_list])
         elevmax = np.max([m[~np.isnan(m)].max() for m in pred_elev_list+pc_elev_list])
         print("elev min and max", elevmin, elevmax)
@@ -264,7 +269,8 @@ if __name__ == "__main__":
             axs[0][0].imshow(image_to_show_list[0]),
             axs[0][1].imshow(pred_list[0], vmin = 0.1, vmax = 20),
             axs[1][0].imshow(pred_elev_list[0], vmin = elevmin, vmax = elevmax),
-            axs[1][1].imshow(pc_elev_list[0], vmin = elevmin, vmax = elevmax)]
+            axs[1][1].imshow(pc_elev_list[0], vmin = elevmin, vmax = elevmax),
+            axs[1][2].imshow(gt_list[0], vmin = elevmin, vmax = elevmax)]
         lines = [axs[0][2].plot( [abs(e)[~np.isnan(e)].mean() for e in e_list[:10]], label = n)[0] 
             for e_list, n in zip([evaluator_pred.error_list, evaluator_pc.error_list], ["pred", "pc"] )]
         axs[0][2].legend()
@@ -305,13 +311,19 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(1,2, figsize=(20,10))
     axs[0].imshow(meanerr_pred, vmin=0, vmax=2, cmap='plasma')
     error_pred_mask = ~np.isnan(meanerr_pred)
-    axs[0].set_title("pred_rmse: %f"%(np.sqrt(np.sum(meanerr_pred[error_pred_mask]**2))/float(error_pred_mask.sum())))
+    axs[0].set_title("pred_rmse: %f"%(np.sqrt(np.sum(meanerr_pred[error_pred_mask]**2)/float(error_pred_mask.sum()))))
 
     meanerr_pc = evaluator_pc.error_sum / evaluator_pc.error_count
     axs[1].imshow(meanerr_pc, vmin=0, vmax=2, cmap='plasma')
     error_pc_mask = ~np.isnan(meanerr_pc)
-    axs[1].set_title("pc_rmse: %f"%(np.sqrt(np.sum(meanerr_pc[error_pc_mask]**2))/float(error_pc_mask.sum())))
+    axs[1].set_title("pc_rmse: %f"%(np.sqrt(np.sum(meanerr_pc[error_pc_mask]**2)/float(error_pc_mask.sum()))))
     divider = make_axes_locatable(axs[1])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(cax = cax, mappable = axs[1].images[0])
     plt.savefig("tmp/error_map.png")
+
+    plt.figure()
+    plt.imshow(meanerr_pred - meanerr_pc, cmap='plasma')
+    plt.colorbar()
+    plt.savefig("tmp/error_diff.png")
+    # plt.show()
