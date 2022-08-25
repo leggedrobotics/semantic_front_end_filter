@@ -101,18 +101,22 @@ class RaycastCamera:
         self.camera.update_pose_from_base_pose(pose)
         camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
         p = torch.Tensor(self.camera.tvec).to(device)
+        # p = torch.Tensor(self.camera.pose[0]).to(device)
         H = torch.inverse(torch.Tensor(self.camera.pose[1]).to(device))
         R = H[:3, :3]
         # p = H[:3, 3]
-        p = torch.Tensor(self.camera.tvec).to(device)
+        # p = torch.Tensor(self.camera.tvec).to(device)
         # p = torch.matmul(R, p)
         h = torch.Tensor(self.camera.pose[0]).to(device)
         # TODO check this
+        # proj_point = torch.matmul(torch.matmul((points ), R.transpose(0, 1)) + p, camera_matrix.transpose(0, 1))
         proj_point = torch.matmul(torch.matmul((points ), R.transpose(0, 1)) + p, camera_matrix.transpose(0, 1))
         proj_point = (proj_point/proj_point[:, 2:].repeat(1, 3)).long()
         # proj_point = proj_point.long()
-        # proj_point, proj_jac = self.camera.project_point(points[:,:3].astype(np.float32))#150ms
+
+        # proj_point, proj_jac = self.camera.project_point(points[:,:3].cpu().numpy().astype(np.float32))#150ms
         # proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)#80ms
+        # proj_point = torch.Tensor(proj_point).to(device).long()
         camera_heading = torch.Tensor(self.camera.pose[1][:3, 2]).to(device)
         point_dir = points[:, :3] - h
         visible = torch.matmul(point_dir, camera_heading) > 1.0
@@ -121,6 +125,7 @@ class RaycastCamera:
                 & (0.0 <= proj_point[:, 1])
                 & (proj_point[:, 1] < self.camera.image_height))
         proj_point = proj_point[visible]
-        pc_distance = torch.sqrt(torch.sum((points[visible,:3] - pose[:3])**2, axis = 1))
+        # pc_distance = torch.sqrt(torch.sum((points[visible,:3] - pose[:3])**2, axis = 1))
+        pc_distance = torch.sqrt(torch.sum((points[visible,:3] - torch.Tensor(self.camera.pose[0]).to(device))**2, axis = 1))
         pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
         return pc_img
