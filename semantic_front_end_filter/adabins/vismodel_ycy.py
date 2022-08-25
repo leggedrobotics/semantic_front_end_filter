@@ -116,7 +116,8 @@ def vis_one(loader = "test", figname=""):
 
         plot_ind = 7+4*i
         axs[plot_ind//4, plot_ind%4].plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
-        axs[plot_ind//4, plot_ind%4].plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        axs[plot_ind//4, plot_ind%4].plot(pred[mask_traj].reshape(-1), diff[mask_traj & mask_pc].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        axs[plot_ind//4, plot_ind%4].plot(pred[mask_traj].reshape(-1), diff[mask_traj & (~mask_pc)].reshape(-1), "o",ms=1,alpha = 0.2, label = "traj_err")
         axs[plot_ind//4, plot_ind%4].set_title("err vs distance")
         axs[plot_ind//4, plot_ind%4].set_xlabel("depth_prediction")
         axs[plot_ind//4, plot_ind%4].set_ylabel("err")
@@ -155,7 +156,7 @@ if __name__=="__main__":
     parser.add_argument("--models", default="")
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
-    args = parse_args()
+    args = parse_args(parser)
     args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_Italy_augment/"
 
     if not os.path.exists(args.outdir):
@@ -172,7 +173,7 @@ if __name__=="__main__":
     
     model_cfgs = [load_param_from_path(os.path.dirname(checkpoint_path)) for checkpoint_path in checkpoint_paths]
     model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"]) for cfg in model_cfgs]
+                                            norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"], deactivate_bn = cfg["deactivate_bn"], skip_connection = cfg["skip_connection"]) for cfg in model_cfgs]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
@@ -180,11 +181,12 @@ if __name__=="__main__":
     # for model in model_list:
     #     model.transform()
 
-    for i in range(9):
+    for i in range(20):
         vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()
+
 
 
     
