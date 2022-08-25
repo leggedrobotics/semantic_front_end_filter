@@ -314,7 +314,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             pred = pred.detach().cpu()
             depth = depth.cpu()
-            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj]))
+            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
+            train_metrics.update(utils.compute_errors(depth[maskpc], pred[maskpc], 'pc/'))
 
 
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -411,6 +412,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
 
             gt_depth = depth.squeeze().cpu().numpy()
             masktraj = masktraj.squeeze().squeeze()
+            maskpc = maskpc.squeeze().squeeze()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
             if args.trainconfig.garg_crop or args.trainconfig.eigen_crop:
                 gt_height, gt_width = gt_depth.shape
@@ -426,9 +428,11 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                     int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                     
             valid_mask = np.logical_and(valid_mask, eval_mask)
-            valid_mask = np.logical_and(valid_mask, masktraj.cpu().numpy())
-            if(not valid_mask.any()): continue
-            metrics.update(utils.compute_errors(gt_depth[valid_mask], pred[valid_mask]))
+            valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
+            valid_mask_pc = np.logical_and(valid_mask, maskpc.cpu().numpy()) 
+            if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
+            metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
+            metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si

@@ -77,7 +77,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def compute_errors(gt, pred):
+def compute_errors(gt, pred, prefix):
     """
     gt and pred should be turned to np
     """
@@ -101,9 +101,10 @@ def compute_errors(gt, pred):
     silog = np.sqrt(np.mean(err ** 2) - np.mean(err) ** 2) * 100
 
     log_10 = (np.abs(np.log10(gt) - np.log10(pred))).mean()
-    return dict(a1=a1, a2=a2, a3=a3, abs_rel=abs_rel, rmse=rmse, log_10=log_10, rmse_log=rmse_log,
+    error_dict =  dict(a1=a1, a2=a2, a3=a3, abs_rel=abs_rel, rmse=rmse, log_10=log_10, rmse_log=rmse_log,
                 silog=silog, sq_rel=sq_rel)
-
+    error_dict_with_prefix = {prefix+key: value for key, value in error_dict.items()}
+    return error_dict_with_prefix
 
 ##################################### Demo Utilities ############################################
 def b64_to_pil(b64string):
