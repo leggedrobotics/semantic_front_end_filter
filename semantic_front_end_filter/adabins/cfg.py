@@ -128,9 +128,9 @@ class TrainConfig:
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
     testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-22-10-36-29_0", # This is Italy dataset
-                                                   "Reconstruct_2022-07-21-10-47-29_0.bag",
-                                                   "Reconstruct_2022-07-18-20-34-01_0.bag",
-                                                   "Reconstruct_2022-07-19-18-43-46_0.bag",
+                                                   "Reconstruct_2022-07-21-10-47-29_0",
+                                                   "Reconstruct_2022-07-18-20-34-01_0",
+                                                   "Reconstruct_2022-07-19-18-43-46_0",
                                                     # "Reconstruct_2022-04-26-17-35-27_0",  "WithPointCloudReconstruct_2022-03-26-22-28-54_0", # This is SA dataset
                                                     "Reconstruct_2022-08-13-10-08-26_0" # this is Zurich dataset
                                                     ]) 
