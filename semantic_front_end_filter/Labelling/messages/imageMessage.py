@@ -57,9 +57,9 @@ class Camera:
 
     def update_pose_from_base_pose(self, base_in_world):
 
-        position = np.array(base_in_world[:3].cpu())
+        position = np.array(base_in_world[:3])
         # R_bak = np.array(quaternion_matrix(base_in_world[3:]))
-        rotation = Rotation.from_quat(base_in_world[3:].cpu())
+        rotation = Rotation.from_quat(base_in_world[3:])
         R = np.eye(4)
         R[:3,:3] = rotation.as_matrix()
         # assert(np.sum((R_bak - R)**2) < 1e-10)

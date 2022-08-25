@@ -68,7 +68,7 @@ class GFT:
             f"One and only one file should be provided"
 
         # Get GroundArray from saved GFT msgpack
-        if GroundMapFile != None:
+        if GroundMapFile is not None:
             self.GroundArray = self.load(GroundMapFile)
         else:
         # Get GroundArray from saved Feet Trajectories
