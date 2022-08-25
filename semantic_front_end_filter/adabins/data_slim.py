@@ -9,6 +9,8 @@ import numpy as np
 import msgpack
 import msgpack_numpy as m
 import cv2 as cv
+from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
+
 m.patch()
 
 def filter_msg_pack(input_path, output_path):
@@ -16,22 +18,29 @@ def filter_msg_pack(input_path, output_path):
         byte_data = data_file.read()
         data = msgpack.unpackb(byte_data)
     depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
+    
+    # pc_img = torch.zeros_like(torch.Tensor(data["images"]["cam4"][:1, ...])).to(device).float()
+    pc_img = torch.zeros(1, 540, 720).to(device)
+    pose = torch.Tensor(data["pose"]["map"]).to(device)
+    points = torch.Tensor(data["pointcloud"][:,:3]).to(device)
+    pc_img = raycastCamera.project_cloud_to_depth(pose, points, pc_img)
+    pc_image = pc_img.squeeze(0)[..., None].cpu().numpy()
+    # old method
+    # pc_image = np.zeros_like(depth_gt[:,:,:1])
+    # pos = data["pose"]["map"][:3]
+    # pc = data["pointcloud"]
+    # pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
 
-    pc_image = np.zeros_like(depth_gt[:,:,:1])
-    pos = data["pose"]["map"][:3]
-    pc = data["pointcloud"]
-    pc_distance = np.sqrt(np.sum((pc[:,:3] - pos)**2, axis = 1))
-
-    imgshape = pc_image.shape[:-1] 
-    pc_proj_mask = pc[:, 10] > 0.5 # the point is on the graph
-    pc_proj_loc = pc[:, 11:13] # the x,y pos of point on image
-    pc_proj_mask = (pc_proj_mask & (pc_proj_loc[:, 0]<imgshape[1])
-                                & (pc_proj_loc[:, 0]>=0)
-                                &  (pc_proj_loc[:, 1]<imgshape[0])
-                                &  (pc_proj_loc[:, 1]>=0))
-    pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
-    pc_distance = pc_distance[pc_proj_mask]
-    pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
+    # imgshape = pc_image.shape[:-1] 
+    # pc_proj_mask = pc[:, 10] > 0 # the point is on the graph
+    # pc_proj_loc = pc[:, 11:13] # the x,y pos of point on image
+    # pc_proj_mask = (pc_proj_mask & (pc_proj_loc[:, 0]<imgshape[1])
+    #                             & (pc_proj_loc[:, 0]>=0)
+    #                             &  (pc_proj_loc[:, 1]<imgshape[0])
+    #                             &  (pc_proj_loc[:, 1]>=0))
+    # pc_proj_loc = pc_proj_loc[pc_proj_mask].astype(np.int32)
+    # pc_distance = pc_distance[pc_proj_mask]
+    # pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
     
     if(np.sum(data["images"]["cam4depth"][0,:,:]>1e-9)<10 ):
         print("%s is filtered out as it only have %d nonzero value"%(input_path, 
@@ -40,6 +49,8 @@ def filter_msg_pack(input_path, output_path):
 
     with open(output_path, "wb") as out_file:
         file_dat = msgpack.packb({
+            "time": data['time'],
+            "pose":data["pose"]["map"],
             "image":data["images"]["cam4"],
             "pc_image":pc_image,
             "depth_var":data["images"]["cam4depth"]
@@ -83,11 +94,15 @@ def dilate_pc(input_path, output_path):
 
 if __name__ == "__main__":
     # For filter_msg_pack
-    # data_path = "/media/chenyu/Semantic/Data/extract_trajectories_003/"
-    # target_path = "/media/chenyu/Semantic/Data/extract_trajectories_003_slim/"
+    data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_SA/extract_trajectories"
+    target_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_SA_slim/extract_trajectories"
     # For dilate_pc
-    data_path = "/media/chenyu/T7/Data/extract_trajectories_003_slim/"
-    target_path = "/media/chenyu/T7/Data/extract_trajectories_003_augment/"
+    # data_path = "/media/chenyu/T7/Data/extract_trajectories_006_Zurich/extract_trajectories"
+    # target_path = "/media/chenyu/T7/Data/extract_trajectories_006_Zurich_augment/extract_trajectories"
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    raycastCamera = RaycastCamera("/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense", device)    
+    
     count = 0
     for root, dirs, files in os.walk(data_path):
         target_root = root.replace(data_path, target_path)
@@ -105,6 +120,6 @@ if __name__ == "__main__":
                     print(target_file_path, "already exist")
                     continue
                 ## choose what to do by commenting out corresponding lines
-                # filter_msg_pack(file_path, target_file_path)
-                dilate_pc(file_path, target_file_path)
+                filter_msg_pack(file_path, target_file_path)
+                # dilate_pc(file_path, target_file_path)
     
