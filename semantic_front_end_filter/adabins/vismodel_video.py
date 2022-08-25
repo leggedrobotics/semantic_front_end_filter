@@ -241,7 +241,7 @@ def saveOnePic(pack_path, path):
     axs[1, 0].imshow(pred_for_show.cpu().detach().numpy())
     axs[1, 0].set_title("prediction")
 
-    axs[1, 1].imshow(map_pred_fusion)
+    axs[1, 1].imshow(map_pred_fusion, vmin = -10, vmax=10)
     center = elevation_pc_fusion.param.map_length/elevation_pc_fusion.param.resolution/2
     xyth = [center, center, Rotation.from_quat(pose_array[3:]).as_euler('xyz',degrees=True)[2]]
     width = 5
@@ -249,7 +249,7 @@ def saveOnePic(pack_path, path):
     axs[1, 1].annotate("", xytext=(center, center), xy=(np.sin(np.deg2rad(xyth[2]))*width+center, np.cos(np.deg2rad(xyth[2]))*width+center), arrowprops=dict(headlength=40, headwidth=20))
     axs[1, 1].set_title("elevation map with prediction")
 
-    axs[1, 2].imshow(map_pc_fusion)
+    axs[1, 2].imshow(map_pc_fusion, vmin = -10, vmax=10)
     axs[1, 2].annotate("", xytext=(center, center), xy=(np.sin(np.deg2rad(xyth[2]))*width+center, np.cos(np.deg2rad(xyth[2]))*width+center), arrowprops=dict(headlength=40, headwidth=20))
     axs[1, 2].set_title("elevation map with only pc")
 
@@ -282,7 +282,7 @@ if __name__=="__main__":
     parser = ArgumentParser()
     parser.add_argument("--model_path", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
     # parser.add_argument("--model_path", default="/media/anqiao/Semantic/Models/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt")
-    parser.add_argument("--dataset_path", default="/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories")
+    parser.add_argument("--dataset_path", default="/media/anqiao/Semantic/Data/extract_trajectories_006_SA/extract_trajectories")
     # parser.add_argument("--dataset_path", default="/home/anqiao/tmp/semantic_front_end_filter/Labelling/extract_trajectories")
     # parser.add_argument("--outdir", default="visulization/results")
     args = parse_args(parser)
@@ -297,7 +297,8 @@ if __name__=="__main__":
     model = model_io.load_checkpoint(args.model_path ,model)[0]
     model.to(device)
     for traj in os.listdir(args.dataset_path):
-        if "Re" in traj:
+        # if "Re" in traj:
+        if traj == "Reconstruct_2022-04-23-21-02-46_0":
             traj_path = os.path.join(args.dataset_path, traj)
             visOneTraj(traj_path, model, args)
         # os.system("ffmpeg -framerate 1 -pattern_type glob -i '" +args.outdir+"/*.jpg' -c:v libx264 -pix_fmt yuv420p "+args.outdir+"/out.mp4")
