@@ -95,8 +95,8 @@ class TrainConfig:
 
  """
     wandb_name: str = "random"
-    bs: int = 8
-    workers: int = 11 # Number of workers for data loading
+    bs: int = 10
+    workers: int = 30 # Number of workers for data loading
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
     pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
@@ -129,6 +129,7 @@ class TrainConfig:
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
     testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
+                                                   "Reconstruct_2022-07-19-18-43-46_0",
                                                     "Reconstruct_2022-07-21-10-47-29_0", # Perugia forest
                                                     "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
                                                     "Reconstruct_2022-04-25-15-31-34_0", # South Africa
