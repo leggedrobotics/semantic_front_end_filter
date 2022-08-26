@@ -22,3 +22,4 @@ checkpoints
 wandb
 .vscode/launch.json
 .vscode/settings.json
+tmp
