@@ -122,8 +122,8 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         
         fig = plt.figure()
         plt.plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
-        plt.plot(pred[mask_traj&pc_img>1e-9 ].reshape(-1), diff[mask_traj&pc_img>1e-9].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_label_err")
-        plt.plot(pred[mask_traj&pc_img<1e-9 ].reshape(-1), diff[mask_traj&pc_img<1e-9].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_unlabel_err")
+        plt.plot(pred[mask_traj&(pc_img>1e-9)].reshape(-1), diff[mask_traj&(pc_img>1e-9)].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_label_err")
+        plt.plot(pred[mask_traj&(pc_img<1e-9)].reshape(-1), diff[mask_traj&(pc_img<1e-9)].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_unlabel_err")
         plt.title("err vs distance")
         plt.xlabel("depth_prediction")
         plt.ylabel("err")
@@ -315,8 +315,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             pred = pred.detach().cpu()
             depth = depth.cpu()
+            pc_image = pc_image.cpu()
             train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
-            train_metrics.update(utils.compute_errors(depth[maskpc], pred[maskpc], 'pc/'))
+            train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -412,6 +413,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             pred[np.isnan(pred)] = args.min_depth_eval
 
             gt_depth = depth.squeeze().cpu().numpy()
+            pc_image = pc_image.squeeze().cpu().numpy()
             masktraj = masktraj.squeeze().squeeze()
             maskpc = maskpc.squeeze().squeeze()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
@@ -433,7 +435,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
-            metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
+            metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
