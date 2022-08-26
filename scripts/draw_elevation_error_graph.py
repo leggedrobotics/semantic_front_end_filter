@@ -117,15 +117,21 @@ if __name__ == "__main__":
     TF_BASE = "base"
     TF_MAP = "map"
 
-    GENERATE_VIDEO = False
+    GENERATE_VIDEO = True
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     raycastCamera = RaycastCamera(device=device) # WARN: This raycastcamera is hard coded with `tf_base_to_sensor`, however, it seems to be constant
+    gft = GFT(FeetTrajsFile = foottrajpath, InitializeGP=False)
+    foot_holds = {k : np.array(gft.getContactPoints(v)[0]) for k,v in gft.FeetTrajs.items()} # A dict of the contact points of each foot
+    foot_holds_array = np.vstack(list(foot_holds.values()))
+
     elevation_pred = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
     elevation_pc = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
+    elevation_fh = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
     # Evaluators used to evaluate the error
     evaluator_pred = ElevationMapEvaluator(groundmappath, elevation_pred.param)
     evaluator_pc = ElevationMapEvaluator(groundmappath, elevation_pc.param)
+    evaluator_fh = ElevationMapEvaluator(groundmappath, elevation_fh.param)
     player = RosbagPlayer(rosbagpath)
 
     ## Initialize model
@@ -185,16 +191,20 @@ if __name__ == "__main__":
         pred_points = pred_pts.detach().cpu().numpy()
         points = points.cpu().numpy().astype(pred_points.dtype) # float_64
         # points = points[points[:,2]<pose[2]] # TODO: Decide whether this hieight mask is necessary
+        fh_points = foot_holds_array[np.sum((foot_holds_array[:,:2] - pose[:2])**2, axis = 1)<1**2]
 
         elevation_pred.move_to_and_input(pose[0:3], pred_points)
         elevmap_pred = elevation_pred.get_elevation_map()
         elevation_pc.move_to_and_input(pose[0:3], points)
         elevmap_pc = elevation_pc.get_elevation_map()
+        elevation_fh.move_to_and_input(pose[0:3], fh_points)
+        elevmap_fh = elevation_fh.get_elevation_map()
         
         rz = Rotation.from_quat(pose[3:]).as_euler('xyz',degrees=False)[2]
 
         error_pred = evaluator_pred.compute_error_against_gpmap(elevmap_pred, pose[:2], rz)
         error_pc = evaluator_pc.compute_error_against_gpmap(elevmap_pc, pose[:2], rz)
+        error_fh = evaluator_fh.compute_error_against_gpmap(elevmap_fh, pose[:2], rz)
         
         elev_pred_buffer.append((elevmap_pred, pose))
         if(GENERATE_VIDEO):
@@ -247,11 +257,12 @@ if __name__ == "__main__":
 
     if(GENERATE_VIDEO): # video generation is expensive in memory
         player.play(end_time=player.bag.get_start_time()+70)
+        # player.play(start_time=player.bag.get_end_time()-200)
     else:
         player.play()# play from start to end
 
     with open("tmp/evaluators.pkl","wb") as f:
-        pkl.dump((evaluator_pred, evaluator_pc), f)
+        pkl.dump((evaluator_pred, evaluator_pc, evaluator_fh), f)
     with open("tmp/elevations.pkl","wb") as f:
         pkl.dump(elev_pred_buffer, f)
 
@@ -307,23 +318,56 @@ if __name__ == "__main__":
         anim.save('tmp/test_anim.mp4')
 
     from mpl_toolkits.axes_grid1 import make_axes_locatable
-    meanerr_pred = evaluator_pred.error_sum / evaluator_pred.error_count
-    fig, axs = plt.subplots(1,2, figsize=(20,10))
-    axs[0].imshow(meanerr_pred, vmin=0, vmax=2, cmap='plasma')
-    error_pred_mask = ~np.isnan(meanerr_pred)
-    axs[0].set_title("pred_rmse: %f"%(np.sqrt(np.sum(meanerr_pred[error_pred_mask]**2)/float(error_pred_mask.sum()))))
+    fig, axs = plt.subplots(3,3, figsize=(30,30))
+    ## Error maps
+    axs[0,0].imshow(evaluator_pred.get_err_map(), vmin=0, vmax=2, cmap='plasma')
+    axs[0,0].set_title("ours rmse: %.3f"%(evaluator_pred.get_rmse()), fontsize=40)
 
-    meanerr_pc = evaluator_pc.error_sum / evaluator_pc.error_count
-    axs[1].imshow(meanerr_pc, vmin=0, vmax=2, cmap='plasma')
-    error_pc_mask = ~np.isnan(meanerr_pc)
-    axs[1].set_title("pc_rmse: %f"%(np.sqrt(np.sum(meanerr_pc[error_pc_mask]**2)/float(error_pc_mask.sum()))))
-    divider = make_axes_locatable(axs[1])
+    axs[0,1].imshow(evaluator_pc.get_err_map(), vmin=0, vmax=2, cmap='plasma')
+    axs[0,1].set_title("pc rmse: %.3f"%(evaluator_pc.get_rmse()), fontsize=40)
+
+    axs[0,2].imshow(evaluator_fh.get_err_map(), vmin=0, vmax=2, cmap='plasma')
+    axs[0,2].set_title("fh rmse: %.3f"%(evaluator_fh.get_rmse()), fontsize=40)
+    divider = make_axes_locatable(axs[0,2])
+
     cax = divider.append_axes('right', size='5%', pad=0.05)
-    plt.colorbar(cax = cax, mappable = axs[1].images[0])
+    cb = plt.colorbar(cax = cax, mappable = axs[0,0].images[0])
+    cb.ax.tick_params(labelsize=30)
+
+    ## Variations
+    maxvar = max(evaluator_pred.get_max_var(),evaluator_pc.get_max_var(),evaluator_fh.get_max_var())
+    axs[1,0].imshow(evaluator_pred.get_var_map(), vmin=0, vmax=maxvar, cmap='plasma')
+    axs[1,0].set_title("ours mean err: %.3f"%(evaluator_pred.get_mean_err()), fontsize=40)
+    axs[1,1].imshow(evaluator_pc.get_var_map(), vmin=0, vmax=maxvar, cmap='plasma')
+    axs[1,1].set_title("pc mean err: %.3f"%(evaluator_pc.get_mean_err()), fontsize=40)
+    axs[1,2].imshow(evaluator_fh.get_var_map(), vmin=0, vmax=maxvar, cmap='plasma')
+    axs[1,2].set_title("fh mean err: %.3f"%(evaluator_fh.get_mean_err()), fontsize=40)
+    divider = make_axes_locatable(axs[1,2])
+
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    cb = plt.colorbar(cax = cax, mappable = axs[1,0].images[0])
+    cb.ax.tick_params(labelsize=30)
+
+    ## Counts
+    maxcount = evaluator_pred.get_max_count()
+    axs[2,0].imshow(evaluator_pred.error_count, vmin=0, vmax=maxcount, cmap='plasma')
+    axs[2,1].imshow(evaluator_pc.error_count, vmin=0, vmax=maxcount, cmap='plasma')
+    axs[2,2].imshow(evaluator_fh.error_count, vmin=0, vmax=maxcount, cmap='plasma')
+    divider = make_axes_locatable(axs[2,2])
+
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    cb = plt.colorbar(cax = cax, mappable = axs[2,0].images[0])
+    cb.ax.tick_params(labelsize=30)
+
+    for aa in axs:
+        for a in aa:
+            a.set_xticks([])
+            a.set_yticks([])
+
     plt.savefig("tmp/error_map.png")
 
     plt.figure()
-    plt.imshow(meanerr_pred - meanerr_pc, cmap='plasma')
+    plt.imshow(evaluator_pred.get_err_map() - evaluator_pc.get_err_map(), cmap='plasma')
     plt.colorbar()
-    plt.savefig("tmp/error_diff.png")
+    plt.savefig("tmp/error_diff.png", bbox_inches='tight', pad_inches=0)
     # plt.show()
