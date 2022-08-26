@@ -8,17 +8,17 @@ class ModelConfig:
     input_height: int= 352
     input_width: int =  704
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
-    min_depth: float = 0.001
-    max_depth: float =  40
+    min_depth: float = 1e-3
+    max_depth: float =  10
     min_depth_eval: float = 1e-3
-    max_depth_eval: float = 40
+    max_depth_eval: float = 10
     # normalize_output Assume the output of the network is a normalized one, 
     # Use the following param to scale it back
     # i.e. re-mornalized by -m/s, 1/s
     # One way to configure this values is to keep it same with the normalize in class `ToTensor`
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
-    use_adabins: bool = True
+    use_adabins: bool = False
     deactivate_bn: bool = True
     skip_connection: bool = True
 
@@ -122,7 +122,7 @@ class TrainConfig:
     edge_aware_label_W: float = 1
     sprase_traj_mask: bool = True
 
-    traj_distance_variance_ratio: float = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
+    traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
     scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     

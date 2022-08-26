@@ -30,7 +30,7 @@ from .dataloader import DepthDataLoader
 from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
 from .utils import RunningAverage, colorize
 import optuna
-import logging
+# import logging
 from optuna.trial import TrialState
 
 DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -232,7 +232,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        run = wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, reinit=True)
         # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
 
         # wandb.watch(model)
@@ -319,8 +319,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             pred = pred.detach().cpu()
             depth = depth.cpu()
+            pc_image = pc_image.cpu()
+            if(not (masktraj.any() & maskpc.any())): continue
             train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
-            train_metrics.update(utils.compute_errors(depth[maskpc], pred[maskpc], 'pc/'))
+            train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -373,6 +375,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         if (epoch+1)%2==0:
             log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
+    run.finish()
     return metrics['traj/rmse'], metrics['pc/rmse']
 
 
@@ -416,6 +419,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             pred[np.isnan(pred)] = args.min_depth_eval
 
             gt_depth = depth.squeeze().cpu().numpy()
+            pc_image = pc_image.squeeze().cpu().numpy()
             masktraj = masktraj.squeeze().squeeze()
             maskpc = maskpc.squeeze().squeeze()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
@@ -437,7 +441,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
-            metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
+            metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
@@ -451,8 +455,8 @@ def convert_arg_line_to_args(arg_line):
 
 
 def objective(trial):
-    args.trainconfig.lr = trial.suggest_int("lr", 1e-5, 1e-3)
-    args.trainconfig.traj_label_W = trial.suggest_int("trajW", 1e-2, 1e2)
+    args.trainconfig.lr = trial.suggest_float("lr", 1e-5, 1e-3)
+    args.trainconfig.traj_label_W = trial.suggest_float("trajW", 0.1, 10)
     traj_rmse, pc_rmse = main_worker(args.gpu, ngpus_per_node, args)
     return traj_rmse, pc_rmse
 

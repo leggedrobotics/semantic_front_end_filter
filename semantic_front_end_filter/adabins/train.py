@@ -229,7 +229,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        run = wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, reinit=True)
         # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
 
         # wandb.watch(model)
@@ -276,6 +276,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         scheduler.step(args.epoch + 1)
     ################################################################################################
 
+    metrics = utils.RunningAverageDict()
     # max_iter = len(train_loader) * epochs
     for epoch in range(args.epoch, epochs):
         print("EPOCH:", epoch)
@@ -302,7 +303,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
             l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+            # loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer
 
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
@@ -314,8 +316,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             pred = pred.detach().cpu()
             depth = depth.cpu()
+            pc_image = pc_image.cpu()
+            if(not (masktraj.any() & maskpc.any())): continue
             train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
-            train_metrics.update(utils.compute_errors(depth[maskpc], pred[maskpc], 'pc/'))
+            train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
             writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -352,23 +356,24 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     }, step=step_count)
 
                     wandb.log({f"test/{k}": v for k, v in metrics.items()}, step=step_count)
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
-                                             root=saver.data_dir)
+                    # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                    #                          root=saver.data_dir)
                                             
                     print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                     time_total = -time.time()
                     time_core = 0.
-                if metrics['abs_rel'] < best_loss and should_write:
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
-                                             root=saver.data_dir)
-                    best_loss = metrics['abs_rel']
+                # if metrics['abs_rel'] < best_loss and should_write:
+                    # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
+                    #                          root=saver.data_dir)
+                    # best_loss = metrics['abs_rel']
                 model.train()
                 #################################################################################################
         wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
         if (epoch+1)%2==0:
             log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
-    return model
+    run.finish()
+    return metrics['traj/rmse'], metrics['pc/rmse']
 
 
 def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device='cpu'):
@@ -411,6 +416,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             pred[np.isnan(pred)] = args.min_depth_eval
 
             gt_depth = depth.squeeze().cpu().numpy()
+            pc_image = pc_image.squeeze().cpu().numpy()
             masktraj = masktraj.squeeze().squeeze()
             maskpc = maskpc.squeeze().squeeze()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
@@ -429,10 +435,10 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                     
             valid_mask = np.logical_and(valid_mask, eval_mask)
             valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
-            valid_mask_pc = np.logical_and(valid_mask, maskpc.cpu().numpy()) 
+            valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
-            metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
+            metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
