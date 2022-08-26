@@ -122,7 +122,8 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         
         fig = plt.figure()
         plt.plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
-        plt.plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        plt.plot(pred[mask_traj&pc_img>1e-9 ].reshape(-1), diff[mask_traj&pc_img>1e-9].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_label_err")
+        plt.plot(pred[mask_traj&pc_img<1e-9 ].reshape(-1), diff[mask_traj&pc_img<1e-9].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_unlabel_err")
         plt.title("err vs distance")
         plt.xlabel("depth_prediction")
         plt.ylabel("err")
@@ -204,7 +205,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_e
     depth[~masktraj] = 0.
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
-    maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+    maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
     l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
 
@@ -377,7 +378,6 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
         val_si = RunningAverage()
         # val_bins = RunningAverage()
         metrics = utils.RunningAverageDict()
-        countinue_count = 0 
         for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
@@ -427,18 +427,15 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
 
                     eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
                     int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                    
+
             valid_mask = np.logical_and(valid_mask, eval_mask)
             valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
-            valid_mask_pc = np.logical_and(valid_mask, maskpc.cpu().numpy()) 
-            if(not (valid_mask_traj.any() & valid_mask_pc.any())): 
-                countinue_count += 1
-                continue
+            valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
+            if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
             metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
-        print("number of continue", countinue_count)
         return metrics.get_value(), val_si
 
 

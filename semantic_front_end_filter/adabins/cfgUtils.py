@@ -13,6 +13,7 @@ def parse_args(parser, flatten = False, argstr = None):
     args.data_path = args.trainconfig.data_path
     args.min_depth = args.modelconfig.min_depth
     args.max_depth = args.modelconfig.max_depth
+    args.max_pc_depth = args.modelconfig.max_pc_depth
     args.min_depth_eval = args.modelconfig.min_depth_eval
     args.max_depth_eval = args.modelconfig.max_depth_eval
     args.load_pretrained = args.modelconfig.load_pretrained
