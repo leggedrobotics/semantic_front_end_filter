@@ -87,7 +87,7 @@ class DataLoadPreprocess(Dataset):
         print("data_path",args.data_path)
         for root, dirs, files in os.walk(args.data_path):
             for file in files:
-                if file.startswith('traj') and file.endswith('.msgpack'):
+                if file.startswith('traj') and file.endswith('.msgpack') and int((file.split('.'))[0].split('_')[-1])%3==0:
                     # print("loading file: %s"%file, end =" ")
                     sample_path = os.path.join(root,file)
                     # with open(sample_path, "rb") as data_file:
