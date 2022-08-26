@@ -358,10 +358,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                     time_total = -time.time()
                     time_core = 0.
-                if metrics['abs_rel'] < best_loss and should_write:
+                if metrics['traj/abs_rel'] < best_loss and should_write:
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
                                              root=saver.data_dir)
-                    best_loss = metrics['abs_rel']
+                    best_loss = metrics['traj/abs_rel']
                 model.train()
                 #################################################################################################
         wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
@@ -377,6 +377,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
         val_si = RunningAverage()
         # val_bins = RunningAverage()
         metrics = utils.RunningAverageDict()
+        countinue_count = 0 
         for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
@@ -430,11 +431,14 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask = np.logical_and(valid_mask, eval_mask)
             valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
             valid_mask_pc = np.logical_and(valid_mask, maskpc.cpu().numpy()) 
-            if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
+            if(not (valid_mask_traj.any() & valid_mask_pc.any())): 
+                countinue_count += 1
+                continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
             metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
+        print("number of continue", countinue_count)
         return metrics.get_value(), val_si
 
 

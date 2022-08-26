@@ -111,7 +111,7 @@ class DataLoadPreprocess(Dataset):
         self.is_for_online_eval = is_for_online_eval
         self.filenames = self.filenames if self.mode == 'train' else self.test_filenames
         random.Random(0).shuffle(self.filenames)
-        # print(len(self.filenames))
+        print(self.mode, len(self.filenames))
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
