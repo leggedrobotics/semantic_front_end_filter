@@ -525,7 +525,7 @@ if __name__ == '__main__':
             args.gpu = 0
         
         study = optuna.create_study(directions=["minimize", "minimize"])
-        study.optimize(objective, n_trials=5)
+        study.optimize(objective, n_trials=20)
         pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
         complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
