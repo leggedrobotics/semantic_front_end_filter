@@ -455,8 +455,8 @@ def convert_arg_line_to_args(arg_line):
 
 
 def objective(trial):
-    args.trainconfig.lr = trial.suggest_float("lr", 1e-5, 1e-3)
-    args.trainconfig.traj_label_W = trial.suggest_float("trajW", 0.1, 10)
+    args.trainconfig.lr = trial.suggest_float("lr", 1e-4, 1e-2)
+    args.trainconfig.traj_label_W = trial.suggest_float("trajW", 1, 40)
     traj_rmse, pc_rmse = main_worker(args.gpu, ngpus_per_node, args)
     return traj_rmse, pc_rmse
 
@@ -543,7 +543,7 @@ if __name__ == '__main__':
         for key, value in trials.params.items():
             print("    {}: {}".format(key, value))
         fig = optuna.visualization.plot_pareto_front(study, target_names=["traj_rmse", "pc_rmse"])
-        fig.write_html("/cluster/home/anqiali/semantic_front_end_filter/pareto-front.html")
+        fig.write_html("/cluster/home/anqiali/semantic_front_end_filter/pc=10_pareto-front.html")
         # fig = optuna.visualization.plot_param_importances(
         #     study, target=lambda t: t.values[0], target_name="traj_rmse"
         # )
