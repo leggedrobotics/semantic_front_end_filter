@@ -15,12 +15,13 @@ class ElevationMapEvaluator:
     compute error given an elevation map,
     and count the mean and variance of elevation map errors
     """
-    def __init__(self, ground_map_path, elev_map_param):
+    def __init__(self, ground_map_path, elev_map_param, traj_variance_threashold=0.03):
         """
         arg ground_map_path:    The path to the ground map msgpack, 
                 generated from Labelling/GroundfromTrajs.py
         arg elev_map_param:     The parameter dataclass for the elevation map
                 for example elevation_mapping_cupy.parameter.Parameter
+        arg traj_variance_threashold: same as the traj_variance_threashold in adabins/cfg.py
         """
         with open(ground_map_path, "rb") as data_file:
             data = data_file.read()
@@ -28,7 +29,11 @@ class ElevationMapEvaluator:
             print("load ground dict, y real range: ",ground_dict["yRealRange"], 
                                     "x real range: ", ground_dict["xRealRange"])
             self.ground_dict = ground_dict
-            self.gpmap = np.array(ground_dict["GPMap"])
+        self.gpmap = np.array(ground_dict["GPMap"])
+        varmap = np.array(ground_dict["Confidence"]) # TODO: check the meaning with anqiao
+        varmap[varmap==0] = varmap.max() + 0.1*(varmap.max() - varmap.min())
+        self.gpmap[varmap>traj_variance_threashold] = np.nan
+
         # Interpolate function for self.gpmap, reference: semantic_front_end_filter/Labelling/ExtractDepthImage.py
         center_point = np.array([ground_dict["xRealRange"][0],ground_dict["yRealRange"][0],0]) # this should be a misnomer, it is the upper left corner
         # some side notes about RealRange and res: The (RealRange[1]-RealRange[0])/res and gpmap size do not match

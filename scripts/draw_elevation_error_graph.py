@@ -108,16 +108,23 @@ if __name__ == "__main__":
     # TF_MAP = "map"
     
     #### Italy Configurations
+    modelname = "2022-08-19-11-35-52"
     rosbagpath = "/Data/Italy_0820/Reconstruct_2022-07-18-20-34-01_0.bag"
     foottrajpath = "/Data/Italy_0820/FeetTrajs.msgpack"
     groundmappath = "/Data/Italy_0820/GroundMap.msgpack"
-    model_path = "checkpoints/2022-08-19-11-35-52/UnetAdaptiveBins_best.pt"
+    model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
     image_topic = "/alphasense_driver_ros/cam4/debayered"
     pc_topic = "/bpearl_rear/point_cloud"
     TF_BASE = "base"
     TF_MAP = "map"
 
     GENERATE_VIDEO = True
+    if GENERATE_VIDEO: # this should be corresponded to the `play`
+        # outputdir = f"checkpoints/{modelname}/Italy0-70"
+        outputdir = f"checkpoints/{modelname}/Italy0-200"
+    else:
+        outputdir = f"checkpoints/{modelname}/Italywhole"
+
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     raycastCamera = RaycastCamera(device=device) # WARN: This raycastcamera is hard coded with `tf_base_to_sensor`, however, it seems to be constant
@@ -256,14 +263,21 @@ if __name__ == "__main__":
     player.register_callback(pc_topic, pointcloud_cb)
 
     if(GENERATE_VIDEO): # video generation is expensive in memory
-        player.play(end_time=player.bag.get_start_time()+70)
+        player.play(end_time=player.bag.get_start_time()+200)
         # player.play(start_time=player.bag.get_end_time()-200)
     else:
         player.play()# play from start to end
 
-    with open("tmp/evaluators.pkl","wb") as f:
+
+    ## Output
+    try:
+        os.makedirs(outputdir)
+    except Exception as e:
+        print(e)
+        pass
+    with open(os.path.join(outputdir, "evaluators.pkl"),"wb") as f:
         pkl.dump((evaluator_pred, evaluator_pc, evaluator_fh), f)
-    with open("tmp/elevations.pkl","wb") as f:
+    with open(os.path.join(outputdir, "elevations.pkl"),"wb") as f:
         pkl.dump(elev_pred_buffer, f)
 
     ### Generate Animation
@@ -315,7 +329,7 @@ if __name__ == "__main__":
                                 frames = len(imgdatasource[0]),
                                 interval = 1000 / 5, # in ms
                                 )
-        anim.save('tmp/test_anim.mp4')
+        anim.save(os.path.join(outputdir, 'test_anim.mp4'))
 
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     fig, axs = plt.subplots(3,3, figsize=(30,30))
@@ -364,10 +378,10 @@ if __name__ == "__main__":
             a.set_xticks([])
             a.set_yticks([])
 
-    plt.savefig("tmp/error_map.png")
+    plt.savefig(os.path.join(outputdir, "error_map.png"))
 
     plt.figure()
     plt.imshow(evaluator_pred.get_err_map() - evaluator_pc.get_err_map(), cmap='plasma')
     plt.colorbar()
-    plt.savefig("tmp/error_diff.png", bbox_inches='tight', pad_inches=0)
+    plt.savefig(os.path.join(outputdir, "error_diff.png"), bbox_inches='tight', pad_inches=0)
     # plt.show()
