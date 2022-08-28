@@ -42,6 +42,3 @@ STATE_TOPIC: '/state_estimator/anymal_state'
 COMMAND_TOPIC: '/twist_mux/twist'
 POINT_CLOUD_SUFFIX: '/point_cloud'
 POINT_CLOUD_NAMES: ['/bpearl_front', '/bpearl_rear']
-
-# The DATASET_TYPE controls some policies in extraction and depth casting
-DATASET_TYPE: 'SA'

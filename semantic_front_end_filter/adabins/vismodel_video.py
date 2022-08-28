@@ -2,7 +2,6 @@
 # coding: utf-8
 
 # from train import *
-import sys,os
 from email.base64mime import header_length
 from math import degrees
 import matplotlib.pyplot as plt
@@ -11,21 +10,14 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML
 import cv2
-import torch
-import numpy as np
 import msgpack
 import msgpack_numpy as m
-from simple_parsing import ArgumentParser
+from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
+from semantic_front_end_filter.adabins.train import *
+from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap, plt_add_robot_patch
 from scipy.spatial.transform import Rotation as Rotation
 from matplotlib.patches import Rectangle
 import matplotlib.patches as patches
-import pickle as pkl
-
-from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
-from semantic_front_end_filter.adabins.cfgUtils import parse_args
-from semantic_front_end_filter.adabins.models import UnetAdaptiveBins
-from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap, plt_add_robot_patch
-from semantic_front_end_filter.adabins.model_io import load_checkpoint
 # from semantic_front_end_filter_ros.scripts.test_foward import RosVisulizer
 m.patch()
 
@@ -191,9 +183,6 @@ def robot_patch(pos):
     # robot.set_transform(t2) 
     # robot_center.set_transform(t2)
     return (robot, robot_center)
-
-tmp_elev_map_buffer = []
-
 def saveOnePic(pack_path, path):
     with open(pack_path, "rb") as data_file:
         bytedata = data_file.read()
@@ -264,7 +253,6 @@ def saveOnePic(pack_path, path):
     axs[1, 2].annotate("", xytext=(center, center), xy=(np.sin(np.deg2rad(xyth[2]))*width+center, np.cos(np.deg2rad(xyth[2]))*width+center), arrowprops=dict(headlength=40, headwidth=20))
     axs[1, 2].set_title("elevation map with only pc")
 
-    tmp_elev_map_buffer.append((map_pred_fusion, pose_array))
     # plt.show()
     plt.savefig(path)
     print(path)
@@ -281,14 +269,13 @@ def visOneTraj(traj_path, model, args):
         if('traj' in pack):
             pack_path = traj_path + '/' + pack
             print(pack_path)
-            saveOnePic(pack_path, path=outdir+'/%03d.png'%i)
-    with open(outdir+"/elev_maps.pkl", "wb") as f:
-        pkl.dump(tmp_elev_map_buffer, f)
-    os.system("ffmpeg -framerate 2 -pattern_type glob -i '" +outdir+"/*.png' -c:v libx264 -pix_fmt yuv420p "+outdir+"/out.mp4")
+            saveOnePic(pack_path, path=outdir+'/%03d.jpg'%i)
+
+    os.system("ffmpeg -framerate 2 -pattern_type glob -i '" +outdir+"/*.jpg' -c:v libx264 -pix_fmt yuv420p "+outdir+"/out.mp4")
  
 if __name__=="__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    raycastCamera = RaycastCamera(device = device)
+    raycastCamera = RaycastCamera("/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense", device)
     elevation_pred_fusion = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
     elevation_pc_fusion = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = False)
 
@@ -305,9 +292,9 @@ if __name__=="__main__":
 
     model_cfg = load_param_from_path(os.path.dirname(args.model_path))
     # model = None
-    model = UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
+    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
                                             norm=args.modelconfig.norm, use_adabins=model_cfg["use_adabins"], deactivate_bn = model_cfg["deactivate_bn"], skip_connection = model_cfg["skip_connection"])
-    model = load_checkpoint(args.model_path ,model)[0]
+    model = model_io.load_checkpoint(args.model_path ,model)[0]
     model.to(device)
     for traj in os.listdir(args.dataset_path):
         if "Re" in traj:
