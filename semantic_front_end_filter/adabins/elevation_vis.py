@@ -10,7 +10,7 @@ import cupy as xp
 from elevation_mapping_cupy.parameter import Parameter
 from elevation_mapping_cupy.elevation_mapping import ElevationMap
 import numpy as np
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation as Rotation
 from ruamel.yaml import YAML
 import yaml
 # from dacite import from_dict
@@ -121,8 +121,6 @@ class WorldViewElevationMap:
         self.param = Parameter()
         for key, value in conf['elevation_mapping'].items():
             self.param.set_value(key, value)
-        self.param.resolution = resolution
-        self.param.map_length = map_length
         self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
         self.param.plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml")
         p = dict(enable_overlap_clearance = False, max_height_range = 10, ramped_height_range_c = 10)
@@ -160,6 +158,7 @@ class WorldViewElevationMap:
         points = xp.array(points)# change the frame of points, translate them into pos's frame
         self.elevation.move_to(pos)
         if(not self.is_init):
+            print("input called")
             points -= t
             self.elevation.input(points, R, t, 0, 0)
         else:

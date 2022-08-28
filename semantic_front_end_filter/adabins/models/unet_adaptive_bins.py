@@ -106,11 +106,11 @@ class UnetAdaptiveBins(nn.Module):
         self.max_val = max_val
         self.encoder = Encoder(backend)
         self.skip_connection = skip_connection
+        self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
+                                        dim_out=n_bins,
+                                        embedding_dim=128, norm=norm)
 
         if(use_adabins):
-            self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
-                                            dim_out=n_bins,
-                                            embedding_dim=128, norm=norm)
             self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
         else:
             self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
@@ -121,7 +121,7 @@ class UnetAdaptiveBins(nn.Module):
 
     def forward(self, x, **kwargs):
         unet_out = self.decoder(self.encoder(x), **kwargs)
-        if(self.use_adabins):
+        if(self.use_adabins==True):
             bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
             out = self.conv_out(range_attention_maps)
 
