@@ -217,9 +217,8 @@ def vis_from_dataset(sample):
     ## Broadcast model prediction
 
     checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                            input_channel=4, 
-                                            norm=args.modelconfig.norm, use_adabins = True)
+    modelcfg = model_io.load_param_from_path(checkpoint_path)
+    model = models.UnetAdaptiveBins.build(input_channel = 4, **modelcfg)
     model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
 
     _, pred = model(sample["image"])
@@ -260,9 +259,8 @@ if __name__ == "__main__":
             SEMANTIC_FRONT_END_FILTER_ROOT_PATH,
             "adabins", 
             "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-07-26-00-11-50/UnetAdaptiveBins_latest.pt")
-        model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                                input_channel = 4,
-                                                norm=args.modelconfig.norm, use_adabins = False)
+        modelcfg = model_io.load_param_from_path(checkpoint_path)
+        model = models.UnetAdaptiveBins.build(input_channel = 4, **modelcfg)
         # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
         model.to(device)
 

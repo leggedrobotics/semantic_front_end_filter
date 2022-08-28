@@ -4,6 +4,7 @@ import os
 @dataclass
 class ModelConfig:
     n_bins: int =  256
+    input_channel: int = 4
     load_pretrained: bool = False
     input_height: int= 352
     input_width: int =  704

@@ -1,7 +1,13 @@
 import os
-
 import torch
+import yaml
 
+
+def load_param_from_path(data_path):
+    model_cfg = yaml.load(
+        open(os.path.join(os.path.dirname(data_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
+    # model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
+    return model_cfg
 
 def save_weights(model, filename, path="./saved_models"):
     if not os.path.isdir(path):
