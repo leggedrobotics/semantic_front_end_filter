@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from train import *
+import torch
+from .dataloader import DepthDataLoader
+from .cfgUtils import parse_args
+from simple_parsing import ArgumentParser
+
 import matplotlib.pyplot as plt
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML

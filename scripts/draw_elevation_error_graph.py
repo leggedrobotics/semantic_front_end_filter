@@ -41,7 +41,7 @@ from semantic_front_end_filter.Labelling.GroundfromTrajs import GFT
 # Adabins
 from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
 from semantic_front_end_filter.adabins.models import UnetAdaptiveBins
-from semantic_front_end_filter.adabins.model_io import load_checkpoint
+from semantic_front_end_filter.adabins.model_io import load_checkpoint, load_param_from_path
 from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap
 from semantic_front_end_filter.adabins.elevation_eval_util import ElevationMapEvaluator
 
@@ -90,10 +90,6 @@ class RosbagPlayer:
             start_time=start_time, end_time=end_time):
             self._callbacks[topic](topic, msg, t, self.tf_buffer, self._shared_var)
 
-
-def load_param_from_path(data_path):
-    model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
-    return model_cfg
 
 
 def main (modelname, overwrite = False):
@@ -144,10 +140,7 @@ def main (modelname, overwrite = False):
     player = RosbagPlayer(rosbagpath)
 
     ## Initialize model
-    model_cfg = load_param_from_path(os.path.dirname(model_path))
-    model_cfg={k:v for k,v in model_cfg.items() if k in [
-        "n_bins", "min_val", "max_val", "norm", "use_adabins", "deactivate_bn", "skip_connection"
-    ]}
+    model_cfg = load_param_from_path(model_path)
     model = UnetAdaptiveBins.build(input_channel = 4, **model_cfg)
 
     model = load_checkpoint(model_path, model)[0]
@@ -390,7 +383,7 @@ def main (modelname, overwrite = False):
     # plt.show()
 
 if __name__ == "__main__":
-    main("2022-08-19-11-35-52")
+    main("2022-08-19-11-35-52", overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-27*"):
     #     print("Running model:",m)
