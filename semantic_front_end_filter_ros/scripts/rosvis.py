@@ -218,7 +218,7 @@ def vis_from_dataset(sample):
 
     checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
     modelcfg = model_io.load_param_from_path(checkpoint_path)
-    model = models.UnetAdaptiveBins.build(**modelcfg)
+    model = models.UnetAdaptiveBins.build(input_channel = 4, **modelcfg)
     model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
 
     _, pred = model(sample["image"])
@@ -260,7 +260,7 @@ if __name__ == "__main__":
             "adabins", 
             "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-07-26-00-11-50/UnetAdaptiveBins_latest.pt")
         modelcfg = model_io.load_param_from_path(checkpoint_path)
-        model = models.UnetAdaptiveBins.build(**modelcfg)
+        model = models.UnetAdaptiveBins.build(input_channel = 4, **modelcfg)
         # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model) 
         model.to(device)
 

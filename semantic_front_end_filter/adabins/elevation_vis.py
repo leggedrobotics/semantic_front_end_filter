@@ -217,7 +217,7 @@ if __name__ == "__main__":
     checkpoint_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt"
     # model = UnetAdaptiveBins.build(**model_cfg)
     # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model)
-    model = UnetAdaptiveBins.build(**model_cfg)
+    model = UnetAdaptiveBins.build(input_channel = 4, **model_cfg)
     model = load_checkpoint(args.model_path ,model)[0] 
     model.cuda()
 

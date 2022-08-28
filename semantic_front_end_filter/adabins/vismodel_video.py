@@ -292,7 +292,7 @@ if __name__=="__main__":
 
     model_cfg = load_param_from_path(os.path.dirname(args.model_path))
     # model = None
-    model = models.UnetAdaptiveBins.build(**model_cfg)
+    model = models.UnetAdaptiveBins.build(input_channel = 4,**model_cfg)
     model = model_io.load_checkpoint(args.model_path ,model)[0]
     model.to(device)
     for traj in os.listdir(args.dataset_path):
