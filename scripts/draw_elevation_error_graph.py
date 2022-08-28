@@ -70,11 +70,12 @@ class RosbagPlayer:
                 tf_times.append(transform.header.stamp)
 
         self._callbacks = {}
+        self._shared_var = {}
 
     def register_callback(self, topic, func):
         """
         arg topic: the topic of the callback function
-        arg func: have the signature: (topic, msg, t, tf_buffer) 
+        arg func: have the signature: (topic, msg, t, tf_buffer, shared_var) 
         """
         self._callbacks[topic] = func
 
@@ -87,7 +88,7 @@ class RosbagPlayer:
         for topic, msg, t in self.bag.read_messages(
             topics=list(self._callbacks.keys()),
             start_time=start_time, end_time=end_time):
-            self._callbacks[topic](topic, msg, t, self.tf_buffer)
+            self._callbacks[topic](topic, msg, t, self.tf_buffer, self._shared_var)
 
 
 def load_param_from_path(data_path):
@@ -95,8 +96,7 @@ def load_param_from_path(data_path):
     return model_cfg
 
 
-if __name__ == "__main__":
-
+def main (modelname, overwrite = False):
     # #### SA Configurations
     # rosbagpath = "/Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_09/mission8_locomotion/Reconstruct_2022-04-25-19-10-16_0.bag"
     # foottrajpath = "/Data/extract_trajectories_002/Reconstruct_2022-04-25-19-10-16_0/FeetTrajs.msgpack"
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     # TF_MAP = "map"
     
     #### Italy Configurations
-    modelname = "2022-08-19-11-35-52"
+    
     rosbagpath = "/Data/Italy_0820/Reconstruct_2022-07-18-20-34-01_0.bag"
     foottrajpath = "/Data/Italy_0820/FeetTrajs.msgpack"
     groundmappath = "/Data/Italy_0820/GroundMap.msgpack"
@@ -120,11 +120,13 @@ if __name__ == "__main__":
 
     GENERATE_VIDEO = True
     if GENERATE_VIDEO: # this should be corresponded to the `play`
-        # outputdir = f"checkpoints/{modelname}/Italy0-70"
-        outputdir = f"checkpoints/{modelname}/Italy0-200"
+        outputdir = f"checkpoints/{modelname}/Identity"
+        # outputdir = f"checkpoints/{modelname}/Italy0-200"
     else:
         outputdir = f"checkpoints/{modelname}/Italywhole"
 
+    if not overwrite and os.path.exists(outputdir):
+        return
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     raycastCamera = RaycastCamera(device=device) # WARN: This raycastcamera is hard coded with `tf_base_to_sensor`, however, it seems to be constant
@@ -152,22 +154,25 @@ if __name__ == "__main__":
     model.to(device)
 
     ## Define shared variables
-    pcbuffer=[]
+    player._shared_var.update(dict(
+        pcbuffer=[],
+    ))
     elev_pred_buffer = []
     if(GENERATE_VIDEO):
-        video_frame_count = 0
-        video_frame_freq = 10
-        image_list=[]
-        pred_list=[]
-        pred_elev_list=[]
-        pc_elev_list=[]
-        gt_list=[]
-        errer_list_count=[] # the length of current evaluator.error_list
-
+        player._shared_var.update(dict(
+            video_frame_count = 0,
+        ))
+    video_frame_freq = 10
+    image_list=[]
+    pred_list=[]
+    pred_elev_list=[]
+    pc_elev_list=[]
+    gt_list=[]
+    errer_list_count=[] # the length of current evaluator.error_list
     ###########
     ## Definining callbacks
 
-    def pred_and_checkerr(image, pc, pose):
+    def pred_and_checkerr(image, pc, pose,v):
         """
         Make the prediction based on image, pointcloud and robot current pose
         arg pose: x,y,z,rx,ry,rz,rw
@@ -215,9 +220,8 @@ if __name__ == "__main__":
         
         elev_pred_buffer.append((elevmap_pred, pose))
         if(GENERATE_VIDEO):
-            global video_frame_count
-            if(not video_frame_count):
-                video_frame_count = video_frame_freq
+            if(not v["video_frame_count"]):
+                v["video_frame_count"] = video_frame_freq
                 image_list.append(model_in.squeeze(0).cpu().numpy())
                 pred_list.append(pred.detach().cpu().numpy().T)
                 pred_elev_list.append(elevmap_pred)
@@ -225,12 +229,11 @@ if __name__ == "__main__":
                 gt=evaluator_pred.get_gpmap_at_xy(pose[:2])
                 gt_list.append(gt)
                 errer_list_count.append(len(evaluator_pred.error_list))
-            video_frame_count -=1
+            v["video_frame_count"] -=1
 
 
-    def image_cb(topic, msg, t, tf_buffer):
-        global pcbuffer
-        if(not len(pcbuffer)): return
+    def image_cb(topic, msg, t, tf_buffer, v):
+        if(not len(v["pcbuffer"])): return
         
         img = rgb_msg_to_image(msg, raycastCamera.camera.is_debayered, raycastCamera.camera.rb_swap, ("compressed" in topic))
         img = np.moveaxis(img, 2, 0)
@@ -239,10 +242,10 @@ if __name__ == "__main__":
         tf = tf_buffer.lookup_transform_core(TF_MAP, TF_BASE, msg.header.stamp)
         pose = msg_to_pose(tf)  # pose in fixed ref frame (odom or map)
 
-        pc = np.concatenate(pcbuffer,axis = 0)
-        pred_and_checkerr(img, pc, pose)
+        pc = np.concatenate(v["pcbuffer"],axis = 0)
+        pred_and_checkerr(img, pc, pose, v)
 
-        pcbuffer = pcbuffer[-1:]
+        v["pcbuffer"] = v["pcbuffer"][-1:]
 
         ## Breakpoint vis
         # plt_img = np.moveaxis(img[:3,...], 0, 2)
@@ -252,18 +255,17 @@ if __name__ == "__main__":
     player.register_callback(image_topic, image_cb)
 
     
-    def pointcloud_cb(topic, msg, t, tf_buffer):
-        global pcbuffer
+    def pointcloud_cb(topic, msg, t, tf_buffer, v):
         if not (tf_buffer.can_transform_core(TF_MAP, msg.header.frame_id,  msg.header.stamp)[0]): return
         tf = tf_buffer.lookup_transform_core(TF_MAP, msg.header.frame_id,  msg.header.stamp)
         pose = msg_to_pose(tf)
         pc_array = rospcmsg_to_pcarray(msg, pose)
 
-        pcbuffer.append(pc_array[:,:3])
+        v["pcbuffer"].append(pc_array[:,:3])
     player.register_callback(pc_topic, pointcloud_cb)
 
     if(GENERATE_VIDEO): # video generation is expensive in memory
-        player.play(end_time=player.bag.get_start_time()+200)
+        player.play(end_time=player.bag.get_start_time()+70)
         # player.play(start_time=player.bag.get_end_time()-200)
     else:
         player.play()# play from start to end
@@ -275,10 +277,11 @@ if __name__ == "__main__":
     except Exception as e:
         print(e)
         pass
-    with open(os.path.join(outputdir, "evaluators.pkl"),"wb") as f:
-        pkl.dump((evaluator_pred, evaluator_pc, evaluator_fh), f)
-    with open(os.path.join(outputdir, "elevations.pkl"),"wb") as f:
-        pkl.dump(elev_pred_buffer, f)
+
+    # with open(os.path.join(outputdir, "evaluators.pkl"),"wb") as f:
+    #     pkl.dump((evaluator_pred, evaluator_pc, evaluator_fh), f)
+    # with open(os.path.join(outputdir, "elevations.pkl"),"wb") as f:
+    #     pkl.dump(elev_pred_buffer, f)
 
     ### Generate Animation
     if(GENERATE_VIDEO):
@@ -385,3 +388,10 @@ if __name__ == "__main__":
     plt.colorbar()
     plt.savefig(os.path.join(outputdir, "error_diff.png"), bbox_inches='tight', pad_inches=0)
     # plt.show()
+
+if __name__ == "__main__":
+    main("2022-08-19-11-35-52")
+    # from glob import glob
+    # for m in glob("checkpoints/2022-08-27*"):
+    #     print("Running model:",m)
+    #     main(os.path.basename(m))

@@ -111,6 +111,9 @@ class ElevationMapEvaluator:
 
     def get_err_map(self):
         return self.error_sum / self.error_count
+    
+    def get_rmse_map(self):
+        return np.sqrt(self.error_sqsum / self.error_count)
 
     def get_max_count(self):
         return (self.error_count[~np.isnan(self.error_count)]).max()
