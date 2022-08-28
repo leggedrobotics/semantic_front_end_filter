@@ -308,8 +308,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
 
             pred[pred < args.min_depth] = args.min_depth
-            pred[pred > args.max_depth] = args.max_depth
-            pred[torch.isinf(pred)] = args.max_depth
+            max_depth_gt = max(args.max_depth, args.max_pc_depth)
+            pred[pred > max_depth_gt] = max_depth_gt
+            pred[torch.isinf(pred)] = max_depth_gt
             pred[torch.isnan(pred)] = args.min_depth
 
             pred = pred.detach().cpu()
@@ -402,13 +403,13 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             mask = depth > args.min_depth
             count_val = count_val + 1
             val_si.append(l_dense.item())
-
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
 
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval
-            pred[pred > args.max_depth_eval] = args.max_depth_eval
-            pred[np.isinf(pred)] = args.max_depth_eval
+            max_depth_gt = max(args.max_depth_eval, args.max_pc_depth)
+            pred[pred > max_depth_gt] = max_depth_gt
+            pred[np.isinf(pred)] = max_depth_gt
             pred[np.isnan(pred)] = args.min_depth_eval
 
             gt_depth = depth.squeeze().cpu().numpy()

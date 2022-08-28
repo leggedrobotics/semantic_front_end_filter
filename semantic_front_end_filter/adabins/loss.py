@@ -62,6 +62,7 @@ class EdgeAwareLoss(nn.Module):  # Add variance to loss
         self.args = train_args
 
     def forward(self, input, target, interpolate=True):
+        # return torch.tensor(0)
         if interpolate:
             input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
 
