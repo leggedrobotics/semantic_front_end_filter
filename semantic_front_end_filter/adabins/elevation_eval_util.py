@@ -54,6 +54,7 @@ class ElevationMapEvaluator:
         self.cell_n = int(round(self.map_length / self.resolution)) + 2
 
         self.error_sum = np.zeros([self.cell_n-2, self.cell_n-2], dtype=np.float32)
+        self.error_sqsum = np.zeros([self.cell_n-2, self.cell_n-2], dtype=np.float32) # the sum of squared error
         self.error_count = np.zeros([self.cell_n-2, self.cell_n-2], dtype = int)
         self.error_list = [] # record all errors. This might be too memory expensive
 
@@ -82,13 +83,32 @@ class ElevationMapEvaluator:
         error = elevmap - elevmap_gt
 
         # update the error_sum error count
-        mask = ~np.isnan(error)
         error = rotate(error, angle=-r/np.pi*180, reshape=False, order = 0, mode='constant', cval = np.nan)
+        mask = ~np.isnan(error)
         self.error_sum[mask] += abs(error[mask])
+        self.error_sqsum[mask] += (error[mask])**2
         self.error_count[mask] += 1
         self.error_list.append(error)
-
         return error
+
+    def get_rmse(self):
+        return np.sqrt(np.sum(self.error_sqsum)/np.sum(self.error_count))
+    
+    def get_mean_err(self):
+        return np.sum(self.error_sum)/np.sum(self.error_count)
+
+    def get_var_map(self):
+        return self.error_sqsum - (self.get_err_map())**2
+    
+    def get_max_var(self):
+        var_map = self.get_var_map()
+        return (var_map[~np.isnan(var_map)]).max()
+
+    def get_err_map(self):
+        return self.error_sum / self.error_count
+
+    def get_max_count(self):
+        return (self.error_count[~np.isnan(self.error_count)]).max()
 
         
 if __name__ == "__main__":

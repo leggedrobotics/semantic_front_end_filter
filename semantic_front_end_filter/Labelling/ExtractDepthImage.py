@@ -123,6 +123,7 @@ def raycast_for_variance(
 
 class DIFG:
     def __init__(self, ground_map_path, camera_calibration_path = None, cam_id=None, cfg = None):
+        self.DATASET_TYPE = cfg['DATASET_TYPE']
         print("Initializing Map...")
         with open(ground_map_path, "rb") as data_file:
             data = data_file.read()
@@ -273,11 +274,13 @@ class DIFG:
         H_map_cam = np.eye(4)
 
         H_map_cam[:3,3] =  np.array( [transition])
-        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
-#         H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
-
-        H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
-
+        if(self.DATASET_TYPE=="SA"):# for SA
+            H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
+            H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
+        
+        if(self.DATASET_TYPE=="Italy"): # for Italy
+            H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-rotation[2], -rotation[1], -rotation[0]+math.pi/2]]).as_matrix() # looking down
+            H_map_cam[:3,:3] = Rotation.from_euler('yz', [-90, 0], degrees=True).as_matrix() @ H_map_cam[:3,:3]
 
         R = torch.from_numpy( H_map_cam ).to(device)[:3,:3]
         directions = torch.from_numpy( self.ray_dir )
