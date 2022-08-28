@@ -175,16 +175,16 @@ class WorldViewElevationMap:
         return xp.asnumpy(data)
 
 
-def load_param_from_path(data_path):
-    model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
-    return model_cfg
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import matplotlib.animation as animation
 
     # for loading model
-    from train import *
+    import torch 
+    from .dataloader import DepthDataLoader
+    from .models import UnetAdaptiveBins
+    from .model_io import load_param_from_path, load_checkpoint
     import msgpack
     import msgpack_numpy as m
 
@@ -209,18 +209,16 @@ if __name__ == "__main__":
     # parser.add_argument("--notes", default='', type=str, help="Wandb notes")
     # parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")     
     # args = parse_args(parser)
-    model_cfg = load_param_from_path(os.path.dirname(args.model_path))
+    model_cfg = load_param_from_path(args.model_path)
 
     # from rosvis import *
     # checkpoint_path = "checkpoints/share/2022-05-14-00-19-41/UnetAdaptiveBins_best.pt"
     # args = parse_args(parser)
     checkpoint_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt"
-    # model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-    #                                         norm=args.modelconfig.norm, use_adabins=True)
+    # model = UnetAdaptiveBins.build(**model_cfg)
     # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model)
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm, use_adabins=model_cfg["use_adabins"], deactivate_bn = model_cfg["deactivate_bn"], skip_connection = model_cfg["skip_connection"])
-    model = model_io.load_checkpoint(args.model_path ,model)[0] 
+    model = UnetAdaptiveBins.build(**model_cfg)
+    model = load_checkpoint(args.model_path ,model)[0] 
     model.cuda()
 
     ## Loader

@@ -201,8 +201,8 @@ if __name__ == '__main__':
     args.distributed = False
     device = torch.device('cuda:{}'.format(args.gpu))
     test = DepthDataLoader(args, 'online_eval').data
-    model = UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                   norm='linear').to(device)
+    # model = UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
+    #                                norm='linear').to(device) Need to load modelcfg
     model = model_io.load_checkpoint(args.checkpoint_path, model)[0]
     model = model.eval()
 

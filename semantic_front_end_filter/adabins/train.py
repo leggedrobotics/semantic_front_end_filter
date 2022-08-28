@@ -15,7 +15,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from . import model_io
 from . import models
 from . import utils
-from .cfgUtils import parse_args, TrainConfig, ModelConfig
+from .cfgUtils import parse_args, TrainConfig, ModelConfig, asdict
 from .experimentSaver import ConfigurationSaver
 from .dataloader import DepthDataLoader
 from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
@@ -154,8 +154,7 @@ def main_worker(gpu, ngpus_per_node, args):
     ###################################### Load model ##############################################
     input_channel = 3 if args.load_pretrained else 4
 
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.modelconfig.norm, deactivate_bn = args.modelconfig.deactivate_bn, skip_connection = args.modelconfig.skip_connection)
+    model = models.UnetAdaptiveBins.build(**asdict(args.modelconfig))
 
     ## Load pretrained kitti
     if args.load_pretrained:
@@ -320,10 +319,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
-            writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
@@ -345,7 +344,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
-                [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
+                # [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     wandb.log({
@@ -394,9 +393,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
-            writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
-            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
-            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
+            # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
+            # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
+            # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
@@ -503,7 +502,7 @@ if __name__ == '__main__':
                             dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
                                 ModelConfig(**vars(args.modelconfig))])
                 
-    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+    # writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
 
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size

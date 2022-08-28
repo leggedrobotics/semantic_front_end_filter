@@ -171,8 +171,7 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     model_cfgs = [load_param_from_path(os.path.dirname(checkpoint_path)) for checkpoint_path in checkpoint_paths]
-    model_list = [models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel = 4, min_val=args.min_depth, max_val=args.max_depth,
-                                            norm=args.modelconfig.norm, use_adabins=cfg["use_adabins"], deactivate_bn = cfg["deactivate_bn"], skip_connection = cfg["skip_connection"]) for cfg in model_cfgs]
+    model_list = [models.UnetAdaptiveBins.build(**cfg) for cfg in model_cfgs]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)

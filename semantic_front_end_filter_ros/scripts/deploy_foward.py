@@ -29,7 +29,7 @@ from email import message
 from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
 from semantic_front_end_filter.adabins import model_io, models
 from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
-from semantic_front_end_filter.adabins.cfgUtils import parse_args
+from semantic_front_end_filter.adabins.cfgUtils import parse_args, asdict
 from threading import Lock
 import torch.nn as nn
 import torch
@@ -307,9 +307,7 @@ rosv = RosVisulizer("pointcloud")
 parser = ArgumentParser()
 parser.add_argument("--model", default="")
 args = parse_args(parser)
-model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, min_val=args.min_depth, max_val=args.max_depth,
-                                      input_channel=4,
-                                      norm=args.modelconfig.norm, use_adabins=False, deactivate_bn = True, skip_connection = True)
+model = models.UnetAdaptiveBins.build(**(asdict(args.modelconfig)))
 model.to(device)
 
 ts.registerCallback(callback)
