@@ -4,6 +4,7 @@ import msgpack_numpy as m
 m.patch()
 from PIL import Image
 import numpy as np
+from semantic_front_end_filter.adabins.vismodel_video import getKey
 # import json
 # from segments import SegmentsClient
 # key = os.getenv("SEGMENTS_AI_API_KEY")
@@ -21,17 +22,18 @@ import numpy as np
 
 def extract_images_to_png(dir_path, output_path):
     for root, dirs, files in os.walk(dir_path):
-        for file_name in files:
+        for i, file_name in enumerate(sorted([f for f in files if 'traj' in f], key = getKey)):
             if file_name.startswith('traj') and file_name.endswith('.msgpack'):
                 sample_path = os.path.join(root,file_name)
                 with open(sample_path, "rb") as data_file:
                     byte_data = data_file.read()
                     data = msgpack.unpackb(byte_data)
                     image = Image.fromarray(np.moveaxis((data["image"].astype(np.uint8))[::-1,...], 0, 2))
-                    image.save(os.path.join(output_path, file_name.replace(".msgpack", ".png")), format="png")
+                    image.save(os.path.join(output_path, "%03d_"%i + file_name.replace(".msgpack", ".png")), format="png")
 
 if __name__ == "__main__":
-    extract_images_to_png("/media/chenyu/T7/Data/extract_trajectories_006_Zurich_slim/extract_trajectories/Reconstruct_2022-08-13-08-48-50_0/",
-                        "tmp/Reconstruct_2022-08-13-08-48-50_0")
+    output_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/tmp/Reconstruct_2022-07-18-20-34-01_0"
+    extract_images_to_png("/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/Reconstruct_2022-07-18-20-34-01_0/",
+                        output_path)
 
 
