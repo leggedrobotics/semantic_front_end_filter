@@ -15,7 +15,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 import wandb
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from . import model_io
 from . import models
 from . import utils
-from .cfgUtils import parse_args, TrainConfig, ModelConfig
+from .cfgUtils import parse_args, TrainConfig, ModelConfig, asdict
 from .experimentSaver import ConfigurationSaver
 from .dataloader import DepthDataLoader
 from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
@@ -122,7 +122,8 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         
         fig = plt.figure()
         plt.plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
-        plt.plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        plt.plot(pred[mask_traj&(pc_img>1e-9)].reshape(-1), diff[mask_traj&(pc_img>1e-9)].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_label_err")
+        plt.plot(pred[mask_traj&(pc_img<1e-9)].reshape(-1), diff[mask_traj&(pc_img<1e-9)].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_unlabel_err")
         plt.title("err vs distance")
         plt.xlabel("depth_prediction")
         plt.ylabel("err")
@@ -153,8 +154,7 @@ def main_worker(gpu, ngpus_per_node, args):
     ###################################### Load model ##############################################
     input_channel = 3 if args.load_pretrained else 4
 
-    model = models.UnetAdaptiveBins.build(n_bins=args.modelconfig.n_bins, input_channel=input_channel, use_adabins=args.modelconfig.use_adabins, min_val=args.min_depth, max_val=args.max_depth,
-                                          norm=args.modelconfig.norm, deactivate_bn = args.modelconfig.deactivate_bn, skip_connection = args.modelconfig.skip_connection)
+    model = models.UnetAdaptiveBins.build(**asdict(args.modelconfig))
 
     ## Load pretrained kitti
     if args.load_pretrained:
@@ -204,7 +204,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_e
     depth[~masktraj] = 0.
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
-    maskpc = mask0 & (pc_image > 1e-9) # pc image have label
+    maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
     l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
 
@@ -308,20 +308,22 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
 
             pred[pred < args.min_depth] = args.min_depth
-            pred[pred > args.max_depth] = args.max_depth
-            pred[torch.isinf(pred)] = args.max_depth
+            max_depth_gt = max(args.max_depth, args.max_pc_depth)
+            pred[pred > max_depth_gt] = max_depth_gt
+            pred[torch.isinf(pred)] = max_depth_gt
             pred[torch.isnan(pred)] = args.min_depth
 
             pred = pred.detach().cpu()
             depth = depth.cpu()
+            pc_image = pc_image.cpu()
             train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
-            train_metrics.update(utils.compute_errors(depth[maskpc], pred[maskpc], 'pc/'))
+            train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
-            writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
+            # writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
@@ -343,7 +345,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
-                [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
+                # [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
                     wandb.log({
@@ -358,10 +360,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                     time_total = -time.time()
                     time_core = 0.
-                if metrics['abs_rel'] < best_loss and should_write:
+                if metrics['traj/abs_rel'] < best_loss and should_write:
                     model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
                                              root=saver.data_dir)
-                    best_loss = metrics['abs_rel']
+                    best_loss = metrics['traj/abs_rel']
                 model.train()
                 #################################################################################################
         wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
@@ -392,25 +394,26 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
-            writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
-            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
-            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
+            # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
+            # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
+            # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
             mask = depth > args.min_depth
             count_val = count_val + 1
             val_si.append(l_dense.item())
-
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
 
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval
-            pred[pred > args.max_depth_eval] = args.max_depth_eval
-            pred[np.isinf(pred)] = args.max_depth_eval
+            max_depth_gt = max(args.max_depth_eval, args.max_pc_depth)
+            pred[pred > max_depth_gt] = max_depth_gt
+            pred[np.isinf(pred)] = max_depth_gt
             pred[np.isnan(pred)] = args.min_depth_eval
 
             gt_depth = depth.squeeze().cpu().numpy()
+            pc_image = pc_image.squeeze().cpu().numpy()
             masktraj = masktraj.squeeze().squeeze()
             maskpc = maskpc.squeeze().squeeze()
             valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
@@ -426,13 +429,13 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
 
                     eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
                     int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                    
+
             valid_mask = np.logical_and(valid_mask, eval_mask)
             valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
-            valid_mask_pc = np.logical_and(valid_mask, maskpc.cpu().numpy()) 
+            valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
-            metrics.update(utils.compute_errors(gt_depth[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
+            metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
             metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
@@ -500,7 +503,7 @@ if __name__ == '__main__':
                             dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
                                 ModelConfig(**vars(args.modelconfig))])
                 
-    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+    # writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
 
     if args.distributed:
         args.world_size = ngpus_per_node * args.world_size

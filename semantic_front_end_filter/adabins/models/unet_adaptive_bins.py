@@ -97,13 +97,15 @@ class Encoder(nn.Module):
 
 
 class UnetAdaptiveBins(nn.Module):
-    def __init__(self, backend, n_bins=100, min_val=0.1, max_val=10, norm='linear',
-                    output_norm_mean = 0, output_norm_std = 1., use_adabins = True, deactivate_bn = False, skip_connection = False):
+    def __init__(self, backend, n_bins, min_depth, max_depth, norm,
+                    normalize_output_mean, normalize_output_std, 
+                    use_adabins, deactivate_bn, skip_connection,
+                    **kwargs):
         super(UnetAdaptiveBins, self).__init__()
         self.use_adabins = use_adabins
         self.num_classes = n_bins
-        self.min_val = min_val
-        self.max_val = max_val
+        self.min_val = min_depth
+        self.max_val = max_depth
         self.encoder = Encoder(backend)
         self.skip_connection = skip_connection
         self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
@@ -117,7 +119,7 @@ class UnetAdaptiveBins(nn.Module):
 
         self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
                                       nn.Softmax(dim=1))
-        self.normalize = transforms.Normalize(mean=[-output_norm_mean/output_norm_std], std=[1/output_norm_std])
+        self.normalize = transforms.Normalize(mean=[-normalize_output_mean/normalize_output_std], std=[1/normalize_output_std])
 
     def forward(self, x, **kwargs):
         unet_out = self.decoder(self.encoder(x), **kwargs)

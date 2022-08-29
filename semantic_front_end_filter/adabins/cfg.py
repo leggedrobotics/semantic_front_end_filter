@@ -4,21 +4,23 @@ import os
 @dataclass
 class ModelConfig:
     n_bins: int =  256
+    input_channel: int = 4
     load_pretrained: bool = False
     input_height: int= 352
     input_width: int =  704
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
     min_depth: float = 0.001
-    max_depth: float =  40
+    max_depth: float =  10
     min_depth_eval: float = 1e-3
-    max_depth_eval: float = 40
+    max_depth_eval: float = 10
+    max_pc_depth: float = 15
     # normalize_output Assume the output of the network is a normalized one, 
     # Use the following param to scale it back
     # i.e. re-mornalized by -m/s, 1/s
     # One way to configure this values is to keep it same with the normalize in class `ToTensor`
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
-    use_adabins: bool = True
+    use_adabins: bool = False
     deactivate_bn: bool = True
     skip_connection: bool = True
 
@@ -94,12 +96,12 @@ class TrainConfig:
 
  """
     wandb_name: str = "random"
-    bs: int = 8
-    workers: int = 11 # Number of workers for data loading
+    bs: int = 10
+    workers: int = 30 # Number of workers for data loading
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
     pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
-    pc_img_label_channel: int = 1 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
+    pc_img_label_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
     lr: float =  0.000357
     wd: float =  0.1
     div_factor: int =  25 
@@ -119,15 +121,20 @@ class TrainConfig:
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 0.5
     traj_label_W: float = 1
-    edge_aware_label_W: float = 1
+    edge_aware_label_W: float = 0
     sprase_traj_mask: bool = True
 
-    traj_distance_variance_ratio: float = 1/40 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
+    traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight
     scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
-    testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-22-10-36-29_0", # This is Italy dataset
-                                                    "Reconstruct_2022-04-26-17-35-27_0",  "WithPointCloudReconstruct_2022-03-26-22-28-54_0", # This is SA dataset
-                                                    # "Reconstruct_2022-08-13-10-08-26_0" # this is Zurich dataset
+    testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
+                                                   "Reconstruct_2022-07-19-18-43-46_0",
+                                                    "Reconstruct_2022-07-21-10-47-29_0", # Perugia forest
+                                                    "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
+                                                    "Reconstruct_2022-04-25-15-31-34_0", # South Africa
+                                                    "Reconstruct_2022-04-26-16-34-01_0", # South Africa 
+                                                    "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
+                                                    "Reconstruct_2022-04-26-17-05-24_0"  # South Africa 
                                                     ]) 
