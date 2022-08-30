@@ -83,38 +83,40 @@ class maskBasedRMSE:
         print("the latest error on rigid: mean = %.3f" %(self.pc_rmse_list[-1]))
 
 if __name__ == "__main__":
-    # key = os.getenv("SEGMENTS_AI_API_KEY")
+    """When changing the different labeled set, please change the dataset_identifier, 
+        traj_path and parameter of unpackMsgpack()"""
+
     key = "002502c9bfbc0a2f44271dbb5ff3ee82ca6c439a"
     client = SegmentsClient(key)
     dataset_identifier = "yangcyself/Zurich-Reconstruct_2022-08-13-08-48-50_0"
-    # get dataset from cloud and disk
+    # dataset_identifier = "Anqiao/Italy-Reconstruct_2022-07-18-20-34-01_0"
+
+    # Get dataset from cloud and disk
     samples = client.get_samples(dataset_identifier)
     traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Zurich_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
-    # build model
-    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-28-11-30-58/UnetAdaptiveBins_latest.pt"
+    # traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
+    
+    # Build model
+    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-57-35/UnetAdaptiveBins_best.pt"
     model_cfg = YAML().load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'))
-    model = models.UnetAdaptiveBins.build(n_bins=256, input_channel = 4, min_val=0.001, max_val=10,
-                                            norm="linear", use_adabins=model_cfg["use_adabins"], deactivate_bn = model_cfg["deactivate_bn"], skip_connection = model_cfg["skip_connection"])
+    model_cfg["input_channel"] = 4
+    model = models.UnetAdaptiveBins.build(**model_cfg)                                        
     model = model_io.load_checkpoint(model_path ,model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
     
+    # Calculate rmse
     rmse = maskBasedRMSE()
     for num, sample in enumerate(samples):
-        # get labels
+        # Get labels
         try:
             label = client.get_label(sample.uuid, labelset='ground-truth')
         except:
             print("picture "+sample.name+" is not labeled")
-            continue
-        # if sample.label:
-        #     label = client.get_label(sample.uuid, labelset='ground-truth')  
-        # else:
-        #     continue
+            break
 
         instance_bitmap = load_label_bitmap_from_url(  label.attributes.segmentation_bitmap.url )
         semantic_bitmap = get_semantic_bitmap(instance_bitmap, label.attributes.annotations) # 2->soft 1->rigid
-        # preprocess labels
         if (2 not in semantic_bitmap) & (1 not in semantic_bitmap): 
             continue
         if 2 not in semantic_bitmap:
@@ -124,6 +126,7 @@ if __name__ == "__main__":
 
         # Get corresponding predction
         data = unpackMsgpack(traj_path + '/' + sample.name.split('.')[0]+'.msgpack')
+        # data = unpackMsgpack(traj_path + '/' + (sample.name.split('.')[0]).split('_', 1)[-1]+'.msgpack')
         pc_img = torch.Tensor(data['pc_image'].squeeze()[None, ...]).to(device)
         image = torch.Tensor(data['image']).to(device)
         input = torch.cat([image/255., pc_img],axis=0)
@@ -132,7 +135,7 @@ if __name__ == "__main__":
         for i, (m, s) in enumerate(zip(mean, std)):
             input[0, i, ...] = (input[0, i, ...] - m)/s
         pred = model(input)[0][0]
-        # pred = pc_img.squeeze()
+        pred = pc_img.squeeze()
         pred [(pc_img[0]==0)] = torch.nan
         pred = pred.detach().cpu().numpy()
 
@@ -146,9 +149,9 @@ if __name__ == "__main__":
         if pc_mask.any():
            rmse.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask, name="pc")
         print(num)
-
+        
+        # Plot the result
         PLOT = False
-        # plot the result
         if(PLOT):
             fig, axs = plt.subplots(2, 4,figsize=(20, 20))
             fig.suptitle(traj_path + '/' + sample.name.split('.')[0]+'.msgpack')
@@ -201,11 +204,6 @@ if __name__ == "__main__":
         # axs[0,3].set_title("Input pc")
 
 
-    # statistics 
+    # output  
     print(str(num) + " images are loaded")
     rmse.print_info()
-    # print(str(len(rmse.traj_rmse_list)) + '/' + str(num) + " images are accounted")
-    # print("traj_rmse: ", rmse.get_mean_rmse("traj"))
-    # print("pc_rmse: ", rmse.get_mean_rmse("pc"))
-
-    # img = load_image_from_url
