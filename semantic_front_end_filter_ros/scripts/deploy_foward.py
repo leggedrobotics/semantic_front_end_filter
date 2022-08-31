@@ -96,13 +96,14 @@ class Timer:
 
 
 class RosVisulizer:
-    def __init__(self, topic, camera_calibration_path="/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"):
+    def __init__(self, topic, camera_calibration_path="/home/jonfrey/git/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"):
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
         self.raycastCamera = RaycastCamera(
             self.camera_calibration_path, device)
         self.image_cv_bridge = CvBridge()
+        print("waiting for images")
 
     def build_could_from_depth_image(self, pose, depth, image=None):
         """
@@ -112,7 +113,7 @@ class RosVisulizer:
 
         pts = self.raycastCamera.project_depth_to_cloud(pose, depth)
         height_mask = pts[:, 2] < pose[2]
-        pts = pts[height_mask]
+        # pts = pts[height_mask]
         if(image is not None):
             im_color = image.reshape(-1, 3)
             im_color = im_color[height_mask]
@@ -132,7 +133,8 @@ class RosVisulizer:
         else:
             subsample_mask = np.random.choice(
                 [True, False], size=pts.shape[0], p=[0.3, 0.7])
-        pts = pts[subsample_mask].cpu()
+        # pts = pts[subsample_mask].cpu()
+        pts = pts.cpu()
         print("cloud lengths:", len(pts))
         if(image is not None):
             im_color = im_color[subsample_mask]
@@ -217,23 +219,23 @@ class RosVisulizer:
         self.pub.publish(cloud)
 
 
-def callback(image, point_cloud):
+def callback(img_msg, point_cloud):
     print("callback")
     # image
-    image = rgb_msg_to_image(image, True, False, False)
+    image = rgb_msg_to_image(img_msg, True, False, False)
     image = np.moveaxis(image, 2, 0)
     image = torch.tensor(image).to(device)
 
     # pose
     try:
         listener.waitForTransform(
-            "map", point_cloud.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
+            "map", point_cloud.header.frame_id, img_msg.header.stamp, rospy.Duration(1.0))
         (trans, rot) = listener.lookupTransform(
-             "map", point_cloud.header.frame_id, rospy.Time(0))
+             "map", point_cloud.header.frame_id, img_msg.header.stamp)
         listener.waitForTransform(
-            "map", "base", rospy.Time(0), rospy.Duration(1.0))
+            "map", "base", img_msg.header.stamp, rospy.Duration(1.0))
         (trans_base, rot_base) = listener.lookupTransform(
-             "map", "base", rospy.Time(0))     
+             "map", "base", img_msg.header.stamp)     
     except Exception as e:
         print(e)
         return
@@ -271,11 +273,14 @@ def callback(image, point_cloud):
         # Prediction
         pred = model(_image)
         pred = pred[0].detach()
-        pred[pc_img<1e-9] = torch.nan
+        m = torch.logical_or((pc_img<1e-9), (pc_img>10))
+        pred[m] = torch.nan
+        pred[pc_img>10] = torch.nan
         pred = pred[0].T
         # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
         # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
         cloud = rosv.build_could_from_depth_image(pose_base, pred, None)
+        cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
         # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
         # pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
@@ -291,7 +296,7 @@ if __name__ == "__main__":
     # image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
     image_topic = "/alphasense_driver_ros/cam4/debayered"
     # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
-    pointcloud_topic = "/bpearl_rear/point_cloud"
+    pointcloud_topic = "/robot_self_filter/bpearl_rear/point_cloud"
     TF_BASE = "base"
 
     rospy.init_node('test_foward', anonymous=False)
@@ -308,8 +313,8 @@ if __name__ == "__main__":
 
     # Build model
     rosv = RosVisulizer("pointcloud")
-    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
-    model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'))
+    model_path = "/home/jonfrey/git/semantic_front_end_filter/2022-08-29-23-51-44_fixed-20220831T141345Z-001/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
     model = model_io.load_checkpoint(model_path ,model)[0]

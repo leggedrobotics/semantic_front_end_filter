@@ -81,7 +81,7 @@ class RaycastCamera:
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
         """
-        self.camera.update_pose_from_base_pose(pose)
+        self.camera.update_pose_from_base_pose(pose.cpu())
         W,H = self.camera.image_width,self.camera.image_height
 
         position = self.camera.pose[0]
@@ -98,7 +98,7 @@ class RaycastCamera:
         return pts
 
     def project_cloud_to_depth(self, pose, points, pc_img):
-        self.camera.update_pose_from_base_pose(pose)
+        self.camera.update_pose_from_base_pose(pose.cpu())
         camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
         p = torch.Tensor(self.camera.tvec).to(device)
         H = torch.inverse(torch.Tensor(self.camera.pose[1]).to(device))
