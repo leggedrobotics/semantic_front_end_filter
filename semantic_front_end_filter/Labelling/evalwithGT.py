@@ -12,6 +12,7 @@ import msgpack_numpy as m
 from semantic_front_end_filter.adabins import models, model_io
 import torch
 import cv2 
+from semantic_front_end_filter_ros.scripts.deploy_foward import RosVisulizer
 m.patch()
 
 def get_semantic_bitmap(
@@ -46,12 +47,20 @@ def unpackMsgpack(path):
     return data
 
 class maskBasedRMSE:
-    traj_rmse_list = []
-    pc_rmse_list = []
-    traj_mask_valid_list = []
-    pc_mask_valid_list = []
-    names = ["traj", "pc"]
+    def __init__(self) -> None:
+        self.traj_rmse_list = []
+        self.pc_rmse_list = []
+        self.traj_mask_valid_list = []
+        self.pc_mask_valid_list = []
+        self.names = ["traj", "pc"]
+
+    def cal_rmse(reference, prediction):
+        return np.sqrt(np.mean((reference - prediction)**2))
+        
     def cal_and_append(self, reference, prediction, mask, name):
+        if ~mask.any():
+            print("mask is zero")
+            return
         err = np.sqrt(np.mean((reference[mask] - prediction[mask])**2))
         assert name in self.names
         if name == "traj":
@@ -68,7 +77,8 @@ class maskBasedRMSE:
         if name == "pc":
             err_weighted_list =  np.array(self.pc_rmse_list) * np.array(self.pc_mask_valid_list)/sum(self.pc_mask_valid_list)
         return sum(err_weighted_list)
-    
+
+
     def print_info(self):
         traj_mean = self.get_mean_rmse("traj")
         pc_mean = self.get_mean_rmse("pc")
@@ -88,25 +98,29 @@ if __name__ == "__main__":
 
     key = "002502c9bfbc0a2f44271dbb5ff3ee82ca6c439a"
     client = SegmentsClient(key)
-    dataset_identifier = "yangcyself/Zurich-Reconstruct_2022-08-13-08-48-50_0"
-    # dataset_identifier = "Anqiao/Italy-Reconstruct_2022-07-18-20-34-01_0"
+    # dataset_identifier = "yangcyself/Zurich-Reconstruct_2022-08-13-08-48-50_0"
+    dataset_identifier = "Anqiao/Italy-Reconstruct_2022-07-18-20-34-01_0"
 
     # Get dataset from cloud and disk
     samples = client.get_samples(dataset_identifier)
-    traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Zurich_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
-    # traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
+    # traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Zurich_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
+    traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
     
     # Build model
-    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-57-35/UnetAdaptiveBins_best.pt"
+    model_path = "/home/anqiao/catkin_ws/SA_dataset/mountpoint/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
     model_cfg = YAML().load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'))
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
     model = model_io.load_checkpoint(model_path ,model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    rosv = RosVisulizer("pointcloud")
     
     # Calculate rmse
     rmse = maskBasedRMSE()
+    rmse0_3 = maskBasedRMSE()
+    rmse3_6 = maskBasedRMSE()
+    rmse6_9 = maskBasedRMSE()
     for num, sample in enumerate(samples):
         # Get labels
         try:
@@ -125,8 +139,8 @@ if __name__ == "__main__":
             semantic_bitmap[semantic_bitmap!=2]=1 
 
         # Get corresponding predction
-        data = unpackMsgpack(traj_path + '/' + sample.name.split('.')[0]+'.msgpack')
-        # data = unpackMsgpack(traj_path + '/' + (sample.name.split('.')[0]).split('_', 1)[-1]+'.msgpack')
+        # data = unpackMsgpack(traj_path + '/' + sample.name.split('.')[0]+'.msgpack')
+        data = unpackMsgpack(traj_path + '/' + (sample.name.split('.')[0]).split('_', 1)[-1]+'.msgpack')
         pc_img = torch.Tensor(data['pc_image'].squeeze()[None, ...]).to(device)
         image = torch.Tensor(data['image']).to(device)
         input = torch.cat([image/255., pc_img],axis=0)
@@ -137,8 +151,10 @@ if __name__ == "__main__":
         pred = model(input)[0][0]
         pred = pc_img.squeeze()
         pred [(pc_img[0]==0)] = torch.nan
+        # fusing raw lidar points
+        # pred_fusion = rosv.raycastCamera.fuse(pred.T.clone(), pc_img.squeeze().T, torch.Tensor(data['pose']))
+        # pred_fusion = pred_fusion.T    
         pred = pred.detach().cpu().numpy()
-
         # Get two masks 
         pc_mask = (semantic_bitmap==2) & (data['pc_image'].squeeze()>1e-9) & (data['pc_image'].squeeze()<10) & (data["depth_var"][0].squeeze()<10)
         traj_mask = (semantic_bitmap==1) & (data["depth_var"][0]>0) & (data["depth_var"][1]<0.025) & (data['pc_image'].squeeze()>1e-9) & (data['pc_image'].squeeze()<10) & (data["depth_var"][0].squeeze()<10)      
@@ -146,8 +162,14 @@ if __name__ == "__main__":
         # Calculate rmse
         if traj_mask.any():
             rmse.cal_and_append(data['depth_var'][0], pred, traj_mask, name="traj")
+            rmse0_3.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]<3), name="traj")
+            rmse3_6.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=3) & (data["depth_var"][0]<=6), name="traj")
+            rmse6_9.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=6) & (data["depth_var"][0]<=9), name="traj")
         if pc_mask.any():
-           rmse.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask, name="pc")
+            rmse.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask, name="pc")
+            rmse0_3.cal_and_append(data['pc_image'].squeeze(), pred, traj_mask & (data['pc_image'].squeeze()<3), name="pc")
+            rmse3_6.cal_and_append(data['pc_image'].squeeze(), pred, traj_mask & (data['pc_image'].squeeze()>=3) & (data['pc_image'].squeeze()<=6), name="pc")
+            rmse6_9.cal_and_append(data['pc_image'].squeeze(), pred, traj_mask & (data['pc_image'].squeeze()>=6) & (data['pc_image'].squeeze()<=9), name="pc")           
         print(num)
         
         # Plot the result
@@ -207,3 +229,9 @@ if __name__ == "__main__":
     # output  
     print(str(num) + " images are loaded")
     rmse.print_info()
+    print("0-3")
+    rmse0_3.print_info()
+    print("3-6")
+    rmse3_6.print_info()    
+    print("6_9")
+    rmse6_9.print_info()
