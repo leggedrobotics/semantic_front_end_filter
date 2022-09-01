@@ -81,7 +81,7 @@ class RaycastCamera:
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
         """
-        self.camera.update_pose_from_base_pose(pose)
+        self.camera.update_pose_from_base_pose(pose.cpu())
         W,H = self.camera.image_width,self.camera.image_height
 
         position = self.camera.pose[0]
@@ -98,21 +98,16 @@ class RaycastCamera:
         return pts
 
     def project_cloud_to_depth(self, pose, points, pc_img):
-        self.camera.update_pose_from_base_pose(pose)
+        self.camera.update_pose_from_base_pose(pose.cpu())
         camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
-        p = torch.Tensor(self.camera.tvec).to(device)
         H = torch.inverse(torch.Tensor(self.camera.pose[1]).to(device))
         R = H[:3, :3]
-        # p = H[:3, 3]
         p = torch.Tensor(self.camera.tvec).to(device)
-        # p = torch.matmul(R, p)
         h = torch.Tensor(self.camera.pose[0]).to(device)
         # TODO check this
         proj_point = torch.matmul(torch.matmul((points ), R.transpose(0, 1)) + p, camera_matrix.transpose(0, 1))
         proj_point = (proj_point/proj_point[:, 2:].repeat(1, 3)).long()
-        # proj_point = proj_point.long()
-        # proj_point, proj_jac = self.camera.project_point(points[:,:3].astype(np.float32))#150ms
-        # proj_point = np.reshape(proj_point, [-1, 2]).astype(np.int32)#80ms
+
         camera_heading = torch.Tensor(self.camera.pose[1][:3, 2]).to(device)
         point_dir = points[:, :3] - h
         visible = torch.matmul(point_dir, camera_heading) > 1.0
@@ -124,3 +119,25 @@ class RaycastCamera:
         pc_distance = torch.sqrt(torch.sum((points[visible,:3] - h)**2, axis = 1))
         pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
         return pc_img
+
+    def fuse(self, pred, raw_pc, pose):
+        self.camera.update_pose_from_base_pose(pose.cpu())  
+        W,H = self.camera.image_width,self.camera.image_height
+
+        position = self.camera.pose[0]
+        # euler_bak = euler_from_matrix(self.camera.pose[1][:3,:3]) # the default order is "sxyz", see http://docs.ros.org/en/jade/api/tf/html/python/transformations.html
+        euler = Rotation.from_matrix(self.camera.pose[1][:3,:3]).as_euler("xyz")
+        # assert( np.sum((euler - euler_bak)**2)<1e-9)
+            
+        H_map_cam = calculate_H_map_cam(position, euler)
+        R = torch.from_numpy( H_map_cam )[:3,:3]
+        directions = self.ray_dir
+        directions = (directions @ R.to(self.device))
+        start_points = torch.from_numpy( H_map_cam[:3,3]).to(self.device)
+        pred_points = start_points + pred.reshape(-1,1)*directions
+        raw_points = start_points + raw_pc.reshape(-1,1)*directions
+
+        mask = (pred_points[:, 2] - pose[2]>-100).reshape(pred.shape)
+        # pred_points[pred_points[:, 2]>3] = raw_points[pred_points[:, 2]>3]
+        pred[mask] = raw_pc[mask]
+        return pred

@@ -12,14 +12,14 @@ import ros_numpy
 import tf
 
 m.patch()
-rospy.init_node('dump_publisher', anonymous=True)
+rospy.init_node('dummy_publisher', anonymous=True)
 
 pose_br = tf.TransformBroadcaster()
 image_pub = rospy.Publisher("/alphasense_driver_ros/cam4/image_raw/compressed", Image, queue_size=1)
 points_pub = rospy.Publisher("/bpearl_rear/point_cloud", PointCloud2, queue_size=1)
 
 
-with open("/media/anqiao/Semantic/Data/extract_trajectories_003/extract_trajectories/Reconstruct_2022-04-24-18-35-59_0/traj_0_datum_2.msgpack", "rb") as data_file:
+with open("/media/anqiao/Semantic/Data/extract_trajectories_006_SA/extract_trajectories/Reconstruct_2022-04-24-18-35-59_0/traj_0_datum_2.msgpack", "rb") as data_file:
     byte_data = data_file.read()
     data = msgpack.unpackb(byte_data)
 
