@@ -101,7 +101,7 @@ class WorldViewElevationMap:
     """
     A convinent warper for ElevationMap
     """
-    def __init__(self, resolution, map_length, init_with_initialize_map = True):
+    def __init__(self, resolution=None, map_length=None, init_with_initialize_map = True):
         """
         arg: init_with_initialize_map: (True, False, None, "nearest", "linear", "cubic")
         """
@@ -121,8 +121,8 @@ class WorldViewElevationMap:
         self.param = Parameter()
         for key, value in conf['elevation_mapping'].items():
             self.param.set_value(key, value)
-        self.param.resolution = resolution
-        self.param.map_length = map_length
+        self.param.resolution = self.param.resolution if resolution is None else resolution
+        self.param.map_length = self.param.map_length if map_length is None else map_length
         self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
         self.param.plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml")
         p = dict(enable_overlap_clearance = False, max_height_range = 10, ramped_height_range_c = 10)

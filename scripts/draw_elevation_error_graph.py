@@ -114,10 +114,21 @@ def main (modelname, overwrite = False):
     TF_BASE = "base"
     TF_MAP = "map"
 
+    # #### Zurich Configurations
+    # rosbagpath = "/Data/Italy_0820/Reconstruct_2022-07-18-20-34-01_0.bag"
+    # foottrajpath = "/Data/Italy_0820/FeetTrajs.msgpack"
+    # groundmappath = "/Data/Italy_0820/GroundMap.msgpack"
+    # model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
+    # image_topic = "/alphasense_driver_ros/cam4/debayered"
+    # pc_topic = "/bpearl_rear/point_cloud"
+    # TF_BASE = "base"
+    # TF_MAP = "map"
+
     GENERATE_VIDEO = True
+    VIS_IN_RVIZ = True
     if GENERATE_VIDEO: # this should be corresponded to the `play`
-        outputdir = f"checkpoints/{modelname}/Identity"
-        # outputdir = f"checkpoints/{modelname}/Italy0-200"
+        # outputdir = f"checkpoints/{modelname}/Identity"
+        outputdir = f"checkpoints/{modelname}/Italy0-2008x8"
     else:
         outputdir = f"checkpoints/{modelname}/Italywhole"
 
@@ -130,9 +141,9 @@ def main (modelname, overwrite = False):
     foot_holds = {k : np.array(gft.getContactPoints(v)[0]) for k,v in gft.FeetTrajs.items()} # A dict of the contact points of each foot
     foot_holds_array = np.vstack(list(foot_holds.values()))
 
-    elevation_pred = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
-    elevation_pc = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
-    elevation_fh = WorldViewElevationMap(resolution = 0.1, map_length = 10, init_with_initialize_map = None)
+    elevation_pred = WorldViewElevationMap(resolution = None, map_length = None, init_with_initialize_map = None)
+    elevation_pc = WorldViewElevationMap(resolution = None, map_length = None, init_with_initialize_map = None)
+    elevation_fh = WorldViewElevationMap(resolution = None, map_length = None, init_with_initialize_map = None)
     # Evaluators used to evaluate the error
     evaluator_pred = ElevationMapEvaluator(groundmappath, elevation_pred.param)
     evaluator_pc = ElevationMapEvaluator(groundmappath, elevation_pc.param)
@@ -141,10 +152,38 @@ def main (modelname, overwrite = False):
 
     ## Initialize model
     model_cfg = load_param_from_path(model_path)
-    model = UnetAdaptiveBins.build(input_channel = 4, **model_cfg)
+    model_cfg["input_channel"] = 4
+    model = UnetAdaptiveBins.build(**model_cfg)
 
     model = load_checkpoint(model_path, model)[0]
     model.to(device)
+
+    ## Rviz publishers
+    if VIS_IN_RVIZ:
+        from sensor_msgs import point_cloud2
+        from sensor_msgs.msg import PointCloud2, PointField
+        from std_msgs.msg import Header
+        from sensor_msgs.msg import Image
+        import struct
+        from cv_bridge import CvBridge
+        image_cv_bridge = CvBridge()
+        def buildPoint(x, y, z, r, g, b, a=None):
+            if(np.array([r, g, b]).max() < 1.01):
+                r = int(r * 255.0)
+                g = int(g * 255.0)
+                b = int(b * 255.0)
+                a = 255 if a is None else int(a * 255.0)
+            else:
+                r = int(r)
+                g = int(g)
+                b = int(b)
+                a = 255 if a is None else int(a)
+            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+            return [x, y, z, rgb]
+        rospy.init_node('draw_elev_map', anonymous=False)
+        pred_pc_pub = rospy.Publisher("pred_pc", PointCloud2, queue_size=1)
+        image_pub = rospy.Publisher("cam_image", Image, queue_size=1)
+
 
     ## Define shared variables
     player._shared_var.update(dict(
@@ -223,7 +262,33 @@ def main (modelname, overwrite = False):
                 gt_list.append(gt)
                 errer_list_count.append(len(evaluator_pred.error_list))
             v["video_frame_count"] -=1
-
+        
+        if(VIS_IN_RVIZ):
+            try:
+                header = Header()
+                header.frame_id = "map"
+                fields = [
+                    PointField('x', 0, PointField.FLOAT32, 1),
+                    PointField('y', 4, PointField.FLOAT32, 1),
+                    PointField('z', 8, PointField.FLOAT32, 1),
+                    # PointField('rgb', 12, PointField.UINT32, 1),
+                    PointField('rgba', 12, PointField.UINT32, 1),
+                ]
+                pred_points[:,:3] -= pred_points[:,:3].mean(axis = 0)
+                colors = ((pred_points[:, 2]-pred_points[:, 2].min())
+                    /(pred_points[:, 2].max()-pred_points[:, 2].min()))[:,None]*np.array([[1,1,1]])
+                cloud = point_cloud2.create_cloud(header, fields,
+                                            [buildPoint(*p[:3], *c) for p, c in zip(pred_points, colors)])
+                pred_pc_pub.publish(cloud)
+                image_to_show = np.moveaxis(image.cpu().numpy(), 0, 2).astype(np.uint8)
+                image_pub.publish(image_cv_bridge.cv2_to_imgmsg(image_to_show, "bgr8"))
+                print("image_to_show", image_to_show.shape, image_to_show.mean())
+            except KeyboardInterrupt as e:
+                cmd = input("Pause")
+                if(cmd =="exit"):
+                    raise KeyboardInterrupt()
+            except Exception as e:
+                print(e)
 
     def image_cb(topic, msg, t, tf_buffer, v):
         if(not len(v["pcbuffer"])): return
@@ -258,7 +323,7 @@ def main (modelname, overwrite = False):
     player.register_callback(pc_topic, pointcloud_cb)
 
     if(GENERATE_VIDEO): # video generation is expensive in memory
-        player.play(end_time=player.bag.get_start_time()+70)
+        player.play(end_time=player.bag.get_start_time()+200)
         # player.play(start_time=player.bag.get_end_time()-200)
     else:
         player.play()# play from start to end
@@ -383,8 +448,9 @@ def main (modelname, overwrite = False):
     # plt.show()
 
 if __name__ == "__main__":
-    main("2022-08-19-11-35-52", overwrite=True)
+    for m in ["2022-08-29-23-51-44"]:
+        main(m, overwrite=True)
     # from glob import glob
-    # for m in glob("checkpoints/2022-08-27*"):
+    # for m in glob("checkpoints/2022-08-29-*"):
     #     print("Running model:",m)
-    #     main(os.path.basename(m))
+    #     main(os.path.basename(m), overwrite = False)
