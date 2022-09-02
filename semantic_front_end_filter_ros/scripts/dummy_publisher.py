@@ -19,7 +19,7 @@ image_pub = rospy.Publisher("/alphasense_driver_ros/cam4/image_raw/compressed", 
 points_pub = rospy.Publisher("/bpearl_rear/point_cloud", PointCloud2, queue_size=1)
 
 
-with open("/media/anqiao/Semantic/Data/extract_trajectories_003/extract_trajectories/Reconstruct_2022-04-24-18-35-59_0/traj_0_datum_2.msgpack", "rb") as data_file:
+with open("/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-22-10-36-29_0/traj_0_datum_2.msgpack", "rb") as data_file:
     byte_data = data_file.read()
     data = msgpack.unpackb(byte_data)
 
@@ -57,7 +57,7 @@ while not rospy.is_shutdown():
     da["intensity"] = cloud_arr[:, 3]
     pc_msg = ros_numpy.msgify(PointCloud2, da)
     pc_msg.header.stamp = stamp
-    pc_msg.header.frame_id = "base"
+    pc_msg.header.frame_id = "map"
 
     points_pub.publish(pc_msg)
 
