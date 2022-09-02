@@ -42,6 +42,7 @@ class DecoderBN(nn.Module):
         self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16, deactivate_bn = deactivate_bn)
         self.up5_add = UpSampleBN(skip_input=features // 16 + 1, output_features=features // 32, deactivate_bn = deactivate_bn)
         self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
+        self.distance_maintainer = nn.ReLU()
         #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
         # if(self.skip_connection):
         #     self.conv3 = nn.Conv2d(features // 32, num_classes, kernel_size=3, stride=1, padding=1)
@@ -63,8 +64,10 @@ class DecoderBN(nn.Module):
             # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
             x_d5 = self.conv3(x_d4)
             out = x_block_skip[:, 3:, :, :] + F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest', align_corners=True)
+            out = self.distance_maintainer(out)
         else:
             out = self.conv3(x_d4)
+            out = self.distance_maintainer(out)
         # out = self.act_out(out)
         # if with_features:
         #     return out, features[-1]
