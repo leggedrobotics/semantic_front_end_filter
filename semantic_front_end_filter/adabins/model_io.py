@@ -35,7 +35,7 @@ def save_checkpoint(model, optimizer, epoch, filename, root="./checkpoints"):
 def load_weights(model, filename, path="./saved_models"):
     fpath = os.path.join(path, filename)
     state_dict = torch.load(fpath)
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
     return model
 
 
@@ -73,7 +73,6 @@ def load_checkpoint(fpath, model, optimizer=None):
             # del load_dict[k]
         else:
             modified[k] = v  # else keep the original
-    if(not model.use_adabins):
-        modified = {k:v for k,v in modified.items() if not k.startswith('adaptive_bins_layer')}
-    model.load_state_dict(modified)
+
+    model.load_state_dict(modified, strict=False)
     return model, optimizer, epoch
