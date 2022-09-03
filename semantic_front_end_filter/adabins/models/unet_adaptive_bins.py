@@ -109,9 +109,10 @@ class UnetAdaptiveBins(nn.Module):
         self.max_val = max_depth
         self.encoder = Encoder(backend)
         self.skip_connection = skip_connection
-        self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
-                                        dim_out=n_bins,
-                                        embedding_dim=128, norm=norm)
+        if(self.use_adabins==True):
+            self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
+                                            dim_out=n_bins,
+                                            embedding_dim=128, norm=norm)
 
         if(use_adabins):
             self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)

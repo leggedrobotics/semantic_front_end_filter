@@ -24,6 +24,9 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import Image, CompressedImage
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs import point_cloud2
+from visualization_msgs.msg import Marker, MarkerArray
+from geometry_msgs.msg import Point
+
 import rospy
 from email import message
 from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
@@ -103,8 +106,9 @@ class RosVisulizer:
         self.raycastCamera = RaycastCamera(
             self.camera_calibration_path, device)
         self.image_cv_bridge = CvBridge()
+        print("waiting for images")
 
-    def build_could_from_depth_image(self, pose, depth, image=None):
+    def build_could_from_depth_image(self, pose, depth, image=None, pc_image = None, pose_bp = None):
         """
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
@@ -112,12 +116,12 @@ class RosVisulizer:
 
         pts = self.raycastCamera.project_depth_to_cloud(pose, depth)
         height_mask = pts[:, 2] < pose[2]
-        pts = pts[height_mask]
+        # pts = pts[height_mask]
         if(image is not None):
             im_color = image.reshape(-1, 3)
             im_color = im_color[height_mask]
         header = Header()
-        header.frame_id = "map"
+        header.frame_id = "bpearl_rear"
         fields = [
             PointField('x', 0, PointField.FLOAT32, 1),
             PointField('y', 4, PointField.FLOAT32, 1),
@@ -132,7 +136,13 @@ class RosVisulizer:
         else:
             subsample_mask = np.random.choice(
                 [True, False], size=pts.shape[0], p=[0.3, 0.7])
-        pts = pts[subsample_mask].cpu()
+        # pts = pts[subsample_mask].cpu()
+        pts = pts.cpu()
+        pts = pts[~torch.isnan(pts).any(axis=1), :]
+        pose_bp = pose_bp.to(dtype=torch.float64)
+        Rot = torch.Tensor(quaternion_matrix(pose_bp[3:].cpu().numpy())[:3, :3]).to(device, dtype=torch.float64)
+        pts = torch.matmul(pts-pose_bp[:3].cpu(), Rot.cpu())
+
         print("cloud lengths:", len(pts))
         if(image is not None):
             im_color = im_color[subsample_mask]
@@ -140,7 +150,39 @@ class RosVisulizer:
                                               [rosv.buildPoint(*p[:3], *c, a=0.2) for p, c in zip(pts, im_color)])
         else:
             cloud = point_cloud2.create_cloud(header, fields, pts)
-        return cloud
+        
+        marker = None
+        if(pc_image is not None):
+            print("drawing lines")
+            pts_pc = self.raycastCamera.project_depth_to_cloud(pose, pc_image)
+            pts_pc = pts_pc.cpu()
+            pts_pc = pts_pc[~torch.isnan(pts_pc).any(axis=1), :]
+            # pts = torch.matmul(pts, Rot.cpu().T)+pose_bp[:3].cpu()
+            pts_pc = torch.matmul(pts_pc-pose_bp[:3].cpu(), Rot.cpu())
+
+            
+            distance_mask = ((depth - pc_image)).reshape(-1,1)
+            distance_mask = distance_mask[~torch.isnan(distance_mask).any(axis=1), :]
+            distance_mask = distance_mask>0
+
+            marker = Marker()
+            marker.header.frame_id = "bpearl_rear"
+            marker.type = marker.LINE_LIST
+            marker.action = marker.ADD
+            marker.scale.x = 0.02
+            marker.scale.y = 0.2
+            marker.scale.z = 0.2
+            marker.color.a = 1.0
+            marker.color.r = 1.0
+            marker.color.g = 0
+            marker.color.b = 0
+            for i, (pt, pt_pc) in enumerate(zip(pts, pts_pc)):
+                # if i%10 == 0:
+                if ~distance_mask[i]:
+                    marker.points.append(Point(x = pt[0], y = pt[1], z = pt[2]))
+                    marker.points.append(Point(x = pt_pc[0], y = pt_pc[1], z = pt_pc[2]))
+
+        return cloud ,marker
 
     def build_imgmsg_from_depth_image(self, depth, vmin, vmax):
         depth = torch.clamp(depth, min=vmin, max=vmax)
@@ -217,23 +259,23 @@ class RosVisulizer:
         self.pub.publish(cloud)
 
 
-def callback(image, point_cloud):
+def callback(img_msg, point_cloud):
     print("callback")
     # image
-    image = rgb_msg_to_image(image, True, False, False)
+    image = rgb_msg_to_image(img_msg, True, False, False)
     image = np.moveaxis(image, 2, 0)
     image = torch.tensor(image).to(device)
 
     # pose
     try:
         listener.waitForTransform(
-            "map", point_cloud.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
+            "map", point_cloud.header.frame_id, img_msg.header.stamp, rospy.Duration(1.0))
         (trans, rot) = listener.lookupTransform(
-             "map", point_cloud.header.frame_id, rospy.Time(0))
+             "map", point_cloud.header.frame_id, img_msg.header.stamp)
         listener.waitForTransform(
-            "map", "base", rospy.Time(0), rospy.Duration(1.0))
+            "map", "base", img_msg.header.stamp, rospy.Duration(1.0))
         (trans_base, rot_base) = listener.lookupTransform(
-             "map", "base", rospy.Time(0))     
+             "map", "base", img_msg.header.stamp)     
     except Exception as e:
         print(e)
         return
@@ -271,11 +313,19 @@ def callback(image, point_cloud):
         # Prediction
         pred = model(_image)
         pred = pred[0].detach()
-        pred[pc_img<1e-9] = torch.nan
+        m = torch.logical_or((pc_img<1e-9), (pc_img>10))
+        # m = torch.logical_or(m, (pred - pc_img)<0)
+        pred[m] = torch.nan
+        pc_img[m] = torch.nan
         pred = pred[0].T
         # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
         # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-        cloud = rosv.build_could_from_depth_image(pose_base, pred, None)
+        cloud, marker = rosv.build_could_from_depth_image(pose_base, pred, None, pc_img.squeeze().T, pose)
+
+        if marker is not None:
+            marker.header.stamp = point_cloud.header.stamp
+            lines_pub.publish(marker)
+        cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
         # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
         # pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
@@ -292,6 +342,8 @@ if __name__ == "__main__":
     image_topic = "/alphasense_driver_ros/cam4/debayered"
     # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
     pointcloud_topic = "/bpearl_rear/point_cloud"
+    pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
+    prediction_topic = "/bpearl_rear/pred_pc"
     TF_BASE = "base"
 
     rospy.init_node('test_foward', anonymous=False)
@@ -304,12 +356,13 @@ if __name__ == "__main__":
 
     pred_image_pub = rospy.Publisher("pred_depth_image", Image, queue_size=1)
     pc_image_pub = rospy.Publisher("pointcloud_image", Image, queue_size=1)
-    predpub = rospy.Publisher("pred_pc", PointCloud2, queue_size=1)
+    predpub = rospy.Publisher(prediction_topic, PointCloud2, queue_size=1)
+    lines_pub = rospy.Publisher(pts_lines_topic, Marker, queue_size=1)
 
     # Build model
     rosv = RosVisulizer("pointcloud")
     model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
-    model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'))
+    model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
     model = model_io.load_checkpoint(model_path ,model)[0]
