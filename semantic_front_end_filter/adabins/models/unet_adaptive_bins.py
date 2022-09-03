@@ -24,7 +24,7 @@ class UpSampleBN(nn.Module):
                                     nn.LeakyReLU())
 
     def forward(self, x, concat_with):
-        up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='nearest', align_corners=True)
+        up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='nearest')
         f = torch.cat([up_x, concat_with], dim=1)
         return self._net(f)
 
@@ -63,7 +63,7 @@ class DecoderBN(nn.Module):
         if(self.skip_connection):
             # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
             x_d5 = self.conv3(x_d4)
-            out = x_block_skip[:, 3:, :, :] +  self.distance_maintainer(F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest', align_corners=True))
+            out = x_block_skip[:, 3:, :, :] +  self.distance_maintainer(F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest'))
         else:
             out = self.conv3(x_d4)
         # out = self.act_out(out)
