@@ -108,7 +108,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         pred = images[0].detach()
         predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
         
-        pred = nn.functional.interpolate(pred[None,...], torch.tensor(depth).shape[-2:], mode='bilinear', align_corners=True)
+        pred = nn.functional.interpolate(pred[None,...], torch.tensor(depth).shape[-2:], mode='nearest')
         pred = pred[0][0].cpu().numpy()
         diff = pred- depth
         mask_traj = depth>1e-9
@@ -229,7 +229,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
+        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="disabled")
         # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
 
         # wandb.watch(model)
@@ -305,7 +305,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
             if(pred.shape != depth.shape): # need to enlarge the output prediction
-                pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
+                pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 
             pred[pred < args.min_depth] = args.min_depth
             max_depth_gt = max(args.max_depth, args.max_pc_depth)
@@ -403,7 +403,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             mask = depth > args.min_depth
             count_val = count_val + 1
             val_si.append(l_dense.item())
-            pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
+            pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval

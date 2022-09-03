@@ -12,7 +12,7 @@ import ros_numpy
 import tf
 
 m.patch()
-rospy.init_node('dump_publisher', anonymous=True)
+rospy.init_node('dummy_publisher', anonymous=True)
 
 pose_br = tf.TransformBroadcaster()
 image_pub = rospy.Publisher("/alphasense_driver_ros/cam4/image_raw/compressed", Image, queue_size=1)
