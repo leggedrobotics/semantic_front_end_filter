@@ -63,11 +63,9 @@ class DecoderBN(nn.Module):
         if(self.skip_connection):
             # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
             x_d5 = self.conv3(x_d4)
-            out = x_block_skip[:, 3:, :, :] + F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest', align_corners=True)
-            out = self.distance_maintainer(out)
+            out = x_block_skip[:, 3:, :, :] +  self.distance_maintainer(F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest', align_corners=True))
         else:
             out = self.conv3(x_d4)
-            out = self.distance_maintainer(out)
         # out = self.act_out(out)
         # if with_features:
         #     return out, features[-1]
