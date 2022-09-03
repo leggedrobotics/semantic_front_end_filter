@@ -45,52 +45,6 @@ from semantic_front_end_filter.adabins.model_io import load_checkpoint, load_par
 from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap
 from semantic_front_end_filter.adabins.elevation_eval_util import ElevationMapEvaluator
 
-class RosbagPlayer:
-    """
-    This 'simulator' holds a rosbag, 
-        execute registered callback functions when play
-        also holds tf_buffer to facilitate an easy look up
-    Note: this is only for processing bag data, not for adding new topics and messages
-    """
-    def __init__(self, rosbagpath):
-
-        self.bag = rosbag.Bag(rosbagpath)
-        duration = self.bag.get_end_time() - self.bag.get_start_time()
-        self.tf_buffer = tf2_py.BufferCore(rospy.Duration(duration))
-        
-        # read the whole tf history
-        for topic, msg, t in self.bag.read_messages(topics=['/tf_static']):
-            for transform in msg.transforms:
-                self.tf_buffer.set_transform_static(transform, 'rosbag')
-
-        tf_times = []
-        for topic, msg, t in self.bag.read_messages(topics=['/tf']):
-            for transform in msg.transforms:
-                self.tf_buffer.set_transform(transform, 'rosbag')
-                tf_times.append(transform.header.stamp)
-
-        self._callbacks = {}
-        self._shared_var = {}
-
-    def register_callback(self, topic, func):
-        """
-        arg topic: the topic of the callback function
-        arg func: have the signature: (topic, msg, t, tf_buffer, shared_var) 
-        """
-        self._callbacks[topic] = func
-
-    def play(self, start_time=None, end_time=None):
-        """
-        Play the rosbag and call the callbacks
-        """
-        start_time = start_time if start_time is None else rospy.Time(start_time)
-        end_time = end_time if end_time is None else rospy.Time(end_time)
-        for topic, msg, t in self.bag.read_messages(
-            topics=list(self._callbacks.keys()),
-            start_time=start_time, end_time=end_time):
-            self._callbacks[topic](topic, msg, t, self.tf_buffer, self._shared_var)
-
-
 
 def main (modelname, overwrite = False):
     # #### SA Configurations
@@ -214,8 +168,8 @@ def main (modelname, overwrite = False):
         # pose = torch.Tensor(pose).to(device)
         # get pc image
         pc_img = torch.zeros_like(image[:1, ...]).to(device).float()
-        pc_img,visible = raycastCamera.project_cloud_to_depth(
-                        pose, points, pc_img, return_visible=True)
+        pc_img,visible,proj_point = raycastCamera.project_cloud_to_depth(
+                        pose, points, pc_img, return_detail=True)
         # filter the points to the only visble ones
         points = points[visible] # TODO: Decide whether should be filter the raw points
         # get prediction

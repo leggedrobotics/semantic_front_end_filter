@@ -97,7 +97,7 @@ class RaycastCamera:
         pts = start_points + depth.reshape(-1,1)*directions
         return pts
 
-    def project_cloud_to_depth(self, pose, points, pc_img, return_visible = False):
+    def project_cloud_to_depth(self, pose, points, pc_img, return_detail = False):
         self.camera.update_pose_from_base_pose(pose)
         camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
         p = torch.Tensor(self.camera.tvec).to(device)
@@ -123,6 +123,6 @@ class RaycastCamera:
         proj_point = proj_point[visible]
         pc_distance = torch.sqrt(torch.sum((points[visible,:3] - h)**2, axis = 1))
         pc_img[0, proj_point[:,1], proj_point[:,0]] = pc_distance
-        if return_visible:
-            return pc_img, visible
+        if return_detail:
+            return pc_img, visible, proj_point
         return pc_img
