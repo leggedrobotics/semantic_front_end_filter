@@ -4,6 +4,8 @@ Utilities for the evaluation of elevation map.
 """
 
 import msgpack
+import msgpack_numpy as m
+m.patch()
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator

@@ -45,6 +45,8 @@ from semantic_front_end_filter.adabins.model_io import load_checkpoint, load_par
 from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap
 from semantic_front_end_filter.adabins.elevation_eval_util import ElevationMapEvaluator
 
+# Common rosbagPlayer
+from semantic_front_end_filter.common import RosbagPlayer
 
 def main (modelname, overwrite = False):
     # #### SA Configurations
@@ -79,7 +81,7 @@ def main (modelname, overwrite = False):
     # TF_MAP = "map"
 
     GENERATE_VIDEO = True
-    VIS_IN_RVIZ = True
+    VIS_IN_RVIZ = False
     if GENERATE_VIDEO: # this should be corresponded to the `play`
         # outputdir = f"checkpoints/{modelname}/Identity"
         outputdir = f"checkpoints/{modelname}/Italy0-2008x8"
@@ -236,7 +238,7 @@ def main (modelname, overwrite = False):
                 pred_pc_pub.publish(cloud)
                 image_to_show = np.moveaxis(image.cpu().numpy(), 0, 2).astype(np.uint8)
                 image_pub.publish(image_cv_bridge.cv2_to_imgmsg(image_to_show, "bgr8"))
-                print("image_to_show", image_to_show.shape, image_to_show.mean())
+                # print("image_to_show", image_to_show.shape, image_to_show.mean())
             except KeyboardInterrupt as e:
                 cmd = input("Pause")
                 if(cmd =="exit"):
@@ -349,13 +351,13 @@ def main (modelname, overwrite = False):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     fig, axs = plt.subplots(3,3, figsize=(30,30))
     ## Error maps
-    axs[0,0].imshow(evaluator_pred.get_err_map(), vmin=0, vmax=2, cmap='plasma')
+    axs[0,0].imshow(evaluator_pred.get_err_map(), vmin=0, vmax=0.5, cmap='plasma')
     axs[0,0].set_title("ours rmse: %.3f"%(evaluator_pred.get_rmse()), fontsize=40)
 
-    axs[0,1].imshow(evaluator_pc.get_err_map(), vmin=0, vmax=2, cmap='plasma')
+    axs[0,1].imshow(evaluator_pc.get_err_map(), vmin=0, vmax=0.5, cmap='plasma')
     axs[0,1].set_title("pc rmse: %.3f"%(evaluator_pc.get_rmse()), fontsize=40)
 
-    axs[0,2].imshow(evaluator_fh.get_err_map(), vmin=0, vmax=2, cmap='plasma')
+    axs[0,2].imshow(evaluator_fh.get_err_map(), vmin=0, vmax=0.5, cmap='plasma')
     axs[0,2].set_title("fh rmse: %.3f"%(evaluator_fh.get_rmse()), fontsize=40)
     divider = make_axes_locatable(axs[0,2])
 
@@ -402,7 +404,7 @@ def main (modelname, overwrite = False):
     # plt.show()
 
 if __name__ == "__main__":
-    for m in ["2022-08-29-23-51-44"]:
+    for m in ["2022-08-31-14-42-18", "2022-08-29-23-51-44"]:
         main(m, overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-29-*"):
