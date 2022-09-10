@@ -305,7 +305,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
             if(pred.shape != depth.shape): # need to enlarge the output prediction
-                pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+                # pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+                pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
 
             pred[pred < args.min_depth] = args.min_depth
             max_depth_gt = max(args.max_depth, args.max_pc_depth)
@@ -403,7 +404,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             mask = depth > args.min_depth
             count_val = count_val + 1
             val_si.append(l_dense.item())
-            pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+            # pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+            pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='bilinear', align_corners=True)
+            
 
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval

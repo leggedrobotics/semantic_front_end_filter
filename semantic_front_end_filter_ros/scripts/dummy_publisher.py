@@ -34,6 +34,11 @@ while not rospy.is_shutdown():
                         rospy.Time.now(),
                         "base",
                         "map")
+    pose_br.sendTransform([0, 0, 0],
+                        [0, 0, 0, 1],
+                        rospy.Time.now(),
+                        "bpearl_rear",
+                        "map")
     # image
     bridge = CvBridge()
     imgMsg = bridge.cv2_to_imgmsg(np.moveaxis(data["images"]["cam4"], 0, 2).astype(np.uint8), "bgr8")  

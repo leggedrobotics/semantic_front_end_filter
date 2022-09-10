@@ -315,7 +315,7 @@ def callback(img_msg, point_cloud):
         pred = model(_image)
         pred = pred[0].detach()
         m = torch.logical_or((pc_img<1e-9), (pc_img>10))
-        m = torch.logical_or(m, (pred - pc_img)<0)
+        # m = torch.logical_or(m, (pred - pc_img)<0)
         pred[m] = torch.nan
         pc_img[m] = torch.nan
         pred = pred[0].T
@@ -340,8 +340,8 @@ if __name__ == "__main__":
     points_ph = None
     points_buffer = []
     # image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
-    image_topic = "/alphasense_driver_ros/cam4/debayered"
-    # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
+    # image_topic = "/alphasense_driver_ros/cam4/debayered"
+    image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
     pointcloud_topic = "/bpearl_rear/point_cloud"
     pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
     prediction_topic = "/bpearl_rear/pred_pc"

@@ -13,6 +13,8 @@ from semantic_front_end_filter.adabins import models, model_io
 import torch
 import cv2 
 from semantic_front_end_filter_ros.scripts.deploy_foward import RosVisulizer
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 m.patch()
 
 def get_semantic_bitmap(
@@ -53,6 +55,7 @@ class maskBasedRMSE:
         self.traj_mask_valid_list = []
         self.pc_mask_valid_list = []
         self.names = ["traj", "pc"]
+        self.range_name = "None"
 
     def cal_rmse(reference, prediction):
         return np.sqrt(np.mean((reference - prediction)**2))
@@ -62,6 +65,7 @@ class maskBasedRMSE:
             print("mask is zero")
             return
         err = np.sqrt(np.mean((reference[mask] - prediction[mask])**2))
+        # err = np.mean(reference[mask] - prediction[mask])
         assert name in self.names
         if name == "traj":
             self.traj_rmse_list.append(err)
@@ -78,10 +82,17 @@ class maskBasedRMSE:
             err_weighted_list =  np.array(self.pc_rmse_list) * np.array(self.pc_mask_valid_list)/sum(self.pc_mask_valid_list)
         return sum(err_weighted_list)
 
+    def get_whole_rmse(self, name):
+        assert name in self.names
+        if name == "traj":
+            err_weighted = np.sqrt(((np.array(self.traj_rmse_list) ** 2) * np.array(self.traj_mask_valid_list)/sum(self.traj_mask_valid_list)).sum())
+        if name == "pc":
+            err_weighted =  np.sqrt(((np.array(self.pc_rmse_list) ** 2) * np.array(self.pc_mask_valid_list)/sum(self.pc_mask_valid_list)).sum())
+        return err_weighted
 
     def print_info(self):
-        traj_mean = self.get_mean_rmse("traj")
-        pc_mean = self.get_mean_rmse("pc")
+        traj_mean = self.get_whole_rmse("traj")
+        pc_mean = self.get_whole_rmse("pc")
         traj_max, traj_min = np.array(self.traj_rmse_list).max(), np.array(self.traj_rmse_list).min()
         pc_max, pc_min = np.array(self.pc_rmse_list).max(), np.array(self.pc_rmse_list).min()
         print("%d images are accounted for soft objects, %d images are accounted for rigid objects" %(len(self.traj_rmse_list), len(self.pc_rmse_list)))
@@ -91,6 +102,9 @@ class maskBasedRMSE:
     def print_latest_info(self):
         print("the latest error on soft: mean = %.3f" %(self.traj_rmse_list[-1]))
         print("the latest error on rigid: mean = %.3f" %(self.pc_rmse_list[-1]))
+    
+    def print_important_info(self):
+        print(self.get_whole_rmse("traj"), ', ', self.get_whole_rmse("pc"), end=', ')
 
 if __name__ == "__main__":
     """When changing the different labeled set, please change the dataset_identifier, 
@@ -107,7 +121,8 @@ if __name__ == "__main__":
     traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
     
     # Build model
-    model_path = "/home/anqiao/catkin_ws/SA_dataset/mountpoint/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
     model_cfg = YAML().load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'))
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
@@ -118,10 +133,14 @@ if __name__ == "__main__":
     
     # Calculate rmse
     rmse = maskBasedRMSE()
-    rmse0_3 = maskBasedRMSE()
-    rmse3_6 = maskBasedRMSE()
-    rmse6_9 = maskBasedRMSE()
+    rmse0_2 = maskBasedRMSE()
+    rmse2_4 = maskBasedRMSE()
+    rmse4_6 = maskBasedRMSE()
+    rmse6_8 = maskBasedRMSE()
+    rmse8_10 = maskBasedRMSE()
     for num, sample in enumerate(samples):
+        if num ==0 or num==1:
+            continue
         # Get labels
         try:
             label = client.get_label(sample.uuid, labelset='ground-truth')
@@ -149,7 +168,7 @@ if __name__ == "__main__":
         for i, (m, s) in enumerate(zip(mean, std)):
             input[0, i, ...] = (input[0, i, ...] - m)/s
         pred = model(input)[0][0]
-        pred = pc_img.squeeze()
+        # pred = pc_img.squeeze()
         pred [(pc_img[0]==0)] = torch.nan
         # fusing raw lidar points
         # pred_fusion = rosv.raycastCamera.fuse(pred.T.clone(), pc_img.squeeze().T, torch.Tensor(data['pose']))
@@ -162,16 +181,24 @@ if __name__ == "__main__":
         # Calculate rmse
         if traj_mask.any():
             rmse.cal_and_append(data['depth_var'][0], pred, traj_mask, name="traj")
-            rmse0_3.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]<3), name="traj")
-            rmse3_6.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=3) & (data["depth_var"][0]<=6), name="traj")
-            rmse6_9.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=6) & (data["depth_var"][0]<=9), name="traj")
+            rmse0_2.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]<2), name="traj")
+            rmse2_4.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=2) & (data["depth_var"][0]<=4), name="traj")
+            rmse4_6.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=4) & (data["depth_var"][0]<=6), name="traj")
+            rmse6_8.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=6) & (data["depth_var"][0]<=8), name="traj")
+            rmse8_10.cal_and_append(data['depth_var'][0], pred, traj_mask & (data["depth_var"][0]>=8) & (data["depth_var"][0]<=10), name="traj")
         if pc_mask.any():
             rmse.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask, name="pc")
-            rmse0_3.cal_and_append(data['pc_image'].squeeze(), pred, traj_mask & (data['pc_image'].squeeze()<3), name="pc")
-            rmse3_6.cal_and_append(data['pc_image'].squeeze(), pred, traj_mask & (data['pc_image'].squeeze()>=3) & (data['pc_image'].squeeze()<=6), name="pc")
-            rmse6_9.cal_and_append(data['pc_image'].squeeze(), pred, traj_mask & (data['pc_image'].squeeze()>=6) & (data['pc_image'].squeeze()<=9), name="pc")           
+            rmse0_2.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask & (data['pc_image'].squeeze()<2), name="pc")
+            rmse2_4.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask & (data['pc_image'].squeeze()>=2) & (data['pc_image'].squeeze()<=4), name="pc")
+            rmse4_6.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask & (data['pc_image'].squeeze()>=4) & (data['pc_image'].squeeze()<=6), name="pc")           
+            rmse6_8.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask & (data['pc_image'].squeeze()>=6) & (data['pc_image'].squeeze()<=8), name="pc")           
+            rmse8_10.cal_and_append(data['pc_image'].squeeze(), pred, pc_mask & (data['pc_image'].squeeze()>=8) & (data['pc_image'].squeeze()<=10), name="pc")           
         print(num)
         
+        try:
+            print(rmse2_4.pc_rmse_list[-1], rmse2_4.pc_mask_valid_list[-1])
+        except:
+            print("no data")
         # Plot the result
         PLOT = False
         if(PLOT):
@@ -207,18 +234,22 @@ if __name__ == "__main__":
             pred_traj_diff = pred - depth
             pred_traj_diff[~traj_mask] = np.nan
             x, y = np.where(~np.isnan(pred_traj_diff))
-            axs[1,1].scatter(y, x, c = pred_traj_diff[x, y], vmin = -5, vmax = 5)        # axs[1,1].imshow(pred_traj_diff)
-            axs[1,1].imshow(semantic_bitmap, alpha = 0.5)
+            sc = axs[1,1].scatter(y, x, c = pred_traj_diff[x, y], vmin = -5, vmax = 5)        # axs[1,1].imshow(pred_traj_diff)
             axs[1,1].set_title("prediction difference with traj label")
+            divider = make_axes_locatable(axs[1, 1])
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            plt.colorbar(sc, ax = axs[1, 1])
+            axs[1,1].imshow(semantic_bitmap, alpha = 0.5)
 
             pred_pc_diff = pred - pc_img
             pred_pc_diff[~pc_mask] = np.nan
+            pred_pc_diff[pred_pc_diff>10] = 0
             x, y = np.where(~np.isnan(pred_pc_diff))
             axs[1,2].scatter(y, x, c = pred_pc_diff[x, y], vmin = -5, vmax = 5)
             axs[1,2].imshow(semantic_bitmap, alpha = 0.5)
             # axs[1,2].imshow(pred_traj_pc)
             axs[1,2].set_title("prediction difference with pc label")
-            rmse.print_latest_info()
+            # rmse.print_latest_info()
 
             plt.show()
             plt.close()
@@ -229,9 +260,17 @@ if __name__ == "__main__":
     # output  
     print(str(num) + " images are loaded")
     rmse.print_info()
-    print("0-3")
-    rmse0_3.print_info()
-    print("3-6")
-    rmse3_6.print_info()    
-    print("6_9")
-    rmse6_9.print_info()
+    print("0-2")
+    rmse0_2.print_info()
+    print("2-4")
+    rmse2_4.print_info() 
+    print(rmse2_4.pc_rmse_list, rmse2_4.pc_mask_valid_list)   
+    print("4-6")
+    rmse4_6.print_info()
+    print("6-8")
+    rmse6_8.print_info()
+    print("8-10")
+    rmse8_10.print_info()
+    rmselist = [rmse0_2, rmse2_4, rmse4_6, rmse6_8, rmse8_10]
+    for rmse_i in rmselist:
+        rmse_i.print_important_info()
