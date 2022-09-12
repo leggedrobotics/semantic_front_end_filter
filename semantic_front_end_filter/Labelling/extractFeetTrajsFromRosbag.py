@@ -173,7 +173,7 @@ def extractFeetTrajs(file_name, out_dir, cfg, raisim_objects):
 
     # Get Trajectories
     basePose = []
-    for topic, msg, t in bag.read_messages(topics=[STATE_TOPIC], start_time=latestTFstamp):
+    for topic, msg, t in bag.read_messages(topics=[STATE_TOPIC], start_time=latestTFstamp, end_time=latestTFstamp+rospy.Time.from_sec(460)):
         # if(tf_buffer.canTransform('msf_body_imu_map', TF_BASE, t)):
         # tf = tf_buffer.lookup_transform_core('msf_body_imu_map', TF_BASE, t)
         try:

@@ -159,7 +159,8 @@ def main_worker(gpu, ngpus_per_node, args):
     ## Load pretrained kitti
     if args.load_pretrained:
         model,_,_ = model_io.load_checkpoint("./models/AdaBins_kitti.pt", model)
-    
+
+    model,_,_ = model_io.load_checkpoint("/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt", model)
     if input_channel == 3:
         model.transform()
     ################################################################################################
@@ -287,37 +288,37 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
                              total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
-            time_core -= time.time()
-            optimizer.zero_grad()
+        #     time_core -= time.time()
+        #     optimizer.zero_grad()
 
-            img = batch['image'].to(device)
-            depth = batch['depth'].to(device)
-            depth_var = batch['depth_variance'].to(device)
-            if 'has_valid_depth' in batch:
-                if not batch['has_valid_depth']:
-                    continue
-            if(args.modelconfig.use_adabins):
-                bin_edges, pred = model(img)
-            else:
-                bin_edges, pred = None, model(img)
-            pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+        #     img = batch['image'].to(device)
+        #     depth = batch['depth'].to(device)
+        #     depth_var = batch['depth_variance'].to(device)
+        #     if 'has_valid_depth' in batch:
+        #         if not batch['has_valid_depth']:
+        #             continue
+        #     if(args.modelconfig.use_adabins):
+        #         bin_edges, pred = model(img)
+        #     else:
+        #         bin_edges, pred = None, model(img)
+        #     pc_image = batch["pc_image"].to(device)
+        #     l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+        #     loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
 
-            if(pred.shape != depth.shape): # need to enlarge the output prediction
-                pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+        #     if(pred.shape != depth.shape): # need to enlarge the output prediction
+        #         pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 
-            pred[pred < args.min_depth] = args.min_depth
-            max_depth_gt = max(args.max_depth, args.max_pc_depth)
-            pred[pred > max_depth_gt] = max_depth_gt
-            pred[torch.isinf(pred)] = max_depth_gt
-            pred[torch.isnan(pred)] = args.min_depth
+        #     pred[pred < args.min_depth] = args.min_depth
+        #     max_depth_gt = max(args.max_depth, args.max_pc_depth)
+        #     pred[pred > max_depth_gt] = max_depth_gt
+        #     pred[torch.isinf(pred)] = max_depth_gt
+        #     pred[torch.isnan(pred)] = args.min_depth
 
-            pred = pred.detach().cpu()
-            depth = depth.cpu()
-            pc_image = pc_image.cpu()
-            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
-            train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
+        #     pred = pred.detach().cpu()
+        #     depth = depth.cpu()
+        #     pc_image = pc_image.cpu()
+        #     train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
+        #     train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
             # writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -325,26 +326,27 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             # writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
             # writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
 
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
-            optimizer.step()
-            if should_log and step_count % 5 == 0:
-                wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step_count)
-                wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step_count)
+            # loss.backward()
+            # nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
+            # optimizer.step()
+            # if should_log and step_count % 5 == 0:
+            #     wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
+            #     wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step_count)
+            #     wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step_count)
+            #     wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step_count)
 
-            step_count += 1
-            scheduler.step()
+            # step_count += 1
+            # scheduler.step()
 
-            time_core += time.time()
+            # time_core += time.time()
             ########################################################################################################
 
-            if should_write and step_count % args.trainconfig.validate_every == 0:
-
+            # if should_write and step_count % args.trainconfig.validate_every == 0:
+            if True:
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
+                print(metrics)
                 # [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
