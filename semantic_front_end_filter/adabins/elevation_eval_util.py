@@ -104,6 +104,9 @@ class ElevationMapEvaluator:
     def get_mean_err(self):
         return np.sum(self.error_sum)/np.sum(self.error_count)
 
+    def get_errvar(self):
+        return np.sum(self.error_sqsum) - (self.get_mean_err())**2
+
     def get_var_map(self):
         return self.error_sqsum - (self.get_err_map())**2
     

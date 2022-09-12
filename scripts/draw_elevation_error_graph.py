@@ -71,7 +71,7 @@ def main (modelname, overwrite = False):
     TF_MAP = "map"
 
     # #### Zurich Configurations
-    # rosbagpath = "/Data/Italy_0820/Reconstruct_2022-07-18-20-34-01_0.bag"
+    # rosbagpath = "/Data/hongeberg/mission_data/Reconstruct/Reconstruct_2022-08-13-08-48-50_0.bag"
     # foottrajpath = "/Data/Italy_0820/FeetTrajs.msgpack"
     # groundmappath = "/Data/Italy_0820/GroundMap.msgpack"
     # model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
@@ -81,7 +81,6 @@ def main (modelname, overwrite = False):
     # TF_MAP = "map"
 
     GENERATE_VIDEO = True
-    VIS_IN_RVIZ = False
     if GENERATE_VIDEO: # this should be corresponded to the `play`
         # outputdir = f"checkpoints/{modelname}/Identity"
         outputdir = f"checkpoints/{modelname}/Italy0-2008x8"
@@ -113,33 +112,6 @@ def main (modelname, overwrite = False):
 
     model = load_checkpoint(model_path, model)[0]
     model.to(device)
-
-    ## Rviz publishers
-    if VIS_IN_RVIZ:
-        from sensor_msgs import point_cloud2
-        from sensor_msgs.msg import PointCloud2, PointField
-        from std_msgs.msg import Header
-        from sensor_msgs.msg import Image
-        import struct
-        from cv_bridge import CvBridge
-        image_cv_bridge = CvBridge()
-        def buildPoint(x, y, z, r, g, b, a=None):
-            if(np.array([r, g, b]).max() < 1.01):
-                r = int(r * 255.0)
-                g = int(g * 255.0)
-                b = int(b * 255.0)
-                a = 255 if a is None else int(a * 255.0)
-            else:
-                r = int(r)
-                g = int(g)
-                b = int(b)
-                a = 255 if a is None else int(a)
-            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-            return [x, y, z, rgb]
-        rospy.init_node('draw_elev_map', anonymous=False)
-        pred_pc_pub = rospy.Publisher("pred_pc", PointCloud2, queue_size=1)
-        image_pub = rospy.Publisher("cam_image", Image, queue_size=1)
-
 
     ## Define shared variables
     player._shared_var.update(dict(
@@ -219,33 +191,6 @@ def main (modelname, overwrite = False):
                 errer_list_count.append(len(evaluator_pred.error_list))
             v["video_frame_count"] -=1
         
-        if(VIS_IN_RVIZ):
-            try:
-                header = Header()
-                header.frame_id = "map"
-                fields = [
-                    PointField('x', 0, PointField.FLOAT32, 1),
-                    PointField('y', 4, PointField.FLOAT32, 1),
-                    PointField('z', 8, PointField.FLOAT32, 1),
-                    # PointField('rgb', 12, PointField.UINT32, 1),
-                    PointField('rgba', 12, PointField.UINT32, 1),
-                ]
-                pred_points[:,:3] -= pred_points[:,:3].mean(axis = 0)
-                colors = ((pred_points[:, 2]-pred_points[:, 2].min())
-                    /(pred_points[:, 2].max()-pred_points[:, 2].min()))[:,None]*np.array([[1,1,1]])
-                cloud = point_cloud2.create_cloud(header, fields,
-                                            [buildPoint(*p[:3], *c) for p, c in zip(pred_points, colors)])
-                pred_pc_pub.publish(cloud)
-                image_to_show = np.moveaxis(image.cpu().numpy(), 0, 2).astype(np.uint8)
-                image_pub.publish(image_cv_bridge.cv2_to_imgmsg(image_to_show, "bgr8"))
-                # print("image_to_show", image_to_show.shape, image_to_show.mean())
-            except KeyboardInterrupt as e:
-                cmd = input("Pause")
-                if(cmd =="exit"):
-                    raise KeyboardInterrupt()
-            except Exception as e:
-                print(e)
-
     def image_cb(topic, msg, t, tf_buffer, v):
         if(not len(v["pcbuffer"])): return
         
@@ -282,6 +227,7 @@ def main (modelname, overwrite = False):
         player.play(end_time=player.bag.get_start_time()+200)
         # player.play(start_time=player.bag.get_end_time()-200)
     else:
+        # player.play(end_time=player.bag.get_start_time()+5)
         player.play()# play from start to end
 
 
@@ -351,14 +297,14 @@ def main (modelname, overwrite = False):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     fig, axs = plt.subplots(3,3, figsize=(30,30))
     ## Error maps
-    axs[0,0].imshow(evaluator_pred.get_err_map(), vmin=0, vmax=0.5, cmap='plasma')
-    axs[0,0].set_title("ours rmse: %.3f"%(evaluator_pred.get_rmse()), fontsize=40)
+    axs[0,0].imshow(evaluator_pred.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    # axs[0,0].set_title("ours rmse: %.3f"%(evaluator_pred.get_rmse()), fontsize=40)
 
-    axs[0,1].imshow(evaluator_pc.get_err_map(), vmin=0, vmax=0.5, cmap='plasma')
-    axs[0,1].set_title("pc rmse: %.3f"%(evaluator_pc.get_rmse()), fontsize=40)
+    axs[0,1].imshow(evaluator_pc.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    # axs[0,1].set_title("pc rmse: %.3f"%(evaluator_pc.get_rmse()), fontsize=40)
 
-    axs[0,2].imshow(evaluator_fh.get_err_map(), vmin=0, vmax=0.5, cmap='plasma')
-    axs[0,2].set_title("fh rmse: %.3f"%(evaluator_fh.get_rmse()), fontsize=40)
+    axs[0,2].imshow(evaluator_fh.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    # axs[0,2].set_title("fh rmse: %.3f"%(evaluator_fh.get_rmse()), fontsize=40)
     divider = make_axes_locatable(axs[0,2])
 
     cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -367,12 +313,12 @@ def main (modelname, overwrite = False):
 
     ## Variations
     maxvar = max(evaluator_pred.get_max_var(),evaluator_pc.get_max_var(),evaluator_fh.get_max_var())
-    axs[1,0].imshow(evaluator_pred.get_var_map(), vmin=0, vmax=maxvar, cmap='plasma')
-    axs[1,0].set_title("ours mean err: %.3f"%(evaluator_pred.get_mean_err()), fontsize=40)
-    axs[1,1].imshow(evaluator_pc.get_var_map(), vmin=0, vmax=maxvar, cmap='plasma')
-    axs[1,1].set_title("pc mean err: %.3f"%(evaluator_pc.get_mean_err()), fontsize=40)
-    axs[1,2].imshow(evaluator_fh.get_var_map(), vmin=0, vmax=maxvar, cmap='plasma')
-    axs[1,2].set_title("fh mean err: %.3f"%(evaluator_fh.get_mean_err()), fontsize=40)
+    axs[1,0].imshow(evaluator_pred.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    # axs[1,0].set_title("ours mean err: %.3f"%(evaluator_pred.get_mean_err()), fontsize=40)
+    axs[1,1].imshow(evaluator_pc.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    # axs[1,1].set_title("pc mean err: %.3f"%(evaluator_pc.get_mean_err()), fontsize=40)
+    axs[1,2].imshow(evaluator_fh.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    # axs[1,2].set_title("fh mean err: %.3f"%(evaluator_fh.get_mean_err()), fontsize=40)
     divider = make_axes_locatable(axs[1,2])
 
     cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -381,9 +327,9 @@ def main (modelname, overwrite = False):
 
     ## Counts
     maxcount = evaluator_pred.get_max_count()
-    axs[2,0].imshow(evaluator_pred.error_count, vmin=0, vmax=maxcount, cmap='plasma')
-    axs[2,1].imshow(evaluator_pc.error_count, vmin=0, vmax=maxcount, cmap='plasma')
-    axs[2,2].imshow(evaluator_fh.error_count, vmin=0, vmax=maxcount, cmap='plasma')
+    axs[2,0].imshow(evaluator_pred.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
+    axs[2,1].imshow(evaluator_pc.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
+    axs[2,2].imshow(evaluator_fh.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
     divider = make_axes_locatable(axs[2,2])
 
     cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -394,17 +340,33 @@ def main (modelname, overwrite = False):
         for a in aa:
             a.set_xticks([])
             a.set_yticks([])
-
+    plt.subplots_adjust(
+                    wspace=0.05, 
+                    hspace=0.05
+    )
     plt.savefig(os.path.join(outputdir, "error_map.png"))
+    # plt.subplot_tool()
+    # plt.show()
 
     plt.figure()
     plt.imshow(evaluator_pred.get_err_map() - evaluator_pc.get_err_map(), cmap='plasma')
     plt.colorbar()
-    plt.savefig(os.path.join(outputdir, "error_diff.png"), bbox_inches='tight', pad_inches=0)
+    # plt.savefig(os.path.join(outputdir, "error_diff.png"), bbox_inches='tight', pad_inches=0)
     # plt.show()
 
+    with open(os.path.join(outputdir, "eval_result.txt"), "w")as f: 
+        f.write("ours rmse: %.3f\n"%(evaluator_pred.get_rmse()))
+        f.write("pc rmse: %.3f\n"%(evaluator_pc.get_rmse()))
+        f.write("fh rmse: %.3f\n"%(evaluator_fh.get_rmse()))
+        f.write("ours err var: %.3f\n"%(evaluator_pred.get_errvar()))
+        f.write("pc err var: %.3f\n"%(evaluator_pc.get_errvar()))
+        f.write("fh err var: %.3f\n"%(evaluator_fh.get_errvar()))
+        f.write("ours mean err: %.3f\n"%(evaluator_pred.get_mean_err()))
+        f.write("pc mean err: %.3f\n"%(evaluator_pc.get_mean_err()))
+        f.write("fh mean err: %.3f\n"%(evaluator_fh.get_mean_err()))
+
 if __name__ == "__main__":
-    for m in ["2022-08-31-14-42-18", "2022-08-29-23-51-44"]:
+    for m in ["2022-09-03-09-24-05_final", "2022-09-04-19-38-09_bn"]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
         main(m, overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-29-*"):

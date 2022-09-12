@@ -175,6 +175,13 @@ class WorldViewElevationMap:
         self.elevation.get_map_with_name_ref("elevation", data)
         return xp.asnumpy(data)
 
+    def get_layer_map(self, layer_name):
+        """
+        Output the elevation map, in the form of numpy array
+        """
+        data = np.zeros((self.elevation.cell_n - 2, self.elevation.cell_n - 2), dtype=np.float32)
+        self.elevation.get_map_with_name_ref(layer_name, data)
+        return xp.asnumpy(data)
 
 
 if __name__ == "__main__":
