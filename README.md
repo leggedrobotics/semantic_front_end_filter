@@ -14,9 +14,13 @@ pip3 install -e .
 
 
 ## Running rosnode
-The model can be downloaded here https://drive.google.com/drive/folders/1Q6Y0o_HCFxJdaWOiCdn5lbjLB5r30m80. Please remember to download the whole folder.
+The model can be downloaded [here](https://drive.google.com/drive/folders/1Q6Y0o_HCFxJdaWOiCdn5lbjLB5r30m80). Please remember to download the whole folder.
 
 After setting up the repo, change the model_path, image_topic in semantic_front_end_filter_ros/scripts/deploy_foward.py. Then you can simply run this file as a ros node, listening to camera image and pointclouds, and publishing filtered pointclouds.
+
+The reconstructed validation trajectory that we commonly use is [here](https://drive.google.com/drive/folders/1m1XzdB_q6GBZjpP_csMFxQ3IIILvXtjO?usp=sharing). You can directly play the bag and it will contain necessary pointcloud, image, and tf messages.
+
+
 
 ## Train
 

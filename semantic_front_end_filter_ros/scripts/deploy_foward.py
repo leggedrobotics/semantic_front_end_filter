@@ -80,7 +80,7 @@ if __name__ == '__main__':
     assert rosgraph.is_master_online()
 
 sys.path.append("../Labelling/")
-
+FLAG_MARKER = False
 
 class Timer:
     def __init__(self, name="") -> None:
@@ -99,7 +99,7 @@ class Timer:
 
 
 class RosVisulizer:
-    def __init__(self, topic, camera_calibration_path="/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"):
+    def __init__(self, topic, camera_calibration_path):
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
@@ -165,22 +165,23 @@ class RosVisulizer:
             distance_mask = distance_mask[~torch.isnan(distance_mask).any(axis=1), :]
             distance_mask = distance_mask>0
 
-            marker = Marker()
-            marker.header.frame_id = "bpearl_rear"
-            marker.type = marker.LINE_LIST
-            marker.action = marker.ADD
-            marker.scale.x = 0.02
-            marker.scale.y = 0.2
-            marker.scale.z = 0.2
-            marker.color.a = 1.0
-            marker.color.r = 1.0
-            marker.color.g = 0
-            marker.color.b = 0
-            for i, (pt, pt_pc) in enumerate(zip(pts, pts_pc)):
-                # if i%10 == 0:
-                if ~distance_mask[i]:
-                    marker.points.append(Point(x = pt[0], y = pt[1], z = pt[2]))
-                    marker.points.append(Point(x = pt_pc[0], y = pt_pc[1], z = pt_pc[2]))
+            if FLAG_MARKER:
+                marker = Marker()
+                marker.header.frame_id = "bpearl_rear"
+                marker.type = marker.LINE_LIST
+                marker.action = marker.ADD
+                marker.scale.x = 0.02
+                marker.scale.y = 0.2
+                marker.scale.z = 0.2
+                marker.color.a = 1.0
+                marker.color.r = 1.0
+                marker.color.g = 0
+                marker.color.b = 0
+                for i, (pt, pt_pc) in enumerate(zip(pts, pts_pc)):
+                    # if i%10 == 0:
+                    if ~distance_mask[i]:
+                        marker.points.append(Point(x = pt[0], y = pt[1], z = pt[2]))
+                        marker.points.append(Point(x = pt_pc[0], y = pt_pc[1], z = pt_pc[2]))
 
         return cloud ,marker
 
@@ -344,6 +345,7 @@ if __name__ == "__main__":
     pointcloud_topic = "/bpearl_rear/point_cloud"
     pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
     prediction_topic = "/bpearl_rear/pred_pc"
+    camera_calibration_path = "/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"
     TF_BASE = "base"
 
     rospy.init_node('test_foward', anonymous=False)
@@ -360,8 +362,9 @@ if __name__ == "__main__":
     lines_pub = rospy.Publisher(pts_lines_topic, Marker, queue_size=1)
 
     # Build model
-    rosv = RosVisulizer("pointcloud")
-    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    rosv = RosVisulizer("pointcloud", camera_calibration_path)
+    # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    model_path = "/home/chenyu/projects/kpconv/semantic_front_end_filter/checkpoints/2022-09-04-19-38-09_bn"
     model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        

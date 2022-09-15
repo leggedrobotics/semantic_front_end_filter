@@ -1,0 +1,28 @@
+<launch>
+  <!-- Launch the anymal model loader -->
+  <param name="/use_sim_time" value="true"/>
+  <node pkg="parameterized_xacro" type="parameterized_xacro.py" name="load_anymal_description" output="screen" >
+   <!--param name="xacro_file" value="$(find anymal_c_subt)/urdf/anymal_c_subt.urdf.xacro"/-->
+   <!--param name="ros_parameter" value="anymal_description"/-->
+   <!--param name="custom_parameters" value="anymal_description"/-->
+   <rosparam>
+      <!-- xacro_file: $(rospack find anymal_c_subt)/urdf/anymal_c_subt.urdf.xacro -->
+      xacro_file: $(rospack find anymal_c_rsl)/urdf/anymal_c_rsl.urdf.xacro
+      <!-- xacro_file: $(rospack find anymal_cerberus_rsl)/urdf/anymal_cerberus_rsl.urdf.xacro -->
+      ros_parameter: anymal_description
+      custom_parameters: 
+        interface_hatch: true
+        perception_head: true
+        bpearl_front: true
+        bpearl_rear: true
+        rsl_base: true
+        alphasense: true
+        simulate_wide_angle_camera: false
+        simulate_depth_camera: false
+        simulate_perception_head_color_cameras: true
+        simulate_lidar: true
+        simulation: true
+    </rosparam>
+  </node>
+  <node name="rviz" pkg="rviz" type="rviz" args="" />
+</launch>
