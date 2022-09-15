@@ -14,7 +14,7 @@ pip3 install -e .
 
 
 ## Running rosnode
-The model can be downloaded [here](https://drive.google.com/drive/folders/1Q6Y0o_HCFxJdaWOiCdn5lbjLB5r30m80). Please remember to download the whole folder.
+The model can be downloaded [here](https://drive.google.com/drive/folders/1fSOTvCp4IA6ey2NAhyHrBxCyJ9_pRd1N). Please remember to download the whole folder.
 
 After setting up the repo, change the model_path, image_topic in semantic_front_end_filter_ros/scripts/deploy_foward.py. Then you can simply run this file as a ros node, listening to camera image and pointclouds, and publishing filtered pointclouds.
 
