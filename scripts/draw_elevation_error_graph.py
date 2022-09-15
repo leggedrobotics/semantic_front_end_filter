@@ -102,6 +102,7 @@ def main (modelname, overwrite = False):
     # Evaluators used to evaluate the error
     evaluator_pred = ElevationMapEvaluator(groundmappath, elevation_pred.param)
     evaluator_pc = ElevationMapEvaluator(groundmappath, elevation_pc.param)
+    evaluator_smooth = ElevationMapEvaluator(groundmappath, elevation_pc.param)
     evaluator_fh = ElevationMapEvaluator(groundmappath, elevation_fh.param)
     player = RosbagPlayer(rosbagpath)
 
@@ -169,6 +170,8 @@ def main (modelname, overwrite = False):
         elevmap_pred = elevation_pred.get_elevation_map()
         elevation_pc.move_to_and_input(pose[0:3], points)
         elevmap_pc = elevation_pc.get_elevation_map()
+        minfmap_pc = elevation_pc.get_layer_map("min_filter")
+        smotmap_pc = elevation_pc.get_layer_map("smooth")
         elevation_fh.move_to_and_input(pose[0:3], fh_points)
         elevmap_fh = elevation_fh.get_elevation_map()
         
@@ -176,6 +179,7 @@ def main (modelname, overwrite = False):
 
         error_pred = evaluator_pred.compute_error_against_gpmap(elevmap_pred, pose[:2], rz)
         error_pc = evaluator_pc.compute_error_against_gpmap(elevmap_pc, pose[:2], rz)
+        error_smooth = evaluator_smooth.compute_error_against_gpmap(smotmap_pc,  pose[:2], rz)
         error_fh = evaluator_fh.compute_error_against_gpmap(elevmap_fh, pose[:2], rz)
         
         elev_pred_buffer.append((elevmap_pred, pose))
@@ -294,79 +298,92 @@ def main (modelname, overwrite = False):
                                 )
         anim.save(os.path.join(outputdir, 'test_anim.mp4'))
 
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    fig, axs = plt.subplots(3,3, figsize=(30,30))
+    # from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from mpl_toolkits.axes_grid1 import ImageGrid
+    # fig, axs = plt.subplots(3,3, figsize=(30,30))
+    fig = plt.figure(figsize = (10,8))
+    row_rmse = ImageGrid(fig, 311,
+                nrows_ncols = (1,4),
+                axes_pad = 0.05,
+                cbar_location = "right",
+                cbar_mode="single",
+                cbar_size="5%",
+                cbar_pad=0.05
+    )
+    row_var = ImageGrid(fig, 312,
+                nrows_ncols = (1,4),
+                axes_pad = 0.05,
+                cbar_location = "right",
+                cbar_mode="single",
+                cbar_size="5%",
+                cbar_pad=0.05
+    )
+    row_count = ImageGrid(fig, 313,
+                nrows_ncols = (1,4),
+                axes_pad = 0.05,
+                cbar_location = "right",
+                cbar_mode="single",
+                cbar_size="5%",
+                cbar_pad=0.05
+    )
+
+
     ## Error maps
-    axs[0,0].imshow(evaluator_pred.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
-    # axs[0,0].set_title("ours rmse: %.3f"%(evaluator_pred.get_rmse()), fontsize=40)
-
-    axs[0,1].imshow(evaluator_pc.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
-    # axs[0,1].set_title("pc rmse: %.3f"%(evaluator_pc.get_rmse()), fontsize=40)
-
-    axs[0,2].imshow(evaluator_fh.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
-    # axs[0,2].set_title("fh rmse: %.3f"%(evaluator_fh.get_rmse()), fontsize=40)
-    divider = make_axes_locatable(axs[0,2])
-
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    cb = plt.colorbar(cax = cax, mappable = axs[0,0].images[0])
-    cb.ax.tick_params(labelsize=30)
+    row_rmse[0].imshow(evaluator_pred.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    row_rmse[1].imshow(evaluator_pc.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    row_rmse[2].imshow(evaluator_smooth.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    imc = row_rmse[3].imshow(evaluator_fh.get_err_map()[::-1,::-1], vmin=0, vmax=0.5, cmap='plasma')
+    [r.axis('off') for r in row_rmse]
+    plt.colorbar(imc, cax=row_rmse.cbar_axes[0])
 
     ## Variations
     maxvar = max(evaluator_pred.get_max_var(),evaluator_pc.get_max_var(),evaluator_fh.get_max_var())
-    axs[1,0].imshow(evaluator_pred.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
-    # axs[1,0].set_title("ours mean err: %.3f"%(evaluator_pred.get_mean_err()), fontsize=40)
-    axs[1,1].imshow(evaluator_pc.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
-    # axs[1,1].set_title("pc mean err: %.3f"%(evaluator_pc.get_mean_err()), fontsize=40)
-    axs[1,2].imshow(evaluator_fh.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
-    # axs[1,2].set_title("fh mean err: %.3f"%(evaluator_fh.get_mean_err()), fontsize=40)
-    divider = make_axes_locatable(axs[1,2])
+    row_var[0].imshow(evaluator_pred.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    row_var[1].imshow(evaluator_pc.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    row_var[2].imshow(evaluator_smooth.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    imc = row_var[3].imshow(evaluator_fh.get_var_map()[::-1,::-1], vmin=0, vmax=maxvar, cmap='plasma')
+    [r.axis('off') for r in row_var]
+    plt.colorbar(imc, cax=row_var.cbar_axes[0])
 
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    cb = plt.colorbar(cax = cax, mappable = axs[1,0].images[0])
-    cb.ax.tick_params(labelsize=30)
 
     ## Counts
     maxcount = evaluator_pred.get_max_count()
-    axs[2,0].imshow(evaluator_pred.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
-    axs[2,1].imshow(evaluator_pc.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
-    axs[2,2].imshow(evaluator_fh.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
-    divider = make_axes_locatable(axs[2,2])
-
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    cb = plt.colorbar(cax = cax, mappable = axs[2,0].images[0])
-    cb.ax.tick_params(labelsize=30)
-
-    for aa in axs:
-        for a in aa:
-            a.set_xticks([])
-            a.set_yticks([])
+    row_count[0].imshow(evaluator_pred.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
+    row_count[1].imshow(evaluator_pc.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
+    row_count[2].imshow(evaluator_smooth.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
+    imc = row_count[3].imshow(evaluator_fh.error_count[::-1,::-1], vmin=0, vmax=maxcount, cmap='plasma')
+    [r.axis('off') for r in row_count]
+    plt.colorbar(imc, cax=row_count.cbar_axes[0])
     plt.subplots_adjust(
-                    wspace=0.05, 
-                    hspace=0.05
+        hspace = 0.05
     )
-    plt.savefig(os.path.join(outputdir, "error_map.png"))
+    plt.savefig(os.path.join(outputdir, "error_map2.png"), bbox_inches='tight', pad_inches=0)
     # plt.subplot_tool()
+
     # plt.show()
 
-    plt.figure()
-    plt.imshow(evaluator_pred.get_err_map() - evaluator_pc.get_err_map(), cmap='plasma')
-    plt.colorbar()
+    # plt.figure()
+    # plt.imshow(evaluator_pred.get_err_map() - evaluator_pc.get_err_map(), cmap='plasma')
+    # plt.colorbar()
     # plt.savefig(os.path.join(outputdir, "error_diff.png"), bbox_inches='tight', pad_inches=0)
     # plt.show()
 
     with open(os.path.join(outputdir, "eval_result.txt"), "w")as f: 
         f.write("ours rmse: %.3f\n"%(evaluator_pred.get_rmse()))
         f.write("pc rmse: %.3f\n"%(evaluator_pc.get_rmse()))
+        f.write("smooth rmse: %.3f\n"%(evaluator_smooth.get_rmse()))
         f.write("fh rmse: %.3f\n"%(evaluator_fh.get_rmse()))
         f.write("ours err var: %.3f\n"%(evaluator_pred.get_errvar()))
         f.write("pc err var: %.3f\n"%(evaluator_pc.get_errvar()))
+        f.write("smooth err var: %.3f\n"%(evaluator_smooth.get_errvar()))
         f.write("fh err var: %.3f\n"%(evaluator_fh.get_errvar()))
         f.write("ours mean err: %.3f\n"%(evaluator_pred.get_mean_err()))
         f.write("pc mean err: %.3f\n"%(evaluator_pc.get_mean_err()))
+        f.write("smooth mean err: %.3f\n"%(evaluator_smooth.get_mean_err()))
         f.write("fh mean err: %.3f\n"%(evaluator_fh.get_mean_err()))
 
 if __name__ == "__main__":
-    for m in ["2022-09-03-09-24-05_final", "2022-09-04-19-38-09_bn"]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
+    for m in ["2022-09-04-19-38-09_bn"]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
         main(m, overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-29-*"):

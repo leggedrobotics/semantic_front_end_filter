@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation
 import rospy
 import tf
 
-from messages.imageMessage import Camera
+from semantic_front_end_filter.Labelling.messages.imageMessage import Camera
 
 import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

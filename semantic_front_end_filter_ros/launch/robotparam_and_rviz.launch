@@ -6,7 +6,9 @@
    <!--param name="ros_parameter" value="anymal_description"/-->
    <!--param name="custom_parameters" value="anymal_description"/-->
    <rosparam>
-      xacro_file: $(rospack find anymal_c_subt)/urdf/anymal_c_subt.urdf.xacro
+      <!-- xacro_file: $(rospack find anymal_c_subt)/urdf/anymal_c_subt.urdf.xacro -->
+      xacro_file: $(rospack find anymal_c_rsl)/urdf/anymal_c_rsl.urdf.xacro
+      <!-- xacro_file: $(rospack find anymal_cerberus_rsl)/urdf/anymal_cerberus_rsl.urdf.xacro -->
       ros_parameter: anymal_description
       custom_parameters: 
         interface_hatch: true
@@ -14,6 +16,7 @@
         bpearl_front: true
         bpearl_rear: true
         rsl_base: true
+        alphasense: true
         simulate_wide_angle_camera: false
         simulate_depth_camera: false
         simulate_perception_head_color_cameras: true
