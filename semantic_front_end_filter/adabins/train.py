@@ -101,9 +101,9 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         pclabels.append(wandb.Image(colorize(pc_img,vmin = 0, vmax=40)))
         
         if(use_adabins):
-            _, images = model(sample["image"][None,0,...].to(device))
+            _, images,hori_pred = model(sample["image"][None,0,...].to(device))
         else:
-            images = model(sample["image"][None,0,...].to(device))
+            images,hori_pred = model(sample["image"][None,0,...].to(device))
         # bins, images = None, model(sample["image"])
         pred = images[0].detach()
         predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
@@ -297,12 +297,19 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 if not batch['has_valid_depth']:
                     continue
             if(args.modelconfig.use_adabins):
-                bin_edges, pred = model(img)
+                bin_edges, pred, hori_pred = model(img)
             else:
-                bin_edges, pred = None, model(img)
+                bin_edges, (pred, hori_pred) = None, model(img)
             pc_image = batch["pc_image"].to(device)
             l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
+
+
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+
+            ### Calculate the loss for the horizon
+            horizon_height_label = torch.tensor([torch.cat([torch.tensor([depth.shape[2]]).to(device), 
+                    (d>1e-9).nonzero()[:,1]]).min() for d in depth]) / depth.shape[2]
+            loss += 100*((horizon_height_label.to(device) - hori_pred)**2).sum()
 
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
@@ -387,9 +394,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 if not batch['has_valid_depth']:
                     continue
             if(args.modelconfig.use_adabins):
-                bin_edges, pred = model(img)
+                bin_edges, pred, hori_pred = model(img)
             else:
-                bin_edges, pred = None, model(img)
+                bin_edges, (pred, hori_pred) = None, model(img)
             pc_image = batch["pc_image"].to(device)
             l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge

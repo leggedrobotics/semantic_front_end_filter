@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
+import torchvision
 from .miniViT import mViT
 import os
 
@@ -24,7 +25,7 @@ class UpSampleBN(nn.Module):
                                     nn.LeakyReLU())
 
     def forward(self, x, concat_with):
-        up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='nearest')
+        up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='bilinear', align_corners=True)
         f = torch.cat([up_x, concat_with], dim=1)
         return self._net(f)
 
@@ -42,7 +43,6 @@ class DecoderBN(nn.Module):
         self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16, deactivate_bn = deactivate_bn)
         self.up5_add = UpSampleBN(skip_input=features // 16 + 1, output_features=features // 32, deactivate_bn = deactivate_bn)
         self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
-        self.distance_maintainer = nn.ReLU()
         #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
         # if(self.skip_connection):
         #     self.conv3 = nn.Conv2d(features // 32, num_classes, kernel_size=3, stride=1, padding=1)
@@ -63,7 +63,7 @@ class DecoderBN(nn.Module):
         if(self.skip_connection):
             # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
             x_d5 = self.conv3(x_d4)
-            out = x_block_skip[:, 3:, :, :] +  self.distance_maintainer(F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest'))
+            out = x_block_skip[:, 3:, :, :] + F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='bilinear', align_corners=True)
         else:
             out = self.conv3(x_d4)
         # out = self.act_out(out)
@@ -96,6 +96,34 @@ class Encoder(nn.Module):
                 features.append(v(features[-1]))
         return features
 
+class HoriPredict(nn.Module):
+    def __init__(self, inputshape):
+        """
+        arg inputshape: n,x,y
+        """
+        super(HoriPredict, self).__init__()
+        n,x,y = inputshape
+        self.inputshape = inputshape
+        x_ = int((int((int((x-3)/2+1) -3)/2+1)-3)/2+1)
+        y_ = int((int((int((y-3)/2+1) -3)/2+1)-3)/2+1)
+
+        self._net = nn.Sequential(nn.Conv2d(n+1, 512, kernel_size=3, stride=2, padding=0),
+                                nn.LeakyReLU(),
+                                nn.Conv2d(512, 128, kernel_size=3, stride=2, padding=0),
+                                nn.LeakyReLU(),
+                                nn.Conv2d(128, 16, kernel_size=3, stride=2, padding=0),
+                                nn.Flatten(),
+                                nn.Linear(16*x_*y_, 16),
+                                nn.LeakyReLU(),
+                                nn.Linear(16, 1)
+                                )
+        
+    def forward(self, x):
+        x = F.interpolate(x, size=[self.inputshape[1], self.inputshape[2]], mode='bilinear', align_corners=True)
+        coord = torch.linspace(0, 1, self.inputshape[1])[...,None].to(x.get_device())
+        coord = torch.tile(coord, (x.shape[0], 1,1, x.shape[3]))
+        return self._net(torch.cat([x, coord], dim=1))
+
 
 class UnetAdaptiveBins(nn.Module):
     def __init__(self, backend, n_bins, min_depth, max_depth, norm,
@@ -123,8 +151,12 @@ class UnetAdaptiveBins(nn.Module):
                                       nn.Softmax(dim=1))
         self.normalize = transforms.Normalize(mean=[-normalize_output_mean/normalize_output_std], std=[1/normalize_output_std])
 
+        self.hori_pred = HoriPredict([2048, 23,23])
+
     def forward(self, x, **kwargs):
-        unet_out = self.decoder(self.encoder(x), **kwargs)
+        encoded_x = self.encoder(x)
+        unet_out = self.decoder(encoded_x, **kwargs)
+        hori_pred = self.hori_pred(encoded_x[-1])
         if(self.use_adabins==True):
             bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
             out = self.conv_out(range_attention_maps)
@@ -145,16 +177,19 @@ class UnetAdaptiveBins(nn.Module):
         else:
             pred = unet_out
             pred = self.normalize(pred)
-            return pred
+            return pred, hori_pred
 
         pred = self.normalize(pred)
-        return bin_edges, pred
+        return bin_edges, pred, hori_pred
 
     def get_1x_lr_params(self):  # lr/10 learning rate
         return self.encoder.parameters()
 
     def get_10x_lr_params(self):  # lr learning rate
-        modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
+        if(self.use_adabins):
+            modules = [self.decoder, self.adaptive_bins_layer, self.conv_out, self.hori_pred]
+        else:
+            modules = [self.decoder, self.conv_out, self.hori_pred]
         for m in modules:
             yield from m.parameters()
 
