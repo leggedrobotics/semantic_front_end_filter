@@ -314,9 +314,17 @@ def callback(img_msg, point_cloud):
         # Prediction
         pred = model(_image)
         pred = pred[0].detach()
+        pred = nn.functional.interpolate(pred[None,...], torch.tensor(pc_img).shape[-2:], mode='nearest')[0]
         m = torch.logical_or((pc_img<1e-9), (pc_img>10))
+        # m = torch.logical_or(m, pred>4)
         m = torch.logical_or(m, (pred - pc_img)<0)
         pred[m] = torch.nan
+
+        # pred[0, 0:100, :] = torch.nan
+        # pred[0, -100:, :] = torch.nan
+        # pred[0, :, 0:100] = torch.nan
+        # pred[0, :, -100:] = torch.nan
+
         pc_img[m] = torch.nan
         pred = pred[0].T
         # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
@@ -328,8 +336,8 @@ def callback(img_msg, point_cloud):
             lines_pub.publish(marker)
         cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
-        # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
-        # pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
+        pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
+        pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
         predction_end = time.time()
         print("---------------------------------------------------------------------")
 
@@ -344,7 +352,7 @@ if __name__ == "__main__":
     # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
     pointcloud_topic = "/bpearl_rear/point_cloud"
     pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
-    prediction_topic = "/bpearl_rear/pred_pc"
+    prediction_topic = "/prediction/forward"
     TF_BASE = "base"
 
     rospy.init_node('test_foward', anonymous=False)
@@ -362,9 +370,11 @@ if __name__ == "__main__":
 
     # Build model
     rosv = RosVisulizer("pointcloud")
-    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-09-17-15-50-27_solve_float/UnetAdaptiveBins_best.pt"
     model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
+    # model_cfg['deactivate_bn'] = False
+    # model_cfg['skip_connection'] = False
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
     model = model_io.load_checkpoint(model_path ,model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

@@ -47,9 +47,9 @@ def calculate_H_map_cam(transition, rotation):
 
 
 class RaycastCamera:
-    def __init__(self, camera_calibration_path = None, device = None):
+    def __init__(self, camera_calibration_path = None, device = None, id = "cam4"):
         self.camera_calibration_path = os.path.join(LabellingPath, configs) if camera_calibration_path is None else camera_calibration_path
-        cam_id = "cam4"
+        cam_id = id
         cfg={}
         cfg["CAM_RBSWAP"]=['']
         cfg["CAM_SUFFIX"]= '/dropped/debayered/compressed'
@@ -60,11 +60,18 @@ class RaycastCamera:
 
         camera = Camera(self.camera_calibration_path, cam_id, cfg)
         self.camera = camera
-        camera.tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), 
-                        np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],
-                                [ 0.99997436,  0.00386421, -0.00602859,  0.        ],
-                                [ 0.00385317, -0.99999088, -0.00184271,  0.        ],
-                                [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        if id=="cam4":
+            camera.tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), 
+                            np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],
+                                    [ 0.99997436,  0.00386421, -0.00602859,  0.        ],
+                                    [ 0.00385317, -0.99999088, -0.00184271,  0.        ],
+                                    [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        elif id=="cam3":
+            camera.tf_base_to_sensor = (np.array([-0.3496997 , -0.07530075,  0.24087976]), np.array([[-0.99997646,  0.00626061,  0.0028084 ,  0.        ],
+                        [-0.00386116, -0.17507344, -0.98454781,  0.        ],
+                        [-0.00567219, -0.98453547,  0.17509349,  0.        ],
+                        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+
         W,H = camera.image_width,camera.image_height
         pixel_cor = np.mgrid[0:W,0:H]
         pixel_cor_hom = np.concatenate( [ pixel_cor, np.ones_like(pixel_cor[None,0,:,:])], axis=0 )

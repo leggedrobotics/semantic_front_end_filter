@@ -99,12 +99,12 @@ class Timer:
 
 
 class RosVisulizer:
-    def __init__(self, topic, camera_calibration_path="/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"):
+    def __init__(self, topic, camera_calibration_path="/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense", cam_id = 4):
         self.pub = rospy.Publisher(topic, PointCloud2, queue_size=1)
         # if(rospy.)
         self.camera_calibration_path = camera_calibration_path
         self.raycastCamera = RaycastCamera(
-            self.camera_calibration_path, device)
+            self.camera_calibration_path, device, id=cam_id)
         self.image_cv_bridge = CvBridge()
         print("waiting for images")
 
@@ -260,12 +260,17 @@ class RosVisulizer:
         self.pub.publish(cloud)
 
 
-def callback(img_msg, point_cloud):
+def callback(img_msg, point_cloud, img_left_msg):
     print("callback")
     # image
     image = rgb_msg_to_image(img_msg, True, False, False)
     image = np.moveaxis(image, 2, 0)
     image = torch.tensor(image).to(device)
+
+    # image left
+    image_left = rgb_msg_to_image(img_left_msg, True, False, False)
+    image_left = np.moveaxis(image_left, 2, 0)
+    image_left = torch.tensor(image_left).to(device)
 
     # pose
     try:
@@ -300,34 +305,52 @@ def callback(img_msg, point_cloud):
     if(image is not None and pose is not None):
         # Get Input
         pc_img = torch.zeros_like(image[:1, ...]).to(device).float()
+        pc_img_left = torch.zeros_like(image[:1, ...]).to(device).float()
         if(points is not None):
             pc_img = rosv.raycastCamera.project_cloud_to_depth(
                 pose_base, points, pc_img)
+            pc_img_left = rosv_left.raycastCamera.project_cloud_to_depth(
+                pose_base, points, pc_img_left)
             # fig, axs = plt.subplots(1, 2,figsize=(20, 20))
             # axs[0].imshow(pc_img[0].cpu().numpy())
             # axs[1].imshow(image.moveaxis(0, 2).numpy())
         _image = torch.cat([image/255., pc_img],
                             axis=0)  # add the pc channel
+        _image_left = torch.cat([image_left/255., pc_img_left], axis = 0)
         _image = _image[None, ...]
+        _image_left = _image_left[None, ...]
+        _image = torch.cat([_image, _image_left], axis = 0)
         for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
-            _image[0, i, ...] = (_image[0, i, ...] - m)/s
+            _image[:, i, ...] = (_image[:, i, ...] - m)/s
         # Prediction
-        pred = model(_image)
-        pred = pred[0].detach()
+        pred_full = model(_image)
+        pred = pred_full[0].detach()
+        pred = nn.functional.interpolate(pred[None,...], torch.tensor(pc_img).shape[-2:], mode='nearest')[0]
+        pred_left = pred_full[1].detach()
+        pred_left = nn.functional.interpolate(pred_left[None,...], torch.tensor(pc_img).shape[-2:], mode='nearest')[0]
+
         m = torch.logical_or((pc_img<1e-9), (pc_img>10))
-        # m = torch.logical_or(m, (pred - pc_img)<0)
+        m = torch.logical_or(m, (pred - pc_img)<0)
         pred[m] = torch.nan
         pc_img[m] = torch.nan
         pred = pred[0].T
+
+        m = torch.logical_or((pc_img_left<1e-9), (pc_img_left>10))
+        m = torch.logical_or(m, (pred_left - pc_img_left)<0)
+        pred_left[m] = torch.nan
+        pc_img_left[m] = torch.nan
+        pred_left = pred_left[0].T
+
         # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
         # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
         cloud, marker = rosv.build_could_from_depth_image(pose_base, pred, None, pc_img.squeeze().T, pose)
-
+        cloud_left, marker = rosv_left.build_could_from_depth_image(pose_base, pred_left, None, pc_img_left.squeeze().T, pose)
         if marker is not None:
             marker.header.stamp = point_cloud.header.stamp
             lines_pub.publish(marker)
         cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
+        predpub_left.publish(cloud_left)
         # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
         # pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
         predction_end = time.time()
@@ -340,11 +363,14 @@ if __name__ == "__main__":
     points_ph = None
     points_buffer = []
     # image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
-    # image_topic = "/alphasense_driver_ros/cam4/debayered"
-    image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
+    image_topic = "/alphasense_driver_ros/cam4/debayered"
+    image_left_topic = "/alphasense_driver_ros/cam3/debayered"
+    # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
+    # image_left_topic = "/alphasense_driver_ros/cam3/image_raw/compressed"
     pointcloud_topic = "/bpearl_rear/point_cloud"
     pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
-    prediction_topic = "/bpearl_rear/pred_pc"
+    prediction_topic = "/prediction/forward"
+    prediction_left_topic = "/prediction/left"
     TF_BASE = "base"
 
     rospy.init_node('test_foward', anonymous=False)
@@ -352,17 +378,20 @@ if __name__ == "__main__":
     # Sub and Pub
     listener = tf.TransformListener()
     image_sub = message_filters.Subscriber(image_topic, Image)
+    image_left_sub = message_filters.Subscriber(image_left_topic, Image)
     pc_sub = message_filters.Subscriber(pointcloud_topic, PointCloud2)
-    ts = message_filters.ApproximateTimeSynchronizer([image_sub, pc_sub], 1, 1)
+    ts = message_filters.ApproximateTimeSynchronizer([image_sub, pc_sub, image_left_sub], 1, 1)
 
     pred_image_pub = rospy.Publisher("pred_depth_image", Image, queue_size=1)
     pc_image_pub = rospy.Publisher("pointcloud_image", Image, queue_size=1)
     predpub = rospy.Publisher(prediction_topic, PointCloud2, queue_size=1)
+    predpub_left = rospy.Publisher(prediction_left_topic, PointCloud2, queue_size=1)
     lines_pub = rospy.Publisher(pts_lines_topic, Marker, queue_size=1)
 
     # Build model
-    rosv = RosVisulizer("pointcloud")
-    model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    rosv = RosVisulizer("pointcloud", cam_id="cam4")
+    rosv_left = RosVisulizer("pointcloud", cam_id="cam3")
+    model_path = "/home/anqiao/catkin_ws/SA_dataset/mountpoint/Models/2022-09-14-10-14-57/UnetAdaptiveBins_latest.pt"
     model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
