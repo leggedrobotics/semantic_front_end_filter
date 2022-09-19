@@ -109,11 +109,7 @@ class UnetAdaptiveBins(nn.Module):
         self.max_val = max_depth
         self.encoder = Encoder(backend)
         self.skip_connection = skip_connection
-
         if(use_adabins):
-            self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
-                                            dim_out=n_bins,
-                                            embedding_dim=128, norm=norm)
             self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
         else:
             self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
@@ -121,6 +117,13 @@ class UnetAdaptiveBins(nn.Module):
         self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
                                       nn.Softmax(dim=1))
         self.normalize = transforms.Normalize(mean=[-normalize_output_mean/normalize_output_std], std=[1/normalize_output_std])
+        self.lr_params_10x = [self.decoder, self.conv_out]
+        if(self.use_adabins):
+            self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
+                                            dim_out=n_bins,
+                                            embedding_dim=128, norm=norm)
+            self.lr_params_10x.append(self.adaptive_bins_layer)
+
 
     def forward(self, x, **kwargs):
         unet_out = self.decoder(self.encoder(x), **kwargs)
@@ -153,8 +156,11 @@ class UnetAdaptiveBins(nn.Module):
         return self.encoder.parameters()
 
     def get_10x_lr_params(self):  # lr learning rate
-        modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
-        for m in modules:
+        # if(self.use_adabins):
+        #     modules = [self.decoder, self.adaptive_bins_layer, self.conv_out, self.hori_pred]
+        # else:
+        #     modules = [self.decoder, self.conv_out, self.hori_pred]
+        for m in self.lr_params_10x:
             yield from m.parameters()
 
     @classmethod

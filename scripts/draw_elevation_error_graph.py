@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
 import torch
+from torch import nn
 
 # IO
 from ruamel.yaml import YAML
@@ -44,6 +45,7 @@ from semantic_front_end_filter.adabins.models import UnetAdaptiveBins
 from semantic_front_end_filter.adabins.model_io import load_checkpoint, load_param_from_path
 from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap
 from semantic_front_end_filter.adabins.elevation_eval_util import ElevationMapEvaluator
+
 
 # Common rosbagPlayer
 from semantic_front_end_filter.common import RosbagPlayer
@@ -80,7 +82,7 @@ def main (modelname, overwrite = False):
     # TF_BASE = "base"
     # TF_MAP = "map"
 
-    GENERATE_VIDEO = True
+    GENERATE_VIDEO = False
     if GENERATE_VIDEO: # this should be corresponded to the `play`
         # outputdir = f"checkpoints/{modelname}/Identity"
         outputdir = f"checkpoints/{modelname}/Italy0-2008x8"
@@ -153,7 +155,7 @@ def main (modelname, overwrite = False):
         for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
             model_in[0, i, ...] = (model_in[0, i, ...] - m)/s
         pred = model(model_in)[0][0]
-
+        pred = nn.functional.interpolate(pred[None,None,...], torch.tensor(pc_img).shape[-2:], mode='nearest')[0][0]
         pred [(pc_img[0]==0)] = np.nan
         pred = pred.T
 
@@ -232,7 +234,7 @@ def main (modelname, overwrite = False):
         # player.play(start_time=player.bag.get_end_time()-200)
     else:
         # player.play(end_time=player.bag.get_start_time()+5)
-        player.play()# play from start to end
+        player.play(end_time=player.bag.get_start_time()+200)# play from start to end
 
 
     ## Output
@@ -383,7 +385,7 @@ def main (modelname, overwrite = False):
         f.write("fh mean err: %.3f\n"%(evaluator_fh.get_mean_err()))
 
 if __name__ == "__main__":
-    for m in ["2022-09-04-19-38-09_bn"]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
+    for m in ["2022-09-17-15-50-27_solve_float", "2022-09-17-00-52-47-10_3_0"]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
         main(m, overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-29-*"):
