@@ -28,19 +28,24 @@ while not rospy.is_shutdown():
         euler = tf.transformations.euler_from_quaternion(rot)
         # print(euler)
         DImage, varianceDI = d.getDImage(transition=trans, rotation=euler)
+        varianceDI = ((varianceDI - varianceDI.min())/(varianceDI.max() - varianceDI.min()))*255
         if(sum(sum(DImage))!=0):
-            DImage[DImage==0] = DImage[DImage!=0].min()- (DImage[DImage!=0].max()-DImage[DImage!=0].min())/10
+            # DImage[DImage==0] = DImage[DImage!=0].min() - (DImage[DImage!=0].max()-DImage[DImage!=0].min())/10
+            # DImage[DImage==0] = DImage[DImage!=0].max() + (DImage[DImage!=0].max()-DImage[DImage!=0].min())/10
             DImage = (DImage - DImage.min())/(DImage.max()-DImage.min())*255
+            DImage[DImage==0] = varianceDI.max()
+
         
         # print(varianceDI.min(), varianceDI.max())
-        varianceDI = ((varianceDI - varianceDI.min())/(varianceDI.max() - varianceDI.min()))*255
+        # varianceDI = ((varianceDI - varianceDI.min())/(varianceDI.max() - varianceDI.min()))*255
         # imageCV = np.zeros((DImage.shape[0], DImage.shape[1], 3))
         # imageCV[:, :, 0] = DImage*64/255
         # imageCV[:, :, 1] = DImage*200/255
         # imageCV[:, :, 2] = DImage*64/255 
 
         # image_message = bridge.cv2_to_imgmsg(imageCV, encoding="passthrough")
-        imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_JET)
+        # imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_JET)
+        imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_PARULA)
         imageVar = cv2.applyColorMap(varianceDI.astype(np.uint8), cv2.COLORMAP_PARULA)    
         print("Publishing")
 
