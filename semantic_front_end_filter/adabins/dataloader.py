@@ -127,6 +127,7 @@ class DataLoadPreprocess(Dataset):
             depth_gt = np.moveaxis(data["depth_var"],0,2)
             pc_image_label = data["pc_image"][:,:,self.args.trainconfig.pc_img_label_channel,None]
             pc_image_input = data["pc_image"][:,:,self.args.trainconfig.pc_img_input_channel,None]
+            pose = data["pose"].copy()
         else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
@@ -163,9 +164,9 @@ class DataLoadPreprocess(Dataset):
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
             pc_image_input = np.asarray(pc_image_input, dtype=np.float32)
             
-            image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
-                image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
-                pc_image_label, pc_image_input)
+            # image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
+            #     image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
+            #     pc_image_label, pc_image_input)
             image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(
                 image, depth_gt, pc_image_label, pc_image_input)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
@@ -175,7 +176,7 @@ class DataLoadPreprocess(Dataset):
             sample = {'image': image.copy(), 'depth': depth_gt_mean, 
                 'pc_image': pc_image_label.copy(), 'focal': focal, 
                 'depth_variance': depth_gt_variance,
-                'path': sample_path}
+                'path': sample_path, 'pose': pose}
 
         else:
             image = np.asarray(image, dtype=np.float32) / 255.0
@@ -194,9 +195,9 @@ class DataLoadPreprocess(Dataset):
                 image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
                 sample = {'image': image.copy(), 'depth': depth_gt_mean, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy()}
+                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy(), 'pose': pose}
             else:
-                sample = {'image': image.copy(), 'focal': focal}
+                sample = {'image': image.copy(), 'focal': focal, 'pose': pose}
 
         if self.transform:
             sample = self.transform(sample)
@@ -224,10 +225,10 @@ class DataLoadPreprocess(Dataset):
         # Random flipping
         do_flip = random.random()
         retargs = args
-        if do_flip > 0.5:
-            image = (image[:, ::-1, :]).copy()
-            depth_gt = (depth_gt[:, ::-1, :]).copy()
-            retargs = [(i[:, ::-1, :]).copy() for i in args]
+        # if do_flip > 0.5:
+        #     image = (image[:, ::-1, :]).copy()
+        #     depth_gt = (depth_gt[:, ::-1, :]).copy()
+        #     retargs = [(i[:, ::-1, :]).copy() for i in args]
         
         # Random gamma, brightness, color augmentation
         do_augment = random.random()
@@ -279,11 +280,11 @@ class ToTensor(object):
         pc_image = self.to_tensor(pc_image)
         if self.mode == 'train':
             return {'image': image, 'depth': depth, "pc_image":pc_image, 
-                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path']}
+                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path'], 'pose':torch.from_numpy(sample['pose'])}
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image}
+                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image, 'pose':torch.from_numpy(sample['pose'])}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

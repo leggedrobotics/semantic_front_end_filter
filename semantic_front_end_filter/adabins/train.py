@@ -27,7 +27,7 @@ from . import utils
 from .cfgUtils import parse_args, TrainConfig, ModelConfig, asdict
 from .experimentSaver import ConfigurationSaver
 from .dataloader import DepthDataLoader
-from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss
+from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss, ConsistencyLoss
 from .utils import RunningAverage, colorize
 
 DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -195,7 +195,7 @@ def main_worker(gpu, ngpus_per_node, args):
     train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
 
-def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, image):
+def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, pred, bin_edges, depth, depth_var, pc_image, image, pose):
 
     if(args.trainconfig.sprase_traj_mask):
         masktraj = (depth > args.min_depth) & (depth < args.max_depth) & (pc_image > 1e-9)
@@ -213,7 +213,9 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_e
         l_chamfer = criterion_bins(bin_edges, depth)
     else:
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
-    return l_dense, l_chamfer, l_edge, masktraj, maskpc
+
+    l_consis = criterion_consistency(pred, pose)
+    return l_dense, l_chamfer, l_edge, l_consis, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -243,6 +245,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     criterion_ueff = UncertaintyLoss(args.trainconfig)
     criterion_bins = BinsChamferLoss() if args.chamfer else None
     criterion_edge = EdgeAwareLoss(args.trainconfig)
+    criterion_consistency = ConsistencyLoss()
     ################################################################################################
 
     model.train()
@@ -301,11 +304,13 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             else:
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
-
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+            l_dense, l_chamfer, l_edge, l_consis, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis
+
+            # if(pred.shape != depth.shape): # need to enlarge the output prediction
+            #     pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 
             pred[pred < args.min_depth] = args.min_depth
             max_depth_gt = max(args.max_depth, args.max_pc_depth)
@@ -344,7 +349,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
                 ################################# Validation loop ##################################################
                 model.eval()
-                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device)
+                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, epoch, epochs, device)
                 # [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 # print("Validated: {}".format(metrics))
                 if should_log:
@@ -373,7 +378,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     return model
 
 
-def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, epoch, epochs, device='cpu'):
+def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, epoch, epochs, device='cpu'):
     global count_val
     with torch.no_grad():
         val_si = RunningAverage()
@@ -391,8 +396,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             else:
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
-            l_dense, l_chamfer, l_edge, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, pred, bin_edges, depth, depth_var, pc_image, img)
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge
+            pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+            l_dense, l_chamfer, l_edge, l_consis, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis
 
             # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
             # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
@@ -403,7 +409,6 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             mask = depth > args.min_depth
             count_val = count_val + 1
             val_si.append(l_dense.item())
-            pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from pytorch3d.loss import chamfer_distance
 from torch.nn.utils.rnn import pad_sequence
-
+from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
 
 class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
     def __init__(self):
@@ -54,7 +54,31 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
         else:
             Dg = 0
         return Dg
-
+class ConsistencyLoss(nn.Module):  # Add variance to loss
+    def __init__(self):
+        super(ConsistencyLoss, self).__init__()
+        self.name = "ConsistencyLoss"
+        self.raycastCamera = RaycastCamera(
+                    "/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense", device = torch.device("cuda:0"))
+    def cal_loss_two(self, pcA, pcB, poseA, poseB):
+        # project pc_image A to 3D
+        pcA[pcA==0] = torch.nan
+        pts = self.raycastCamera.project_depth_to_cloud(poseA, pcA[0, :, :].T)
+        pts = pts[~torch.isnan(pts).any(axis=1), :]
+        # reproject the points on the image plane of B
+        pcA_reproject = torch.zeros_like(pcA).float()
+        self.raycastCamera.project_cloud_to_depth(poseB.float(), pts.float(), pcA_reproject.float())
+        loss = (pcA_reproject - pcB)[pcA_reproject!=0].mean()
+        return loss
+    
+    def forward(self, pred, pose):
+        # pred    n*1*540*720
+        # pose    n*7
+        loss = 0
+        for i in range(pred.shape[0]-1):
+            loss += self.cal_loss_two(pred[i], pred[i+1], pose[i], pose[i+1])
+        return loss
+        
 class EdgeAwareLoss(nn.Module):  # Add variance to loss
     def __init__(self, train_args):
         super(EdgeAwareLoss, self).__init__()
@@ -65,9 +89,16 @@ class EdgeAwareLoss(nn.Module):  # Add variance to loss
         # return torch.tensor(0)
         if interpolate:
             input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
-
-        input_gradient = torch.gradient(input, dim=[2, 3]) # gradient of prediction
-        target_gradient = torch.gradient(target[:, 0:1, :, :], dim=[2, 3]) # gradient of input image
+        
+        # input_gradient = torch.gradient(input, dim=[2, 3]) # gradient of prediction
+        # target_gradient = torch.gradient(target[:, 0:1, :, :], dim=[2, 3]) # gradient of input image
+        # For torch 1.10.0+cu113
+        if input.shape[0]==1:
+            input_gradient = [gra[None,None,:,:] for gra in torch.gradient(input[0,0], dim=[0,1])]
+            target_gradient = [gra[None,None,:,:] for gra in torch.gradient(target[0,0], dim=[0,1])]
+        else:
+            input_gradient = [gra[:,None,:,:] for gra in torch.gradient(input[:,0], dim=[1,2])]
+            target_gradient = [gra[:,None,:,:] for gra in torch.gradient(target[:,0], dim=[1,2])]
         loss = 1/torch.numel(input) * torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])) + torch.abs(input_gradient[1]) * torch.exp(-torch.abs(target_gradient[1])))
         return loss
 

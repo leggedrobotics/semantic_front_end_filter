@@ -153,8 +153,11 @@ class UnetAdaptiveBins(nn.Module):
     def get_1x_lr_params(self):  # lr/10 learning rate
         return self.encoder.parameters()
 
-    def get_10x_lr_params(self):  # lr learning rate
-        modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
+    def get_10x_lr_params(self):  # lr learning rateQ
+        if(self.use_adabins):
+            modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
+        else:
+            modules = [self.decoder]
         for m in modules:
             yield from m.parameters()
 
