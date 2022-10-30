@@ -1,3 +1,4 @@
+from math import nan
 import torch
 import torch.nn as nn
 from pytorch3d.loss import chamfer_distance
