@@ -6,7 +6,7 @@ from scipy.spatial.transform import Rotation
 try:
     from .messageToVectors import msg_to_pose
     from cv_bridge import CvBridge, CvBridgeError
-    from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
+    # from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
 except ModuleNotFoundError as ex:
     print("ImageMassage Warning: ros package fails to load")
     print(ex)
