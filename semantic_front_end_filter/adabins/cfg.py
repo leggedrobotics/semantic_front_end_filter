@@ -110,6 +110,7 @@ class TrainConfig:
     epochs: int =  50
     w_chamfer: float =  0.1
     data_path: str = "extract_trajectories"
+    camera_cali_path: str = "/home/anqiao/tmp/semantic_front_end_filter/semantic_front_end_filter/Labelling/Example_Files/alphasense"
     do_random_rotate: bool = True
     degree: float =  1.0
 

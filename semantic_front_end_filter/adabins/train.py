@@ -245,7 +245,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     criterion_ueff = UncertaintyLoss(args.trainconfig)
     criterion_bins = BinsChamferLoss() if args.chamfer else None
     criterion_edge = EdgeAwareLoss(args.trainconfig)
-    criterion_consistency = ConsistencyLoss()
+    criterion_consistency = ConsistencyLoss(args.trainconfig)
     ################################################################################################
 
     model.train()

@@ -56,11 +56,12 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
             Dg = torch.tensor(0.).to('cuda')
         return Dg
 class ConsistencyLoss(nn.Module):  # Add variance to loss
-    def __init__(self):
+    def __init__(self, train_args):
         super(ConsistencyLoss, self).__init__()
         self.name = "ConsistencyLoss"
+        self.args = train_args
         self.raycastCamera = RaycastCamera(
-                    "/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense", device = torch.device("cuda:0"))
+                    self.args.camera_cali_path, device = torch.device("cuda:0"))
     def cal_loss_two(self, pcA, pcB, poseA, poseB):
         # project pc_image A to 3D
         pcA[pcA==0] = torch.nan

@@ -51,7 +51,7 @@ class Camera:
         rel_pose = msg_to_pose(tf)
         position = np.array(rel_pose[:3])
         quat = rel_pose[3:]
-        R = np.array(quaternion_matrix(quat))
+        R = Rotation.from_quat(quat).as_matrix()
 
         self.tf_base_to_sensor = (position, R)
 
