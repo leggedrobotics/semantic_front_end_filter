@@ -64,7 +64,7 @@ class ConsistencyLoss(nn.Module):  # Add variance to loss
                     self.args.camera_cali_path, device = torch.device("cuda:0"))
     def cal_loss_two(self, pcA, pcB, poseA, poseB):
         # project pc_image A to 3D
-        pcA[pcA==0] = torch.nan
+        pcA[pcA==0] = nan
         pts = self.raycastCamera.project_depth_to_cloud(poseA, pcA[0, :, :].T)
         pts = pts[~torch.isnan(pts).any(axis=1), :]
         # reproject the points on the image plane of B
