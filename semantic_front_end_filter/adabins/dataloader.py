@@ -38,7 +38,8 @@ class DepthDataLoader(object):
                 self.train_sampler = None
 
             self.data = DataLoader(self.training_samples, args.batch_size,
-                                   shuffle=(self.train_sampler is None),
+                                #    shuffle=(self.train_sampler is None),
+                                   shuffle =  False,
                                    num_workers=args.num_threads,
                                    pin_memory=True,
                                    sampler=self.train_sampler)
@@ -86,7 +87,7 @@ class DataLoadPreprocess(Dataset):
             args.data_path = os.path.join(os.environ["TMPDIR"], args.data_path)
         print("data_path",args.data_path)
         for root, dirs, files in os.walk(args.data_path):
-            for file in files:
+            for file in sorted(files, key=lambda x : (int(x.split('_')[1]), int(x.split('_')[-1].split('.')[0]))):
                 if file.startswith('traj') and file.endswith('.msgpack'):
                     # print("loading file: %s"%file, end =" ")
                     sample_path = os.path.join(root,file)
@@ -110,7 +111,7 @@ class DataLoadPreprocess(Dataset):
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
         self.filenames = self.filenames if self.mode == 'train' else self.test_filenames
-        random.Random(0).shuffle(self.filenames)
+        # random.Random(0).shuffle(self.filenames)
         print(self.mode, len(self.filenames))
 
     def __getitem__(self, idx):

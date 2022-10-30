@@ -206,8 +206,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
-    l_dense += args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
-
+    l_pc = args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
     l_edge = criterion_edge(pred, image, interpolate = True)
     if bin_edges is not None and args.trainconfig.w_chamfer > 0:
         l_chamfer = criterion_bins(bin_edges, depth)
@@ -215,7 +214,8 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
 
     l_consis = criterion_consistency(pred, pose)
-    return l_dense, l_chamfer, l_edge, l_consis, masktraj, maskpc
+    print("SS_L: ", l_dense.item(), "PC_L: ",l_pc.item(), "Consis_L", l_consis.item())
+    return l_dense+l_pc, l_chamfer, l_edge, l_consis, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -308,7 +308,6 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
             l_dense, l_chamfer, l_edge, l_consis, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis
-
             # if(pred.shape != depth.shape): # need to enlarge the output prediction
             #     pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 

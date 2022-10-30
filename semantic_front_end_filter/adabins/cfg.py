@@ -23,6 +23,7 @@ class ModelConfig:
     use_adabins: bool = False
     deactivate_bn: bool = True
     skip_connection: bool = True
+    interpolate_mode : str = "convT"
 
 @dataclass
 class TrainConfig:
@@ -106,7 +107,7 @@ class TrainConfig:
     wd: float =  0.1
     div_factor: int =  25 
     final_div_factor: int =  100
-    epochs: int =  25
+    epochs: int =  50
     w_chamfer: float =  0.1
     data_path: str = "extract_trajectories"
     do_random_rotate: bool = True
@@ -117,11 +118,12 @@ class TrainConfig:
     eigen_crop: bool=True
     traj_variance_threashold: float = 0.03 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
-    same_lr: bool = False
+    same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 0.5
-    traj_label_W: float = 1
+    pc_image_label_W: float = 0
+    traj_label_W: float = 3
     edge_aware_label_W: float = 0
+    consistency_W: float = 0
     sprase_traj_mask: bool = True
 
     traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)

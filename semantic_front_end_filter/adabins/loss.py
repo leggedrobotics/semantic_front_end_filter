@@ -36,6 +36,7 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
         if interpolate:
             input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
 
+        # mask = mask if mask is not None else mask.fill_(True)
         if mask is not None:
             input = input[mask]
             target = target[mask]
@@ -52,7 +53,7 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
             if(self.args.scale_loss_with_point_number):
                 Dg /= input.shape[0]
         else:
-            Dg = 0
+            Dg = torch.tensor(0.).to('cuda')
         return Dg
 class ConsistencyLoss(nn.Module):  # Add variance to loss
     def __init__(self):
@@ -74,7 +75,7 @@ class ConsistencyLoss(nn.Module):  # Add variance to loss
     def forward(self, pred, pose):
         # pred    n*1*540*720
         # pose    n*7
-        loss = 0
+        loss = torch.tensor(0.).to('cuda')
         for i in range(pred.shape[0]-1):
             loss += self.cal_loss_two(pred[i], pred[i+1], pose[i], pose[i+1])
         return loss

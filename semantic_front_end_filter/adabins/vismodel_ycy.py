@@ -1,7 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from train import *
+# from train import *
+import os
+import torch
+from torch import nn
+import numpy as np
+from semantic_front_end_filter.adabins.dataloader import DepthDataLoader
+from semantic_front_end_filter.adabins import model_io, models
+from semantic_front_end_filter.adabins.cfgUtils import parse_args
+from simple_parsing import ArgumentParser
+import yaml
+
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -115,8 +125,10 @@ def vis_one(loader = "test", figname=""):
         axs[plot_ind//4, plot_ind%4].set_title("Square Err to pc%.1f"%np.sum(pcdiff**2))
 
         plot_ind = 7+4*i
-        axs[plot_ind//4, plot_ind%4].plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
-        axs[plot_ind//4, plot_ind%4].plot(pred[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        # axs[plot_ind//4, plot_ind%4].plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
+        axs[plot_ind//4, plot_ind%4].plot(pc_img[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
+        axs[plot_ind//4, plot_ind%4].plot(depth[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
+        print(max(depth[mask_traj]))
         axs[plot_ind//4, plot_ind%4].set_title("err vs distance")
         axs[plot_ind//4, plot_ind%4].set_xlabel("depth_prediction")
         axs[plot_ind//4, plot_ind%4].set_ylabel("err")
@@ -152,11 +164,26 @@ def load_param_from_path(data_path):
     return model_cfg
 
 if __name__=="__main__":
+    parser = ArgumentParser()
     parser.add_argument("--models", default="")
     parser.add_argument("--names", default="")
     parser.add_argument("--outdir", default="visulization/results")
-    args = parse_args()
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_Italy_augment/"
+    parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
+    parser.add_argument("--name", default="UnetAdaptiveBins")
+    parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
+    parser.add_argument("--root", default=".", type=str,
+                        help="Root folder to save data in")
+    parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
+    parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
+
+    parser.add_argument("--notes", default='', type=str, help="Wandb notes")
+    parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
+    # model_path = "/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-10-27-18-43-00"
+    # model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
+    # model_cfg["input_channel"] = 4
+
+    args = parse_args(parser)
+    args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -171,7 +198,7 @@ if __name__=="__main__":
         print("Usage: python vismodel checkpoint_path")
     
     model_cfgs = [load_param_from_path(os.path.dirname(checkpoint_path)) for checkpoint_path in checkpoint_paths]
-    model_list = [models.UnetAdaptiveBins.build(input_channel = 4, **cfg) for cfg in model_cfgs]
+    model_list = [models.UnetAdaptiveBins.build(**cfg) for cfg in model_cfgs]
     names_list = args.names.split(" ")
     loads = [model_io.load_checkpoint(checkpoint_path ,model) for checkpoint_path, model in zip(checkpoint_paths, model_list)]
     # model,opt,epoch = model_io.load_checkpoint(checkpoint_path ,model)
