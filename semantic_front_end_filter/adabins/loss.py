@@ -69,7 +69,8 @@ class ConsistencyLoss(nn.Module):  # Add variance to loss
         pts = self.raycastCamera.project_depth_to_cloud(poseA, pcA[0, :, :].T)
         pts = pts[~torch.isnan(pts).any(axis=1), :]
         # reproject the points on the image plane of B
-        pcA_reproject = torch.zeros_like(pcA).float()
+        # pcA_reproject = torch.zeros_like(pcA).float()
+        pcA_reproject = pcB.clone()
         self.raycastCamera.project_cloud_to_depth(poseB.float(), pts.float(), pcA_reproject.float())
         loss = (pcA_reproject - pcB)[pcA_reproject!=0].mean()
         return loss
