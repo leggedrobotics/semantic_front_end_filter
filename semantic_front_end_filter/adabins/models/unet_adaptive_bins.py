@@ -42,10 +42,11 @@ class UpSampleBN(nn.Module):
 
 
 class DecoderBN(nn.Module):
-    def __init__(self, num_features=2048, num_classes=1, bottleneck_features=2048, deactivate_bn = False, skip_connection = False, mode = 'convT'):
+    def __init__(self, num_features=2048, num_classes=1, bottleneck_features=2048, deactivate_bn = False, skip_connection = False, mode = 'convT', output_mask = False):
         super(DecoderBN, self).__init__()
         features = int(num_features)
         self.skip_connection = skip_connection
+        self.output_mask = output_mask
         self.conv2 = nn.Conv2d(bottleneck_features, features, kernel_size=1, stride=1, padding=1)
         input_size = [[1, 2048, 19, 25], [1, 1024, 34, 45], [1, 512, 68, 90], [1, 256, 135, 180]]
         concat_size = [[1, 176, 34, 45], [1, 64, 68, 90], [1, 40, 135, 180], [1, 24, 269, 359]]
@@ -57,6 +58,7 @@ class DecoderBN(nn.Module):
         self.conv3 = nn.Conv2d(features // 16, features // 32, kernel_size=3, stride=1, padding=1)
         self.conv4 = nn.Conv2d(features // 32, num_classes, kernel_size=1, stride=1)
         self.distance_maintainer = nn.ReLU()
+        self.mask_softer = nn.Sigmoid()
         #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
         # if(self.skip_connection):
         #     self.conv3 = nn.Conv2d(features // 32, num_classes, kernel_size=3, stride=1, padding=1)
@@ -73,10 +75,17 @@ class DecoderBN(nn.Module):
         x_d2 = self.up2(x_d1, x_block2)
         x_d3 = self.up3(x_d2, x_block1)
         x_d4 = self.up4(x_d3, x_block0)
-        if(self.skip_connection):
+        if(self.skip_connection and not self.output_mask):
             # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
             x_d5 = self.conv4(self.conv3(x_d4))
             out = x_block_skip[:, 3:, :, :] +  self.distance_maintainer(F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest'))
+        
+        elif self.output_mask:
+            x_d5 = self.conv4(self.conv3(x_d4))
+            out_with_mask = F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest')
+            # pred = x_d5[:, :1, :, :]
+            mask = self.mask_softer(out_with_mask[:, 1:, :, :])
+            out = mask * out_with_mask[:, :1, :, :] + (1-mask)*x_block_skip[:, 3:, :, :]
         else:
             out = self.conv4(self.conv3(x_d4))
         # out = self.act_out(out)
@@ -130,6 +139,8 @@ class UnetAdaptiveBins(nn.Module):
 
         if(use_adabins):
             self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
+        elif kwargs['output_mask']:
+            self.decoder = DecoderBN(num_classes=2, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'])
         else:
             self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
 

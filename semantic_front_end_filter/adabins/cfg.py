@@ -24,6 +24,7 @@ class ModelConfig:
     deactivate_bn: bool = True
     skip_connection: bool = True
     interpolate_mode : str = "convT"
+    output_mask : bool = True
 
 @dataclass
 class TrainConfig:
@@ -110,7 +111,7 @@ class TrainConfig:
     epochs: int =  50
     w_chamfer: float =  0.1
     data_path: str = "extract_trajectories"
-    camera_cali_path: str = "/home/anqiao/tmp/semantic_front_end_filter/semantic_front_end_filter/Labelling/Example_Files/alphasense"
+    camera_cali_path: str = "/semantic_front_end_filter/Labelling/Example_Files/alphasense"
     do_random_rotate: bool = True
     degree: float =  1.0
 
@@ -121,11 +122,11 @@ class TrainConfig:
     validate_every: int = 100
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 0
-    traj_label_W: float = 3
+    pc_image_label_W: float = 10
+    traj_label_W: float = 10
     edge_aware_label_W: float = 0
     consistency_W: float = 0
-    sprase_traj_mask: bool = True
+    sprase_traj_mask: bool = False
 
     traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight

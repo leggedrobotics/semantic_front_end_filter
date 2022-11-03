@@ -4,7 +4,7 @@ import torch.nn as nn
 from pytorch3d.loss import chamfer_distance
 from torch.nn.utils.rnn import pad_sequence
 from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
-
+import os
 class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
     def __init__(self):
         super(SILogLoss, self).__init__()
@@ -62,7 +62,7 @@ class ConsistencyLoss(nn.Module):  # Add variance to loss
         self.name = "ConsistencyLoss"
         self.args = train_args
         self.raycastCamera = RaycastCamera(
-                    self.args.camera_cali_path, device = torch.device("cuda:0"))
+                    os.getcwd()+self.args.camera_cali_path, device = torch.device("cuda:0"))
     def cal_loss_two(self, pcA, pcB, poseA, poseB):
         # project pc_image A to 3D
         pcA[pcA==0] = nan
