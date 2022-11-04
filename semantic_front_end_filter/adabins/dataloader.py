@@ -165,10 +165,11 @@ class DataLoadPreprocess(Dataset):
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
             pc_image_input = np.asarray(pc_image_input, dtype=np.float32)
             
-            # image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
-            #     image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
-            #     pc_image_label, pc_image_input)
-            image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(
+            if(self.args.trainconfig.random_crop):
+                image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
+                    image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
+                    pc_image_label, pc_image_input)
+            image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(self.args.trainconfig.random_flip,
                 image, depth_gt, pc_image_label, pc_image_input)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
             depth_gt_variance = depth_gt[:, :, 1:].copy()
@@ -222,14 +223,14 @@ class DataLoadPreprocess(Dataset):
         retargs = [i[y:y + height, x:x + width, :] for i in args]
         return img, depth, *retargs
 
-    def train_preprocess(self, image, depth_gt, *args):
+    def train_preprocess(self, flip, image, depth_gt, *args):
         # Random flipping
         do_flip = random.random()
         retargs = args
-        # if do_flip > 0.5:
-        #     image = (image[:, ::-1, :]).copy()
-        #     depth_gt = (depth_gt[:, ::-1, :]).copy()
-        #     retargs = [(i[:, ::-1, :]).copy() for i in args]
+        if flip & (do_flip > 0.5):
+            image = (image[:, ::-1, :]).copy()
+            depth_gt = (depth_gt[:, ::-1, :]).copy()
+            retargs = [(i[:, ::-1, :]).copy() for i in args]
         
         # Random gamma, brightness, color augmentation
         do_augment = random.random()

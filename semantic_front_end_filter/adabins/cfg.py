@@ -6,8 +6,8 @@ class ModelConfig:
     n_bins: int =  256
     input_channel: int = 4
     load_pretrained: bool = False
-    input_height: int= 352
-    input_width: int =  704
+    input_height: int= 500
+    input_width: int =  720
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
     min_depth: float = 0.001
     max_depth: float =  10
@@ -118,6 +118,8 @@ class TrainConfig:
     do_kb_crop: bool = True # if set, crop input images as kitti benchmark images', action='store_true
     garg_crop: bool = True
     eigen_crop: bool=True
+    random_crop: bool=True
+    random_flip: bool=True
     traj_variance_threashold: float = 0.03 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
     same_lr: bool = True
@@ -125,7 +127,7 @@ class TrainConfig:
     pc_image_label_W: float = 10
     traj_label_W: float = 10
     edge_aware_label_W: float = 0
-    consistency_W: float = 0
+    consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     sprase_traj_mask: bool = False
 
     traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)

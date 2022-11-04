@@ -212,8 +212,8 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         l_chamfer = criterion_bins(bin_edges, depth)
     else:
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
-
-    l_consis = criterion_consistency(pred, pose)
+    
+    l_consis = criterion_consistency(pred, pose) if args.trainconfig.consistency_W > 1e-3 else torch.tensor(0.).to('cuda')
     print("SS_L: ", l_dense.item(), "PC_L: ",l_pc.item(), "Consis_L", l_consis.item())
     return l_dense+l_pc, l_chamfer, l_edge, l_consis, masktraj, maskpc
 
