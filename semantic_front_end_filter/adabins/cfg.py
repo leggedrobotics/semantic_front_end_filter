@@ -25,6 +25,7 @@ class ModelConfig:
     skip_connection: bool = True
     interpolate_mode : str = "convT"
     output_mask : bool = True
+    output_mask_channels : int = 2
 
 @dataclass
 class TrainConfig:
@@ -99,7 +100,7 @@ class TrainConfig:
  """
     wandb_name: str = "random"
     bs: int = 10
-    workers: int = 30 # Number of workers for data loading
+    workers: int = 16 # Number of workers for data loading
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
     pc_img_input_channel: int = 0 # Which channel of the point cloud image to use, the pc imges have different level of augmentation (slim_dataset is needed)
@@ -118,16 +119,18 @@ class TrainConfig:
     do_kb_crop: bool = True # if set, crop input images as kitti benchmark images', action='store_true
     garg_crop: bool = True
     eigen_crop: bool=True
-    random_crop: bool=True
+    random_crop: bool=False
     random_flip: bool=True
     traj_variance_threashold: float = 0.03 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 10
-    traj_label_W: float = 10
+    traj_label_W: float = 30
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
+    mask_loss_W: float = 0
+    filter_image_before_loss: bool = True
     sprase_traj_mask: bool = False
 
     traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)

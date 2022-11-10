@@ -4,6 +4,7 @@ import torch.nn as nn
 from pytorch3d.loss import chamfer_distance
 from torch.nn.utils.rnn import pad_sequence
 from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
+import torchvision.transforms
 import os
 class SILogLoss(nn.Module):  # Main loss function used in AdaBins paper
     def __init__(self):
@@ -97,6 +98,8 @@ class EdgeAwareLoss(nn.Module):  # Add variance to loss
         # input_gradient = torch.gradient(input, dim=[2, 3]) # gradient of prediction
         # target_gradient = torch.gradient(target[:, 0:1, :, :], dim=[2, 3]) # gradient of input image
         # For torch 1.10.0+cu113
+        input = torch.sum(input, axis = 1)[:, None,...]
+        target = torch.sum(target, axis = 1)[:, None,...]
         if input.shape[0]==1:
             input_gradient = [gra[None,None,:,:] for gra in torch.gradient(input[0,0], dim=[0,1])]
             target_gradient = [gra[None,None,:,:] for gra in torch.gradient(target[0,0], dim=[0,1])]
@@ -105,7 +108,35 @@ class EdgeAwareLoss(nn.Module):  # Add variance to loss
             target_gradient = [gra[:,None,:,:] for gra in torch.gradient(target[:,0], dim=[1,2])]
         loss = 1/torch.numel(input) * torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])) + torch.abs(input_gradient[1]) * torch.exp(-torch.abs(target_gradient[1])))
         return loss
+class MaskLoss(nn.Module):  # Add variance to loss
+    def __init__(self, train_args):
+        super(MaskLoss, self).__init__()
+        self.name = 'MaskLoss'
+        self.args = train_args
 
+    def forward(self, mask, image, interpolate=True):
+        
+        # return torch.tensor(0)
+        # if interpolate:
+        #     mask = nn.functional.interpolate(mask, image.shape[-2:], mode='bilinear', align_corners=True)
+        
+        # input_gradient = torch.gradient(input, dim=[2, 3]) # gradient of prediction
+        # target_gradient = torch.gradient(target[:, 0:1, :, :], dim=[2, 3]) # gradient of input image
+        # For torch 1.10.0+cu113
+        mask = torch.sum(mask, axis = 1)[:, None,...]
+        image = torch.sum(image, axis = 1)[:, None,...]
+        if self.args.filter_image_before_loss:
+            kernel = torch.Tensor([[1, 2, 1], [2, 4, 2], [1, 2, 1]])[None, None, ...].to('cuda')
+            image = torch.nn.functional.conv2d(image, kernel, padding=1)
+        if mask.shape[0]==1:
+            input_gradient = [gra[None,None,:,:] for gra in torch.gradient(mask[0,0], dim=[0,1])]
+            target_gradient = [gra[None,None,:,:] for gra in torch.gradient(image[0,0], dim=[0,1])]
+        else:
+            input_gradient = [gra[:,None,:,:] for gra in torch.gradient(mask[:,0], dim=[1,2])]
+            target_gradient = [gra[:,None,:,:] for gra in torch.gradient(image[:,0], dim=[1,2])]
+        # loss = 1/torch.numel(mask) * torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])) + torch.abs(input_gradient[1]) * torch.exp(-torch.abs(target_gradient[1])))
+        loss = torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])))
+        return loss
 class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins paper
     def __init__(self):
         super().__init__()
