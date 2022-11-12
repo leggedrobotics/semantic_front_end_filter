@@ -23,9 +23,10 @@ class ModelConfig:
     use_adabins: bool = False
     deactivate_bn: bool = True
     skip_connection: bool = True
-    interpolate_mode : str = "convT"
+    interpolate_mode : str = "bilinear"
     output_mask : bool = True
     output_mask_channels : int = 2
+    decoder_num: int = 2
 
 @dataclass
 class TrainConfig:
@@ -126,7 +127,7 @@ class TrainConfig:
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 10
-    traj_label_W: float = 30
+    traj_label_W: float = 10
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 0
