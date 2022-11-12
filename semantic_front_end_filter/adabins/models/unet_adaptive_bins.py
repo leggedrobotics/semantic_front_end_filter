@@ -168,7 +168,7 @@ class UnetAdaptiveBins(nn.Module):
             encoding = self.encoder(x)
             pred_origin = self.decoder_pred(encoding, **kwargs)
             mask = self.decoder_mask(encoding, **kwargs)
-            unet_out = torch.concat([pred_origin, mask], dim=1)
+            unet_out = torch.cat([pred_origin, mask], dim=1)
         if(self.use_adabins==True):
             bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
             out = self.conv_out(range_attention_maps)
