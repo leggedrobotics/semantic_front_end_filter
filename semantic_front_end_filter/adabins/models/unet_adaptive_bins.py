@@ -152,8 +152,8 @@ class UnetAdaptiveBins(nn.Module):
         elif kwargs['output_mask'] and kwargs['decoder_num'] == 1:
             self.decoder = DecoderBN(num_classes=2, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], output_mask_channels= kwargs['output_mask_channels'])
         elif kwargs['output_mask'] and kwargs['decoder_num'] == 2:
-            self.decoder_pred = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], output_mask_channels= kwargs['output_mask_channels'])
-            self.decoder_mask = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], output_mask_channels= kwargs['output_mask_channels'])
+            self.decoder_pred = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], output_mask_channels= kwargs['output_mask_channels'], output = 'prediction')
+            self.decoder_mask = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], output_mask_channels= kwargs['output_mask_channels'], output = 'mask')
         else:
             self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
 
@@ -188,7 +188,7 @@ class UnetAdaptiveBins(nn.Module):
             pred = torch.sum(out * centers, dim=1, keepdim=True)
         else:
             pred = unet_out
-            pred = self.normalize(pred)
+            pred[:, 0 ,:, :] = self.normalize(pred[:, 0 ,:, :])
             return pred
 
         pred = self.normalize(pred)
