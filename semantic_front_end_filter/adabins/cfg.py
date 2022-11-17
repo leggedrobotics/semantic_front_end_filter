@@ -131,7 +131,7 @@ class TrainConfig:
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 0
-    mask_weight_mode: str='binary'
+    mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True
     sprase_traj_mask: bool = False
 

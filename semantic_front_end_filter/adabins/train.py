@@ -200,7 +200,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     l_mask = torch.tensor(0).to('cuda')
     if(pred.shape[1]==2):
         if(args.trainconfig.mask_weight_mode == 'sigmoid'):
-            mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
+            mask_weight = nn.functional.sigmoid(pred[:, 1:, :, :])
             pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
         elif(args.trainconfig.mask_weight_mode == 'binary'):
             # mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
