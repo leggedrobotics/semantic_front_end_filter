@@ -198,9 +198,17 @@ def main_worker(gpu, ngpus_per_node, args):
 def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, image, pose):
 
     l_mask = torch.tensor(0).to('cuda')
-    if(args.modelconfig.output_mask_channels == 2):
-        mask_weight = pred[:, 1:, :, :]
-        pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
+    if(pred.shape[1]==2):
+        if(args.trainconfig.mask_weight_mode == 'sigmoid'):
+            mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
+            pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
+        elif(args.trainconfig.mask_weight_mode == 'binary'):
+            # mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
+            mask_weight = pred[:, 1:, :, :]
+            pred = pred[:, :1, :, :]
+            pred[mask_weight<=0.5] = pc_image[:, 0:, :, :][mask_weight<=0.5]
+            mask_weight[mask_weight>0.5] = 1
+            mask_weight[mask_weight<=0.5] = 0
         l_mask = criterion_mask(mask_weight, image)
 
     if(args.trainconfig.sprase_traj_mask):
@@ -314,8 +322,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
             l_dense, l_chamfer, l_edge, l_consis,l_mask, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
-            mask_weight = pred[:, 1:, :, :]
-            pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
+            if(pred.shape[1]==2):
+                mask_weight = pred[:, 1:, :, :]
+                pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask
             
             # if(pred.shape != depth.shape): # need to enlarge the output prediction
@@ -407,8 +416,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             pc_image = batch["pc_image"].to(device)
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
             l_dense, l_chamfer, l_edge, l_consis, l_mask, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
-            mask_weight = pred[:, 1:, :, :]
-            pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
+            if(pred.shape[1]==2):
+                mask_weight = pred[:, 1:, :, :]
+                pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
             loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask
 
             # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
