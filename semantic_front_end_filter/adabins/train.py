@@ -209,7 +209,6 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
             pred[mask_weight>0.5] = pc_image[:, 0:, :, :][mask_weight>0.5]
             mask_weight[mask_weight<0.5] = 1
             mask_weight[mask_weight>=0.5] = 0
-        l_mask = criterion_mask(mask_weight, image)
         l_mask_regulation = args.trainconfig.mask_regulation_W * torch.sum(mask_weight)
 
     if(args.trainconfig.sprase_traj_mask):
@@ -217,6 +216,8 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     else:
         masktraj = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~masktraj] = 0.
+    l_mask = criterion_mask(mask_weight, masktraj)
+
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
