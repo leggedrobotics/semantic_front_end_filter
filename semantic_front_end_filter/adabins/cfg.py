@@ -144,7 +144,7 @@ class TrainConfig:
     testing: list = field(default_factory=lambda: [# "Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
                                                 #    "Reconstruct_2022-07-19-18-43-46_0",
                                                     "Reconstruct_2022-07-21-10-47-29_0", # Perugia forest
-                                                    # "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
+                                                    "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
                                                     # "Reconstruct_2022-04-25-15-31-34_0", # South Africa
                                                     # "Reconstruct_2022-04-26-16-34-01_0", # South Africa 
                                                     # "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
@@ -153,7 +153,7 @@ class TrainConfig:
     training: list = field(default_factory=lambda: [#"Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
                                                 #    "Reconstruct_2022-07-19-18-43-46_0",
                                                     "Reconstruct_2022-07-19-19-02-15_0", # Perugia forest
-                                                    # "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
+                                                    "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
                                                     # "Reconstruct_2022-04-25-15-31-34_0", # South Africa
                                                     # "Reconstruct_2022-04-26-16-34-01_0", # South Africa 
                                                     # "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
