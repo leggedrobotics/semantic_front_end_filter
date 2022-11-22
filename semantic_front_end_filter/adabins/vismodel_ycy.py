@@ -89,13 +89,28 @@ def vis_one(loader = "test", figname=""):
         # bins, images = model(sample["image"][:,:3,...])
         print(i)
         input_ = sample["image"]
+        print(input_.shape)
         # input_[:, :, :, :] = 0
         if(model.use_adabins):
             bins, images = model(input_)
         else:
-            images = model(input_)
-
-        pred = images[0].detach().numpy()
+            pred = model(input_)
+        mask_weight_mode = 'sigmoid'
+        if pred.shape[1]==2:
+            if(mask_weight_mode == 'sigmoid'):
+                pred_origin = pred[:, :1, :, :]
+                mask_weight = nn.functional.sigmoid(pred[:, 1:, :, :])
+                pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*sample["pc_image"][:, 0:, :, :]
+            elif(mask_weight_mode == 'binary'):
+                # mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
+                pred_origin = pred[:, :1, :, :]
+                mask_weight = pred[:, 1:, :, :]
+                pred = pred[:, :1, :, :]
+                pred[mask_weight<=0.5] = sample["pc_image"][:, 0:, :, :][mask_weight<=0.5]
+                mask_weight[mask_weight>0.5] = 1
+                mask_weight[mask_weight<=0.5] = 0
+        # pred = sample["pc_image"]
+        pred = pred[0].detach().numpy()
 
         plot_ind = 4+4*i
         axs[plot_ind//4, plot_ind%4].imshow(pred[0],vmin = 0, vmax=40)
@@ -112,7 +127,9 @@ def vis_one(loader = "test", figname=""):
         mask_traj = depth>1e-9
         diff[~mask_traj] = None
         axs[plot_ind//4, plot_ind%4].imshow(diff,vmin = -5, vmax=5)
-        axs[plot_ind//4, plot_ind%4].set_title("Square Err %.1f"%np.sum(diff**2))
+        # axs[plot_ind//4, plot_ind%4].imshow(mask_weight.detach().cpu().numpy()[0, 0], vmin = 0, vmax = 1)
+        # axs[plot_ind//4, plot_ind%4].set_title("Square Err %.1f"%np.sum(diff**2))
+        axs[plot_ind//4, plot_ind%4].set_title("mask_weight")
         divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
         cax = divider.append_axes('right', size='5%', pad=0.05)
         plt.colorbar(cax = cax, mappable = axs[plot_ind//4, plot_ind%4].images[0])
@@ -121,14 +138,18 @@ def vis_one(loader = "test", figname=""):
         pcdiff = pred- pc_img
         mask_pc = pc_img>1e-9
         pcdiff[~mask_pc] = 0
-        axs[plot_ind//4, plot_ind%4].imshow(pcdiff,vmin = -5, vmax=5)
-        axs[plot_ind//4, plot_ind%4].set_title("Square Err to pc%.1f"%np.sum(pcdiff**2))
+        axs[plot_ind//4, plot_ind%4].imshow(pred_origin.detach().cpu().numpy()[0, 0])
+        # axs[plot_ind//4, plot_ind%4].set_title("Square Err to pc%.1f"%np.sum(pcdiff**2))
+        axs[plot_ind//4, plot_ind%4].set_title("orginal_prediction")
+        divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        plt.colorbar(cax = cax, mappable = axs[plot_ind//4, plot_ind%4].images[0])
 
         plot_ind = 7+4*i
         # axs[plot_ind//4, plot_ind%4].plot(pred[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
         axs[plot_ind//4, plot_ind%4].plot(pc_img[mask_pc].reshape(-1), pcdiff[mask_pc].reshape(-1), "x",ms=1,alpha = 0.2,label = "pc_img_err")
         axs[plot_ind//4, plot_ind%4].plot(depth[mask_traj].reshape(-1), diff[mask_traj].reshape(-1), "x",ms=1,alpha = 0.2, label = "traj_err")
-        print(max(depth[mask_traj]))
+        # print(max(depth[mask_traj]))
         axs[plot_ind//4, plot_ind%4].set_title("err vs distance")
         axs[plot_ind//4, plot_ind%4].set_xlabel("depth_prediction")
         axs[plot_ind//4, plot_ind%4].set_ylabel("err")
@@ -165,9 +186,9 @@ def load_param_from_path(data_path):
 
 if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument("--models", default="")
+    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-18-22-13-46/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
-    parser.add_argument("--outdir", default="visulization/results")
+    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-18-22-13-46/results")
     parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
     parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
@@ -183,7 +204,8 @@ if __name__=="__main__":
     # model_cfg["input_channel"] = 4
 
     args = parse_args(parser)
-    args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
+    # args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories"
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -207,7 +229,7 @@ if __name__=="__main__":
     #     model.transform()
 
     for i in range(20):
-        vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
+        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()

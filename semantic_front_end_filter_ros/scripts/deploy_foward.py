@@ -313,7 +313,11 @@ def callback(img_msg, point_cloud):
             _image[0, i, ...] = (_image[0, i, ...] - m)/s
         # Prediction
         pred = model(_image)
+        if pred.shape[1]==2:
+            mask_weight = pred[:, 1:, :, :]
+            pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_img
         pred = pred[0].detach()
+        pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(pc_img).shape[-2:])[0]
         m = torch.logical_or((pc_img<1e-9), (pc_img>10))
         # m = torch.logical_or(m, (pred - pc_img)<0)
         pred[m] = torch.nan
@@ -329,7 +333,7 @@ def callback(img_msg, point_cloud):
         cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
         # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
-        # pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
+        pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
         predction_end = time.time()
         print("---------------------------------------------------------------------")
 
@@ -344,7 +348,7 @@ if __name__ == "__main__":
     # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
     pointcloud_topic = "/bpearl_rear/point_cloud"
     pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
-    prediction_topic = "/bpearl_rear/pred_pc"
+    prediction_topic = "/prediction/forward"
     camera_calibration_path = "/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"
     TF_BASE = "base"
 
@@ -364,7 +368,8 @@ if __name__ == "__main__":
     # Build model
     rosv = RosVisulizer("pointcloud", camera_calibration_path)
     # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
-    model_path = "/home/chenyu/projects/kpconv/semantic_front_end_filter/checkpoints/2022-09-04-19-38-09_bn"
+    # model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-04-02-05-45_edge5/UnetAdaptiveBins_best.pt"
+    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-19-11-44-00_reg0.0002+GrassForest/UnetAdaptiveBins_best.pt"
     model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        

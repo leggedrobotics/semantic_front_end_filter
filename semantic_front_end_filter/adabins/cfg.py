@@ -23,10 +23,10 @@ class ModelConfig:
     use_adabins: bool = False
     deactivate_bn: bool = True
     skip_connection: bool = False
-    interpolate_mode : str = "bilinear"
-    output_mask : bool = True
+    interpolate_mode : str = "bilinear" # "bilinear" or "convT", define what is used in upsampling of decoder 
+    output_mask : bool = True # Please keep this true
     # output_mask_channels : int = 1
-    decoder_num: int = 2
+    decoder_num: int = 2 # One or two
 
 @dataclass
 class TrainConfig:
@@ -131,7 +131,7 @@ class TrainConfig:
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 0
-    mask_regulation_W: float = 0.0001
+    mask_regulation_W: float = 0.0001 # Here is the regulation term 
     mask_regulation_CE_W: float = 0.0000
     mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True
