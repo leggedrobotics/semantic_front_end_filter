@@ -47,7 +47,14 @@ class RunningAverageDict:
                 self._dict[key].append(value)
 
     def get_value(self):
+        # new_dict = {}
+        # for key, value in self._dict.items():
+        #     if value is None:
+        #         new_dict[key] = value
+        #     else:
+        #         new_dict[key] = value.get_value()
         return {key: value.get_value() for key, value in self._dict.items()}
+        # return new_dict
 
 
 def colorize(value, vmin=10, vmax=1000, cmap='magma_r'):
