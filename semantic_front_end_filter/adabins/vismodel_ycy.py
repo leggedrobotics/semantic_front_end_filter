@@ -127,7 +127,7 @@ def vis_one(loader = "test", figname=""):
         mask_traj = depth>1e-9
         diff[~mask_traj] = None
         axs[plot_ind//4, plot_ind%4].imshow(diff,vmin = -5, vmax=5)
-        # axs[plot_ind//4, plot_ind%4].imshow(mask_weight.detach().cpu().numpy()[0, 0], vmin = 0, vmax = 1)
+        axs[plot_ind//4, plot_ind%4].imshow(mask_weight.detach().cpu().numpy()[0, 0], vmin = 0, vmax = 1, alpha = 0.5)
         # axs[plot_ind//4, plot_ind%4].set_title("Square Err %.1f"%np.sum(diff**2))
         axs[plot_ind//4, plot_ind%4].set_title("mask_weight")
         divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
@@ -186,9 +186,9 @@ def load_param_from_path(data_path):
 
 if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-18-22-13-46/UnetAdaptiveBins_latest.pt")
+    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-11-27-22-17-46/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
-    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-18-22-13-46/results")
+    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-11-27-22-17-46/results")
     parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
     parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
@@ -204,8 +204,8 @@ if __name__=="__main__":
     # model_cfg["input_channel"] = 4
 
     args = parse_args(parser)
-    # args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories"
+    args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
+    # args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories"
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -229,7 +229,7 @@ if __name__=="__main__":
     #     model.transform()
 
     for i in range(20):
-        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
+        vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()

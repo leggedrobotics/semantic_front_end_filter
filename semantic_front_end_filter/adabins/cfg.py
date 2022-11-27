@@ -10,9 +10,9 @@ class ModelConfig:
     input_width: int =  720
     norm: str = "linear" # 'linear', 'softmax', 'sigmoid'
     min_depth: float = 0.001
-    max_depth: float =  6
+    max_depth: float =  10
     min_depth_eval: float = 1e-3
-    max_depth_eval: float = 6
+    max_depth_eval: float = 10
     max_pc_depth: float = 15
     # normalize_output Assume the output of the network is a normalized one, 
     # Use the following param to scale it back
@@ -130,8 +130,8 @@ class TrainConfig:
     traj_label_W: float = 10
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
-    mask_loss_W: float = 0
-    mask_regulation_W: float = 0.0001 # Here is the regulation term 
+    mask_loss_W: float = 1
+    mask_regulation_W: float = 1e-7 # Here is the regulation term 
     mask_regulation_CE_W: float = 0.0000
     mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True

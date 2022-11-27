@@ -136,7 +136,7 @@ class MaskLoss(nn.Module):  # Add variance to loss
         #     target_gradient = [gra[:,None,:,:] for gra in torch.gradient(image[:,0], dim=[1,2])]
         # # loss = 1/torch.numel(mask) * torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])) + torch.abs(input_gradient[1]) * torch.exp(-torch.abs(target_gradient[1])))
         # loss = torch.sum(torch.abs(input_gradient[0]) * torch.exp(-torch.abs(target_gradient[0])))
-        loss = mask_traj.sum() - mask[mask_traj].sum()
+        loss = (mask_traj.sum() - mask[mask_traj].sum())/mask_traj.sum()
         # loss = (mask_traj & mask).sum()
         return loss
 class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins paper

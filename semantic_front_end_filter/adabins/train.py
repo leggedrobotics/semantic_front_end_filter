@@ -196,7 +196,7 @@ def main_worker(gpu, ngpus_per_node, args):
           experiment_name=args.name, optimizer_state_dict=None)
 
 def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, image, pose):
-
+    # Only apply l_mask and l_mask_regulation
     l_mask = torch.tensor(0).to('cuda')
     if(pred.shape[1]==2):
         if(args.trainconfig.mask_weight_mode == 'sigmoid'):
@@ -210,7 +210,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
             mask_weight[mask_weight<0.5] = 1
             mask_weight[mask_weight>=0.5] = 0
         l_mask_regulation = args.trainconfig.mask_regulation_W * torch.sum(mask_weight)
-        l_mask_regulation_ce = args.trainconfig.mask_regulation_CE_W * torch.sum(torch.abs(mask_weight*torch.log(mask_weight+1e-5)))
+        # l_mask_regulation_ce = args.trainconfig.mask_regulation_CE_W * torch.sum(torch.abs(mask_weight*torch.log(mask_weight+1e-5)))
 
     if(args.trainconfig.sprase_traj_mask):
         masktraj = (depth > args.min_depth) & (depth < args.max_depth) & (pc_image > 1e-9)
@@ -231,8 +231,8 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
     
     l_consis = criterion_consistency(pred, pose) if args.trainconfig.consistency_W > 1e-3 else torch.tensor(0.).to('cuda')
-    print("SS_L: ", l_dense.item(), "PC_L: ",l_pc.item(), "Mask_L", l_mask_regulation_ce.item())
-    return l_dense+l_pc+l_mask_regulation+l_mask_regulation_ce, l_chamfer, l_edge, l_consis, l_mask, masktraj, maskpc
+    print("MASK_L: ",l_mask.item(), "Mask_R", l_mask_regulation.item())
+    return l_mask+l_mask_regulation, l_chamfer, l_edge, l_consis, l_mask, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
