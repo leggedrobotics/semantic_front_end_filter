@@ -157,6 +157,7 @@ def main_worker(gpu, ngpus_per_node, args):
     input_channel = 3 if args.load_pretrained else 4
 
     model = models.UnetAdaptiveBins.build(**asdict(args.modelconfig))
+    # model,_,_ = model_io.load_checkpoint("/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-28-01-31-55/UnetAdaptiveBins_best.pt", model)
 
     ## Load pretrained kitti
     if args.load_pretrained:
@@ -233,7 +234,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
     
     l_consis = criterion_consistency(pred, pose) if args.trainconfig.consistency_W > 1e-3 else torch.tensor(0.).to('cuda')
-    # print("MASK_L: ",l_mask.item(), "Mask_R", l_mask_regulation.item())
+    print("MASK_L: ",l_mask.item(), "Mask_R", args.trainconfig.mask_regulation_W * l_mask_regulation.item())
     return l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc
 
 
