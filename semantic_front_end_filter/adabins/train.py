@@ -106,7 +106,9 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
             images = model(sample["image"][None,0,...].to(device))
         # bins, images = None, model(sample["image"])
         pred = images[0].detach()
-        predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
+        mask_weight = nn.functional.sigmoid(pred[1:, :, :])
+        # predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=1)))
+        predictions.append(wandb.Image(colorize(mask_weight[0].cpu().numpy(), vmin = -1, vmax=1)))
         
         pred = nn.functional.interpolate(pred[None,...], torch.tensor(depth).shape[-2:], mode='nearest')
         pred = pred[0][0].cpu().numpy()
@@ -209,7 +211,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
             pred[mask_weight>0.5] = pc_image[:, 0:, :, :][mask_weight>0.5]
             mask_weight[mask_weight<0.5] = 1
             mask_weight[mask_weight>=0.5] = 0
-        l_mask_regulation = args.trainconfig.mask_regulation_W * torch.sum(mask_weight)
+        l_mask_regulation = torch.sum(mask_weight)
         # l_mask_regulation_ce = args.trainconfig.mask_regulation_CE_W * torch.sum(torch.abs(mask_weight*torch.log(mask_weight+1e-5)))
 
     if(args.trainconfig.sprase_traj_mask):
@@ -231,8 +233,8 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
     
     l_consis = criterion_consistency(pred, pose) if args.trainconfig.consistency_W > 1e-3 else torch.tensor(0.).to('cuda')
-    print("MASK_L: ",l_mask.item(), "Mask_R", l_mask_regulation.item())
-    return l_mask+l_mask_regulation, l_chamfer, l_edge, l_consis, l_mask, masktraj, maskpc
+    # print("MASK_L: ",l_mask.item(), "Mask_R", l_mask_regulation.item())
+    return l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -248,7 +250,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="disabled")
+        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="online")
         # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
 
         # wandb.watch(model)
@@ -324,11 +326,11 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             pc_image = batch["pc_image"].to(device)
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_chamfer, l_edge, l_consis,l_mask, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
+            l_dense, l_chamfer, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation
             
             # if(pred.shape != depth.shape): # need to enlarge the output prediction
             #     pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
@@ -355,9 +357,12 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
             if should_log and step_count % 5 == 0:
+                # wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
                 wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
                 wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step_count)
                 wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step_count)
+                wandb.log({f"Loss/train/{criterion_mask.name}": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=step_count)
+                wandb.log({f"Loss/train/RegulationMask": args.trainconfig.mask_regulation_W * l_mask_regulation.item()/args.batch_size}, step=step_count)
                 wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step_count)
 
             step_count += 1
@@ -418,15 +423,17 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_chamfer, l_edge, l_consis, l_mask, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
+            l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask
+            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation
 
             # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
             # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
             # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
+            wandb.log({f"Loss/test/{criterion_mask.name}": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=count_val)
+            wandb.log({f"Loss/test/RegulationMask": args.trainconfig.mask_regulation_W * l_mask_regulation.item()/args.batch_size}, step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
