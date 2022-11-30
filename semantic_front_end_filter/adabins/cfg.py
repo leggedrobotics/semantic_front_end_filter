@@ -126,12 +126,12 @@ class TrainConfig:
     validate_every: int = 100
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 0
-    traj_label_W: float = 0
+    pc_image_label_W: float = 10
+    traj_label_W: float = 10
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 1
-    mask_regulation_W: float = 1e-7 # Here is the regulation term 
+    mask_regulation_W: float = 0 # Here is the regulation term 
     mask_regulation_CE_W: float = 0.0000
     mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True
