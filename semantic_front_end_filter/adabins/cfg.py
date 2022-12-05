@@ -26,7 +26,7 @@ class ModelConfig:
     interpolate_mode : str = "bilinear" # "bilinear" or "convT", define what is used in upsampling of decoder 
     output_mask : bool = True # Please keep this true
     # output_mask_channels : int = 1
-    decoder_num: int = 2 # One or two
+    decoder_num: int = 1 # One or two
 
 @dataclass
 class TrainConfig:
@@ -122,12 +122,13 @@ class TrainConfig:
     eigen_crop: bool=True
     random_crop: bool=False
     random_flip: bool=True
-    traj_variance_threashold: float = 0.03 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
+    traj_variance_threashold: float = 0.05 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
     validate_every: int = 100
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 10
-    traj_label_W: float = 10
+    pc_image_label_W: float = 1
+    traj_label_W_4mask: float = 10
+    traj_label_W: float = 0.002
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 1
@@ -136,6 +137,7 @@ class TrainConfig:
     mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True
     sprase_traj_mask: bool = False
+    mask_ratio: float = 1 # Expected ratio of mask_ground/mask_nonground
 
     traj_distance_variance_ratio: float = 0 # the value used in calculating the variance of traj label. var = (depth*traj_distance_variance_ratio + depth_variance)
     pc_label_uncertainty: bool = False # if yes, use the variance of the label to calculate pc weight

@@ -152,7 +152,7 @@ class UnetAdaptiveBins(nn.Module):
         if(use_adabins):
             self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
         elif kwargs['output_mask'] and kwargs['decoder_num'] == 1:
-            self.decoder = DecoderBN(num_classes=2, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'])
+            self.decoder = DecoderBN(num_classes=3, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'])
         elif kwargs['output_mask'] and kwargs['decoder_num'] == 2:
             self.decoder_pred = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'prediction')
             self.decoder_mask = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'mask')
