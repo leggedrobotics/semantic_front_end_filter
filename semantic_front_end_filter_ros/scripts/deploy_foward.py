@@ -82,6 +82,7 @@ if __name__ == '__main__':
 sys.path.append("../Labelling/")
 FLAG_MARKER = False
 
+
 class Timer:
     def __init__(self, name="") -> None:
         self.name = name
@@ -108,7 +109,7 @@ class RosVisulizer:
         self.image_cv_bridge = CvBridge()
         print("waiting for images")
 
-    def build_could_from_depth_image(self, pose, depth, image=None, pc_image = None, pose_bp = None):
+    def build_could_from_depth_image(self, pose, depth, image=None, pc_image=None, pose_bp=None):
         """
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
@@ -140,7 +141,8 @@ class RosVisulizer:
         pts = pts.cpu()
         pts = pts[~torch.isnan(pts).any(axis=1), :]
         pose_bp = pose_bp.to(dtype=torch.float64)
-        Rot = torch.Tensor(quaternion_matrix(pose_bp[3:].cpu().numpy())[:3, :3]).to(device, dtype=torch.float64)
+        Rot = torch.Tensor(quaternion_matrix(pose_bp[3:].cpu().numpy())[
+                           :3, :3]).to(device, dtype=torch.float64)
         pts = torch.matmul(pts-pose_bp[:3].cpu(), Rot.cpu())
 
         print("cloud lengths:", len(pts))
@@ -150,7 +152,7 @@ class RosVisulizer:
                                               [rosv.buildPoint(*p[:3], *c, a=0.2) for p, c in zip(pts, im_color)])
         else:
             cloud = point_cloud2.create_cloud(header, fields, pts)
-        
+
         marker = None
         if(pc_image is not None):
             print("drawing lines")
@@ -160,10 +162,10 @@ class RosVisulizer:
             # pts = torch.matmul(pts, Rot.cpu().T)+pose_bp[:3].cpu()
             pts_pc = torch.matmul(pts_pc-pose_bp[:3].cpu(), Rot.cpu())
 
-            
-            distance_mask = ((depth - pc_image)).reshape(-1,1)
-            distance_mask = distance_mask[~torch.isnan(distance_mask).any(axis=1), :]
-            distance_mask = distance_mask>0
+            distance_mask = ((depth - pc_image)).reshape(-1, 1)
+            distance_mask = distance_mask[~torch.isnan(
+                distance_mask).any(axis=1), :]
+            distance_mask = distance_mask > 0
 
             if FLAG_MARKER:
                 marker = Marker()
@@ -180,10 +182,11 @@ class RosVisulizer:
                 for i, (pt, pt_pc) in enumerate(zip(pts, pts_pc)):
                     # if i%10 == 0:
                     if ~distance_mask[i]:
-                        marker.points.append(Point(x = pt[0], y = pt[1], z = pt[2]))
-                        marker.points.append(Point(x = pt_pc[0], y = pt_pc[1], z = pt_pc[2]))
+                        marker.points.append(Point(x=pt[0], y=pt[1], z=pt[2]))
+                        marker.points.append(
+                            Point(x=pt_pc[0], y=pt_pc[1], z=pt_pc[2]))
 
-        return cloud ,marker
+        return cloud, marker
 
     def build_imgmsg_from_depth_image(self, depth, vmin, vmax):
         depth = torch.clamp(depth, min=vmin, max=vmax)
@@ -272,16 +275,17 @@ def callback(img_msg, point_cloud):
         listener.waitForTransform(
             "map", point_cloud.header.frame_id, img_msg.header.stamp, rospy.Duration(1.0))
         (trans, rot) = listener.lookupTransform(
-             "map", point_cloud.header.frame_id, img_msg.header.stamp)
+            "map", point_cloud.header.frame_id, img_msg.header.stamp)
         listener.waitForTransform(
             "map", "base", img_msg.header.stamp, rospy.Duration(1.0))
         (trans_base, rot_base) = listener.lookupTransform(
-             "map", "base", img_msg.header.stamp)     
+            "map", "base", img_msg.header.stamp)
     except Exception as e:
         print(e)
         return
     pose = torch.Tensor(np.array([*trans, *rot]).astype(np.float64)).to(device)
-    pose_base = torch.Tensor(np.array([*trans_base, *rot_base]).astype(np.float64)).to(device)
+    pose_base = torch.Tensor(
+        np.array([*trans_base, *rot_base]).astype(np.float64)).to(device)
 
     # pointclouds
     surf = ros_numpy.numpify(point_cloud)
@@ -291,11 +295,10 @@ def callback(img_msg, point_cloud):
     else:
         pc_array = np.copy(np.frombuffer(surf.tobytes(), np.dtype(
             np.float32)).reshape(surf.shape[0]*surf.shape[1], -1)[:, :3])
-    
+
     points = torch.Tensor(pc_array).to(device)
     Rot = torch.Tensor(quaternion_matrix(rot)[:3, :3]).to(device)
     points = torch.matmul(points, Rot.T) + pose[:3]
-
 
     if(image is not None and pose is not None):
         # Get Input
@@ -307,25 +310,33 @@ def callback(img_msg, point_cloud):
             # axs[0].imshow(pc_img[0].cpu().numpy())
             # axs[1].imshow(image.moveaxis(0, 2).numpy())
         _image = torch.cat([image/255., pc_img],
-                            axis=0)  # add the pc channel
+                           axis=0)  # add the pc channel
         _image = _image[None, ...]
         for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
             _image[0, i, ...] = (_image[0, i, ...] - m)/s
         # Prediction
         pred = model(_image)
-        if pred.shape[1]==2:
-            mask_weight = pred[:, 1:, :, :]
-            pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_img
+        if pred.shape[1] == 2:
+            mask_weight = torch.nn.functional.sigmoid(pred[:, 1:, :, :])
+            pred = mask_weight * pred[:, :1, :, :] + \
+                (1-mask_weight)*_image[0, 3:, ...]
+        if pred.shape[1] == 3:
+            mask_weight = (pred[:, 1:2] > pred[:, 0:1])
+            pred_origin = pred[:, 2:]
+            pred = pred[:, 2:].clone()
+            pred[~mask_weight] = _image[:, 3:, ...][~mask_weight]
         pred = pred[0].detach()
-        pred = nn.functional.interpolate(torch.tensor(pred)[None,...], torch.tensor(pc_img).shape[-2:])[0]
-        m = torch.logical_or((pc_img<1e-9), (pc_img>10))
+        pred = nn.functional.interpolate(torch.tensor(
+            pred)[None, ...], torch.tensor(pc_img).shape[-2:])[0]
+        m = torch.logical_or((pc_img < 1e-9), (pc_img > 10))
         # m = torch.logical_or(m, (pred - pc_img)<0)
         pred[m] = torch.nan
         pc_img[m] = torch.nan
         pred = pred[0].T
         # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
         # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
-        cloud, marker = rosv.build_could_from_depth_image(pose_base, pred, None, pc_img.squeeze().T, pose)
+        cloud, marker = rosv.build_could_from_depth_image(
+            pose_base, pred, None, pc_img.squeeze().T, pose)
 
         if marker is not None:
             marker.header.stamp = point_cloud.header.stamp
@@ -333,9 +344,11 @@ def callback(img_msg, point_cloud):
         cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
         # pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img[0].T, vmin=5, vmax=30))
-        pred_image_pub.publish(rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
+        pred_image_pub.publish(
+            rosv.build_imgmsg_from_depth_image(pred, vmin=5, vmax=30))
         predction_end = time.time()
         print("---------------------------------------------------------------------")
+
 
 if __name__ == "__main__":
     pose_ph = None
@@ -370,10 +383,12 @@ if __name__ == "__main__":
     # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
     # model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-04-02-05-45_edge5/UnetAdaptiveBins_best.pt"
     model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-19-11-44-00_reg0.0002+GrassForest/UnetAdaptiveBins_best.pt"
-    model_cfg = yaml.load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
+    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-10-14-50/UnetAdaptiveBins_best.pt"
+    model_cfg = yaml.load(open(os.path.join(os.path.dirname(
+        model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
-    model = models.UnetAdaptiveBins.build(**model_cfg)                                        
-    model = model_io.load_checkpoint(model_path ,model)[0]
+    model = models.UnetAdaptiveBins.build(**model_cfg)
+    model = model_io.load_checkpoint(model_path, model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 

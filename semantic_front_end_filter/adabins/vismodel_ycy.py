@@ -95,20 +95,27 @@ def vis_one(loader = "test", figname=""):
             bins, images = model(input_)
         else:
             pred = model(input_)
-        mask_weight_mode = 'sigmoid'
-        if pred.shape[1]==2:
-            if(mask_weight_mode == 'sigmoid'):
-                pred_origin = pred[:, :1, :, :]
-                mask_weight = nn.functional.sigmoid(pred[:, 1:, :, :])
-                pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*sample["pc_image"][:, 0:, :, :]
-            elif(mask_weight_mode == 'binary'):
-                # mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
-                pred_origin = pred[:, :1, :, :]
-                mask_weight = pred[:, 1:, :, :]
-                pred = pred[:, :1, :, :]
-                pred[mask_weight<=0.5] = sample["pc_image"][:, 0:, :, :][mask_weight<=0.5]
-                mask_weight[mask_weight>0.5] = 1
-                mask_weight[mask_weight<=0.5] = 0
+        # mask_weight = (pred[:, 1:] > pred[:, :1]).long()
+        # l_mask_regulation = torch.sum(mask_weight)
+        # elif (pred.shape[1]==3):
+        mask_weight = (pred[:, 1:2]>pred[:, 0:1])
+        pred_origin = pred[:, 2:]
+        pred =  pred[:, 2:].clone()
+        pred[~mask_weight] = sample["pc_image"][~mask_weight]
+        # mask_weight_mode = 'sigmoid'
+        # if pred.shape[1]==2:
+        #     if(mask_weight_mode == 'sigmoid'):
+        #         pred_origin = pred[:, :1, :, :]
+        #         mask_weight = nn.functional.sigmoid(pred[:, 1:, :, :])
+        #         pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*sample["pc_image"][:, 0:, :, :]
+        #     elif(mask_weight_mode == 'binary'):
+        #         # mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
+        #         pred_origin = pred[:, :1, :, :]
+        #         mask_weight = pred[:, 1:, :, :]
+        #         pred = pred[:, :1, :, :]
+        #         pred[mask_weight<=0.5] = sample["pc_image"][:, 0:, :, :][mask_weight<=0.5]
+        #         mask_weight[mask_weight>0.5] = 1
+        #         mask_weight[mask_weight<=0.5] = 0
         # pred = sample["pc_image"]
         pred = pred[0].detach().numpy()
 
@@ -186,9 +193,9 @@ def load_param_from_path(data_path):
 
 if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-11-27-22-17-46/UnetAdaptiveBins_latest.pt")
+    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-00-00-49/UnetAdaptiveBins_best.pt")
     parser.add_argument("--names", default="")
-    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-11-27-22-17-46/results")
+    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-00-00-49/results_bestmodel")
     parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
     parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
@@ -204,8 +211,8 @@ if __name__=="__main__":
     # model_cfg["input_channel"] = 4
 
     args = parse_args(parser)
-    args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
-    # args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories"
+    # args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories"
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
@@ -229,7 +236,7 @@ if __name__=="__main__":
     #     model.transform()
 
     for i in range(20):
-        vis_one("train", figname=os.path.join(args.outdir, "%d"%i))
+        vis_one("test", figname=os.path.join(args.outdir, "%d"%i))
         plt.savefig(os.path.join(args.outdir, "%d.jpg"%i))
         # plt.show()
     # vis_network_structure()
