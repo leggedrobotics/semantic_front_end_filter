@@ -129,6 +129,7 @@ class DataLoadPreprocess(Dataset):
             pc_image_label = data["pc_image"][:,:,self.args.trainconfig.pc_img_label_channel,None]
             pc_image_input = data["pc_image"][:,:,self.args.trainconfig.pc_img_input_channel,None]
             pose = data["pose"].copy()
+            mask_gt = data['anomaly_mask'][..., None].copy()
         else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
@@ -168,9 +169,9 @@ class DataLoadPreprocess(Dataset):
             if(self.args.trainconfig.random_crop):
                 image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
                     image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
-                    pc_image_label, pc_image_input)
-            image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(self.args.trainconfig.random_flip,
-                image, depth_gt, pc_image_label, pc_image_input)
+                    pc_image_label, pc_image_input, mask_gt)
+            image, depth_gt, pc_image_label, pc_image_input, mask_gt = self.train_preprocess(self.args.trainconfig.random_flip,
+                image, depth_gt, pc_image_label, pc_image_input, mask_gt)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
             depth_gt_variance = depth_gt[:, :, 1:].copy()
             depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
@@ -178,7 +179,7 @@ class DataLoadPreprocess(Dataset):
             sample = {'image': image.copy(), 'depth': depth_gt_mean, 
                 'pc_image': pc_image_label.copy(), 'focal': focal, 
                 'depth_variance': depth_gt_variance,
-                'path': sample_path, 'pose': pose}
+                'path': sample_path, 'pose': pose, "mask_gt": mask_gt}
 
         else:
             image = np.asarray(image, dtype=np.float32) / 255.0
@@ -189,17 +190,17 @@ class DataLoadPreprocess(Dataset):
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
 
             if self.mode == 'online_eval':
-                    has_valid_depth = True
-                    depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
+                has_valid_depth = True
+                depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
 
 
             if self.args.trainconfig.do_kb_crop is True:
                 image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
                 sample = {'image': image.copy(), 'depth': depth_gt_mean, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy(), 'pose': pose}
+                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy(), 'pose': pose, "mask_gt": mask_gt}
             else:
-                sample = {'image': image.copy(), 'focal': focal, 'pose': pose}
+                sample = {'image': image.copy(), 'focal': focal, 'pose': pose, "mask_gt": mask_gt}
 
         if self.transform:
             sample = self.transform(sample)
@@ -280,13 +281,14 @@ class ToTensor(object):
         depth_variance = self.to_tensor(depth_variance)
         pc_image = sample['pc_image']
         pc_image = self.to_tensor(pc_image)
+        mask_gt = self.to_tensor(sample['mask_gt'])
         if self.mode == 'train':
             return {'image': image, 'depth': depth, "pc_image":pc_image, 
-                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path'], 'pose':torch.from_numpy(sample['pose'])}
+                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path'], 'pose':torch.from_numpy(sample['pose']), 'mask_gt':mask_gt}
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image, 'pose':torch.from_numpy(sample['pose'])}
+                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image, 'pose':torch.from_numpy(sample['pose']), 'mask_gt':mask_gt}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

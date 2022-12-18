@@ -127,7 +127,7 @@ class TrainConfig:
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 1
-    traj_label_W_4mask: float = 10
+    traj_label_W_4mask: float = 1
     traj_label_W: float = 0.002
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero

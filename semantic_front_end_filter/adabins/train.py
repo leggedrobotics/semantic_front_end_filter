@@ -82,6 +82,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
     filepaths = []
     predictions = []
     masks = []
+    masks_gt = []
     trajerrors = []
     pcimgerrors = []
     errordistributions = []
@@ -116,6 +117,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
 
         predictions.append(wandb.Image(colorize(pred[0].cpu().numpy(), vmin = 0, vmax=40)))
         masks.append(wandb.Image(colorize(mask_weight[0].cpu().numpy(), vmin = -1, vmax=1)))
+        masks_gt.append(wandb.Image(colorize(sample['mask_gt'][0].cpu().numpy(), vmin = -1, vmax=1)))
         
         pred = nn.functional.interpolate(pred[None,...], torch.tensor(depth).shape[-2:], mode='nearest')
         pred = pred[0][0].cpu().numpy()
@@ -151,6 +153,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
     # result_image_table.add_column("filepath", filepaths)
     result_image_table.add_column("pred", predictions)
     result_image_table.add_column("mask", masks)
+    result_image_table.add_column("mask_gt", masks_gt)
     result_image_table.add_column("traj_label_error", trajerrors)
     result_image_table.add_column("pc_label_error", pcimgerrors)
     result_image_table.add_column("distribution", errordistributions)
@@ -206,7 +209,7 @@ def main_worker(gpu, ngpus_per_node, args):
     train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
 
-def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, image, pose):
+def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, image, pose, mask_gt):
     # Only apply l_mask and l_mask_regulation
     l_mask = torch.tensor(0).to('cuda')
     l_mask_regulation = torch.tensor(0).to('cuda')
@@ -230,7 +233,10 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         masktraj = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~masktraj] = 0.
     # l_mask = criterion_mask(mask_weight, masktraj)
-    l_mask = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
+    # l_mask = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
+    # Apply anomaly mask    
+    l_mask = criterion_mask(pred[:, 0:2], mask_gt.squeeze(dim=1).long())
+    
     mask_weight = (pred[:, 1:2] > pred[:, :1]).long()
     mask_soft = nn.functional.softmax(pred[:, 0:2], dim = 1)
     # l_mask_regulation = (torch.sum(mask_weight) - mask_weight.numel()/2)**2
@@ -338,6 +344,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
             depth_var = batch['depth_variance'].to(device)
+            mask_gt = batch['mask_gt'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
@@ -348,7 +355,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             pc_image = batch["pc_image"].to(device)
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_chamfer, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
+            l_dense, l_chamfer, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -442,6 +449,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
             depth_var = batch['depth_variance'].to(device)
+            mask_gt = batch['mask_gt'].to(device)
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
@@ -451,7 +459,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'])
+            l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]

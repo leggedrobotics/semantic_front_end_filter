@@ -383,7 +383,7 @@ if __name__ == "__main__":
     # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
     # model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-04-02-05-45_edge5/UnetAdaptiveBins_best.pt"
     model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-19-11-44-00_reg0.0002+GrassForest/UnetAdaptiveBins_best.pt"
-    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-10-14-50/UnetAdaptiveBins_best.pt"
+    model_path = "/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-12-07-17-56-21/UnetAdaptiveBins_best.pt"
     model_cfg = yaml.load(open(os.path.join(os.path.dirname(
         model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4

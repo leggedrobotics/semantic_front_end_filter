@@ -133,8 +133,10 @@ def vis_one(loader = "test", figname=""):
         print("depth shape:", depth.shape)
         mask_traj = depth>1e-9
         diff[~mask_traj] = None
-        axs[plot_ind//4, plot_ind%4].imshow(diff,vmin = -5, vmax=5)
+        # axs[plot_ind//4, plot_ind%4].imshow(diff,vmin = -5, vmax=5)
         axs[plot_ind//4, plot_ind%4].imshow(mask_weight.detach().cpu().numpy()[0, 0], vmin = 0, vmax = 1, alpha = 0.5)
+        axs[plot_ind//4, plot_ind%4].imshow(cv2.cvtColor(inputimg[:,:,:3], cv2.COLOR_BGR2RGB), alpha = 0.5)
+
         # axs[plot_ind//4, plot_ind%4].set_title("Square Err %.1f"%np.sum(diff**2))
         axs[plot_ind//4, plot_ind%4].set_title("mask_weight")
         divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
@@ -145,9 +147,12 @@ def vis_one(loader = "test", figname=""):
         pcdiff = pred- pc_img
         mask_pc = pc_img>1e-9
         pcdiff[~mask_pc] = 0
-        axs[plot_ind//4, plot_ind%4].imshow(pred_origin.detach().cpu().numpy()[0, 0])
+        # axs[plot_ind//4, plot_ind%4].imshow(pred_origin.detach().cpu().numpy()[0, 0])
+        axs[plot_ind//4, plot_ind%4].imshow(sample["mask_gt"].detach().cpu().numpy()[0, 0])
+        axs[plot_ind//4, plot_ind%4].imshow(cv2.cvtColor(inputimg[:,:,:3], cv2.COLOR_BGR2RGB), alpha = 0.5)
+
         # axs[plot_ind//4, plot_ind%4].set_title("Square Err to pc%.1f"%np.sum(pcdiff**2))
-        axs[plot_ind//4, plot_ind%4].set_title("orginal_prediction")
+        axs[plot_ind//4, plot_ind%4].set_title("ground truth mask")
         divider = make_axes_locatable(axs[plot_ind//4, plot_ind%4])
         cax = divider.append_axes('right', size='5%', pad=0.05)
         plt.colorbar(cax = cax, mappable = axs[plot_ind//4, plot_ind%4].images[0])
@@ -193,9 +198,9 @@ def load_param_from_path(data_path):
 
 if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-00-00-49/UnetAdaptiveBins_best.pt")
+    parser.add_argument("--models", default="/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-12-07-17-56-21/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
-    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-00-00-49/results_bestmodel")
+    parser.add_argument("--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2022-12-07-17-56-21/results_bestmodel")
     parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
     parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
@@ -212,7 +217,8 @@ if __name__=="__main__":
 
     args = parse_args(parser)
     # args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories"
+    # args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_Anomaly/extract_trajectories"
+    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories"
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
