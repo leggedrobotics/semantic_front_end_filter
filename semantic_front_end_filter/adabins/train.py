@@ -245,8 +245,10 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     # pred = pred[:, 1:] + pred[:, :1]
     # pred[:, 2:][mask_weight<1] = 
     
-
-    pred = pred[:, 2:]
+    if(args.trainconfig.sprase_traj_mask):
+        pred = pred[:, 2:] + pc_image # with or withour pc_image
+    else:
+        pred = pred[:, 2:]
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
