@@ -111,7 +111,8 @@ class DataLoadPreprocess(Dataset):
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
         self.filenames = self.filenames if self.mode == 'train' else self.test_filenames
-        random.Random(0).shuffle(self.filenames)
+        if self.mode == 'train':
+            random.Random(0).shuffle(self.filenames)  
         print(self.mode, len(self.filenames))
 
     def __getitem__(self, idx):
@@ -167,7 +168,7 @@ class DataLoadPreprocess(Dataset):
             pc_image_input = np.asarray(pc_image_input, dtype=np.float32)
             
             if(self.args.trainconfig.random_crop):
-                image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
+                image, depth_gt, pc_image_label, pc_image_input, mask_gt = self.random_crop(
                     image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
                     pc_image_label, pc_image_input, mask_gt)
             image, depth_gt, pc_image_label, pc_image_input, mask_gt = self.train_preprocess(self.args.trainconfig.random_flip,

@@ -106,6 +106,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
             _, images = model(sample["image"][None,0,...].to(device))
         else:
             images = model(sample["image"][None,0,...].to(device))
+            # images = model(sample["image"][None,0,...].to(device)[:,0:3])
         # bins, images = None, model(sample["image"])
         pred = images[0].detach()
         # mask_weight = nn.functional.sigmoid(pred[1:, :, :])
@@ -168,7 +169,7 @@ def main_worker(gpu, ngpus_per_node, args):
     input_channel = 3 if args.load_pretrained else 4
 
     model = models.UnetAdaptiveBins.build(**asdict(args.modelconfig))
-    # model,_,_ = model_io.load_checkpoint("/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-28-01-31-55/UnetAdaptiveBins_best.pt", model)
+    # model,_,_ = model_io.load_checkpoint("/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2023-02-21-08-04-21/UnetAdaptiveBins_latest.pt", model)
 
     ## Load pretrained kitti
     if args.load_pretrained:
@@ -344,6 +345,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             optimizer.zero_grad()
 
             img = batch['image'].to(device)
+            # img[:, 3] = 0
             depth = batch['depth'].to(device)
             depth_var = batch['depth_variance'].to(device)
             mask_gt = batch['mask_gt'].to(device)
@@ -354,6 +356,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 bin_edges, pred = model(img)
             else:
                 bin_edges, pred = None, model(img)
+                # bin_edges, pred = None, model(img[:,0:3])
             pc_image = batch["pc_image"].to(device)
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
@@ -459,6 +462,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 bin_edges, pred = model(img)
             else:
                 bin_edges, pred = None, model(img)
+                # bin_edges, pred = None, model(img[: ,0:3])
             pc_image = batch["pc_image"].to(device)
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
             l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)

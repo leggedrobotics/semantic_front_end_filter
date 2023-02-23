@@ -141,6 +141,8 @@ class UnetAdaptiveBins(nn.Module):
         self.min_val = min_depth
         self.max_val = max_depth
         self.encoder = Encoder(backend)
+        # for param in self.encoder.parameters():
+        #     param.requires_grad = False
         self.skip_connection = skip_connection
         self.interpolate_mode = kwargs['interpolate_mode']
         self.args = kwargs
@@ -155,7 +157,7 @@ class UnetAdaptiveBins(nn.Module):
             self.decoder = DecoderBN(num_classes=3, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'])
         elif kwargs['output_mask'] and kwargs['decoder_num'] == 2:
             self.decoder_pred = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'prediction')
-            self.decoder_mask = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'mask')
+            self.decoder_mask = DecoderBN(num_classes=2, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'mask')
         else:
             self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
 
@@ -170,7 +172,7 @@ class UnetAdaptiveBins(nn.Module):
             encoding = self.encoder(x)
             pred_origin = self.decoder_pred(encoding, **kwargs)
             mask = self.decoder_mask(encoding, **kwargs)
-            unet_out = torch.cat([pred_origin, mask], dim=1)
+            unet_out = torch.cat([mask, pred_origin], dim=1)
         if(self.use_adabins==True):
             bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
             out = self.conv_out(range_attention_maps)
@@ -222,13 +224,13 @@ class UnetAdaptiveBins(nn.Module):
 
 
         print('Done.')
+        # Change input
         if(input_channel == 4):
             # Change first layer to 4 channel
             orginal_first_layer_weight = basemodel.conv_stem.weight
             basemodel.conv_stem= torch.nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
             with torch.no_grad():
                 basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
-                # basemodel.conv_stem.weight[:, 0:3, :, :] = 0
 
 
         # Remove last layer
