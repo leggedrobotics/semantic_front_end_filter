@@ -27,6 +27,7 @@ class ModelConfig:
     output_mask : bool = True # Please keep this true
     # output_mask_channels : int = 1
     decoder_num: int = 2 # One or two
+    ablation: str = "onlyRGB" # "onlyRGB", "onlyPC"
 
 @dataclass
 class TrainConfig:
@@ -123,12 +124,12 @@ class TrainConfig:
     random_crop: bool=True
     random_flip: bool=True
     traj_variance_threashold: float = 1 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
-    validate_every: int = 5
+    validate_every: int = 500
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 0
+    pc_image_label_W: float = 1 # pc_image_label_W and traj_label_W_4mask are used to control the crossentropy loss for the mask
     traj_label_W_4mask: float = 1
-    traj_label_W: float = 0.002
+    traj_label_W: float = 1 # 0.002
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 1
@@ -145,15 +146,15 @@ class TrainConfig:
     scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
-    testing: list = field(default_factory=lambda: [ #"Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
+    training: list = field(default_factory=lambda: [ #"Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
                                                     "Reconstruct_2022-07-21-10-47-29_0", # Perugia forest
-                                                    # "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
-                                                    # "Reconstruct_2022-04-25-15-31-34_0", # South Africa
+                                                    "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
+                                                    "Reconstruct_2022-04-25-15-31-34_0", # South Africa
                                                     # "Reconstruct_2022-04-26-16-34-01_0", # South Africa 
                                                     # "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
                                                     # "Reconstruct_2022-04-26-17-05-24_0"  # South Africa 
                                                     ]) 
-    training: list = field(default_factory=lambda: ["Reconstruct_2022-07-19-20-46-08_0", # Perugia high grass
+    testing: list = field(default_factory=lambda: ["Reconstruct_2022-07-19-20-46-08_0", # Perugia high grass
                                                     "Reconstruct_2022-07-19-19-02-15_0", # Perugia forest
                                                     "Reconstruct_2022-07-19-20-06-22_0", # Perugia grassland
                                                     # "Reconstruct_2022-04-25-15-31-34_0", # South Africa

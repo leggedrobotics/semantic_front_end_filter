@@ -105,7 +105,12 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         if(use_adabins):
             _, images = model(sample["image"][None,0,...].to(device))
         else:
-            images = model(sample["image"][None,0,...].to(device))
+            img = sample["image"][None,0,...].to(device)
+            if(args.modelconfig.ablation == "onlyRGB"):
+                img[:, 0] = 0
+            elif(args.modelconfig.ablation == "onlyRGB"):
+                img[:, 0:3] = 0 
+            images = model(img)
             # images = model(sample["image"][None,0,...].to(device)[:,0:3])
         # bins, images = None, model(sample["image"])
         pred = images[0].detach()
@@ -355,8 +360,11 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if(args.modelconfig.use_adabins):
                 bin_edges, pred = model(img)
             else:
+                if(args.modelconfig.ablation == "onlyRGB"):
+                    img[:, 0] = 0
+                elif(args.modelconfig.ablation == "onlyRGB"):
+                    img[:, 0:3] = 0    
                 bin_edges, pred = None, model(img)
-                # bin_edges, pred = None, model(img[:,0:3])
             pc_image = batch["pc_image"].to(device)
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
@@ -461,6 +469,10 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             if(args.modelconfig.use_adabins):
                 bin_edges, pred = model(img)
             else:
+                if(args.modelconfig.ablation == "onlyRGB"):
+                    img[:, 0] = 0
+                elif(args.modelconfig.ablation == "onlyRGB"):
+                    img[:, 0:3] = 0 
                 bin_edges, pred = None, model(img)
                 # bin_edges, pred = None, model(img[: ,0:3])
             pc_image = batch["pc_image"].to(device)
@@ -479,7 +491,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
             # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
             wandb.log({f"Loss/test/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=count_val)
-            wandb.log({f"Loss/test/RegulationMask": args.trainconfig.mask_regulation_W * l_mask_regulation.item()/args.batch_size}, step=count_val)
+            wandb.log({f"Loss/test/SSLoss": l_dense/args.batch_size}, step=count_val)
             wandb.log({f"Loss/test/l_sum": (args.trainconfig.mask_loss_W * l_mask.item() + args.trainconfig.mask_regulation_W * l_mask_regulation.item())/args.batch_size}, step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
