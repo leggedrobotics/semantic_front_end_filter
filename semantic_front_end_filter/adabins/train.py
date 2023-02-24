@@ -233,7 +233,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     else:
         masktraj = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~masktraj] = 0.
-    # l_mask = criterion_mask(mask_weight, masktraj)
+    # Apply traj mask
     # l_mask = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
     # Apply anomaly mask    
     l_mask = criterion_mask(pred[:, 0:2], mask_gt.squeeze(dim=1).long())
@@ -383,8 +383,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             pred = pred.detach().cpu()
             depth = depth.cpu()
             pc_image = pc_image.cpu()
-            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'))
-            train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
+            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'), depth[masktraj].shape[0])
+            # train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
             # writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -478,15 +478,15 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
             # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
             # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
-            wandb.log({f"Loss/test/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=step)
-            wandb.log({f"Loss/test/RegulationMask": args.trainconfig.mask_regulation_W * l_mask_regulation.item()/args.batch_size}, step=step)
-            wandb.log({f"Loss/test/l_sum": (args.trainconfig.mask_loss_W * l_mask.item() + args.trainconfig.mask_regulation_W * l_mask_regulation.item())/args.batch_size}, step=step)
+            wandb.log({f"Loss/test/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=count_val)
+            wandb.log({f"Loss/test/RegulationMask": args.trainconfig.mask_regulation_W * l_mask_regulation.item()/args.batch_size}, step=count_val)
+            wandb.log({f"Loss/test/l_sum": (args.trainconfig.mask_loss_W * l_mask.item() + args.trainconfig.mask_regulation_W * l_mask_regulation.item())/args.batch_size}, step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
             mask = depth > args.min_depth
             count_val = count_val + 1
-            val_si.append(l_dense.item())
+            val_si.append(loss.item())
 
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval
@@ -517,9 +517,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
             valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
-            metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'))
-            metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
-            metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
+            metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'), gt_depth[valid_mask_traj].shape[0])
+            # metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
+            # metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
 

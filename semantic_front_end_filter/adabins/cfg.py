@@ -110,7 +110,7 @@ class TrainConfig:
     wd: float =  0.1
     div_factor: int =  25 
     final_div_factor: int =  100
-    epochs: int =  30
+    epochs: int =  10
     w_chamfer: float =  0.1
     data_path: str = "extract_trajectories"
     camera_cali_path: str = "/semantic_front_end_filter/Labelling/Example_Files/alphasense"
@@ -126,7 +126,7 @@ class TrainConfig:
     validate_every: int = 5
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
-    pc_image_label_W: float = 1
+    pc_image_label_W: float = 0
     traj_label_W_4mask: float = 1
     traj_label_W: float = 0.002
     edge_aware_label_W: float = 0
