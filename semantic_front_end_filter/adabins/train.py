@@ -31,7 +31,7 @@ from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss, Co
 from .utils import RunningAverage, colorize
 
 DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-PROJECT = "semantic_front_end_filter-adabins"
+PROJECT = "semantic_front_end_filter-Anomaly"
 logging = True
 
 count_val = 0
@@ -284,7 +284,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     should_log = should_write and logging
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="online")
+        wandb.init(project=PROJECT, name=args.trainconfig.wandb_name+"_"+DTSTRING, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="online")
         # wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="disabled")
         # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
 
