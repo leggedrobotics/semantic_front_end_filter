@@ -106,8 +106,8 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
             _, images = model(sample["image"][None,0,...].to(device))
         else:
             img = sample["image"][None,0,...].to(device)
-            if(args.modelconfig.ablation == "onlyRGB"):
-                img[:, 0] = 0
+            if(args.modelconfig.ablation == "onlyPC"):
+                img[:, 3] = 0
             elif(args.modelconfig.ablation == "onlyRGB"):
                 img[:, 0:3] = 0 
             images = model(img)
@@ -360,8 +360,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if(args.modelconfig.use_adabins):
                 bin_edges, pred = model(img)
             else:
-                if(args.modelconfig.ablation == "onlyRGB"):
-                    img[:, 0] = 0
+                if(args.modelconfig.ablation == "onlyPC"):
+                    img[:, 3] = 0
                 elif(args.modelconfig.ablation == "onlyRGB"):
                     img[:, 0:3] = 0    
                 bin_edges, pred = None, model(img)
@@ -469,8 +469,8 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             if(args.modelconfig.use_adabins):
                 bin_edges, pred = model(img)
             else:
-                if(args.modelconfig.ablation == "onlyRGB"):
-                    img[:, 0] = 0
+                if(args.modelconfig.ablation == "onlyPC"):
+                    img[:, 3] = 0
                 elif(args.modelconfig.ablation == "onlyRGB"):
                     img[:, 0:3] = 0 
                 bin_edges, pred = None, model(img)
