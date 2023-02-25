@@ -113,9 +113,9 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
             images = model(img)
 
         if(args.trainconfig.sprase_traj_mask):
-            pred[:, 2:] = pred[:, 2:] + pc_img # with or withour pc_image
+            images[:, 2:] = images[:, 2:] + pc_img # with or withour pc_image
         else:
-            pred[:, 2:] = pred[:, 2:]
+            images[:, 2:] = images[:, 2:]
 
         pred = images[0].detach()
         # mask_weight = nn.functional.sigmoid(pred[1:, :, :])
