@@ -111,8 +111,12 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
             elif(args.modelconfig.ablation == "onlyRGB"):
                 img[:, 3] = 0 
             images = model(img)
-            # images = model(sample["image"][None,0,...].to(device)[:,0:3])
-        # bins, images = None, model(sample["image"])
+
+        if(args.trainconfig.sprase_traj_mask):
+            pred[:, 2:] = pred[:, 2:] + pc_img # with or withour pc_image
+        else:
+            pred[:, 2:] = pred[:, 2:]
+
         pred = images[0].detach()
         # mask_weight = nn.functional.sigmoid(pred[1:, :, :])
         mask_weight = (pred[1:] > pred[:1]).long()
@@ -251,10 +255,11 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     # pred = pred[:, 1:] + pred[:, :1]
     # pred[:, 2:][mask_weight<1] = 
     
-    if(args.trainconfig.sprase_traj_mask):
-        pred = pred[:, 2:] + pc_image # with or withour pc_image
-    else:
-        pred = pred[:, 2:]
+    # if(args.trainconfig.sprase_traj_mask):
+        # pred = pred[:, 2:] + pc_image # with or withour pc_image
+    # else:
+        # pred = pred[:, 2:]
+    pred = pred[:, 2:]
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
@@ -366,6 +371,11 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     img[:, 3] = 0    
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
+
+            if(args.trainconfig.sprase_traj_mask):
+                pred[:, 2:] = pred[:, 2:] + pc_image # with or withour pc_image
+            else:
+                pred[:, 2:] = pred[:, 2:]
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
             l_dense, l_chamfer, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)
@@ -476,6 +486,10 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 bin_edges, pred = None, model(img)
                 # bin_edges, pred = None, model(img[: ,0:3])
             pc_image = batch["pc_image"].to(device)
+            if(args.trainconfig.sprase_traj_mask):
+                pred[:, 2:] = pred[:, 2:] + pc_image # with or withour pc_image
+            else:
+                pred[:, 2:] = pred[:, 2:]
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
             l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)
             if(pred.shape[1]==2):
