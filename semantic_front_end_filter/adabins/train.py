@@ -113,7 +113,7 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
             images = model(img)
 
         if(args.trainconfig.sprase_traj_mask):
-            images[:, 2:] = images[:, 2:] + sample["pc_image"].to(device) # with or withour pc_image
+            images[:, 2:] = images[:, 2:] + sample["pc_image"][None,0,...].to(device) # with or withour pc_image
         else:
             images[:, 2:] = images[:, 2:]
 
