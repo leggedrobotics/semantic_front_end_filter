@@ -490,9 +490,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
             # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
             # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
-            wandb.log({f"Loss/test/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=count_val, commit=False)
-            wandb.log({f"Loss/test/SSLoss": l_dense/args.batch_size}, step=count_val, commit=False)
-            wandb.log({f"Loss/test/l_sum": (args.trainconfig.mask_loss_W * l_mask.item() + args.trainconfig.mask_regulation_W * l_mask_regulation.item())/args.batch_size}, step=count_val, commit=False)
+            # wandb.log({f"Loss/test/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=count_val, commit=False)
+            # wandb.log({f"Loss/test/SSLoss": l_dense/args.batch_size}, step=count_val, commit=False)
+            # wandb.log({f"Loss/test/l_sum": (args.trainconfig.mask_loss_W * l_mask.item() + args.trainconfig.mask_regulation_W * l_mask_regulation.item())/args.batch_size}, step=count_val, commit=False)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
