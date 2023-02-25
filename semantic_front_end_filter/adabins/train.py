@@ -107,9 +107,9 @@ def log_images(samples, model, name, step, maxImages = 5, device = None, use_ada
         else:
             img = sample["image"][None,0,...].to(device)
             if(args.modelconfig.ablation == "onlyPC"):
-                img[:, 3] = 0
+                img[:, 0:3] = 0
             elif(args.modelconfig.ablation == "onlyRGB"):
-                img[:, 0:3] = 0 
+                img[:, 3] = 0 
             images = model(img)
             # images = model(sample["image"][None,0,...].to(device)[:,0:3])
         # bins, images = None, model(sample["image"])
@@ -361,9 +361,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 bin_edges, pred = model(img)
             else:
                 if(args.modelconfig.ablation == "onlyPC"):
-                    img[:, 3] = 0
+                    img[:, 0:3] = 0
                 elif(args.modelconfig.ablation == "onlyRGB"):
-                    img[:, 0:3] = 0    
+                    img[:, 3] = 0    
                 bin_edges, pred = None, model(img)
             pc_image = batch["pc_image"].to(device)
             if(pred.shape != depth.shape): # need to enlarge the output prediction
@@ -470,9 +470,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 bin_edges, pred = model(img)
             else:
                 if(args.modelconfig.ablation == "onlyPC"):
-                    img[:, 3] = 0
+                    img[:, 0:3] = 0
                 elif(args.modelconfig.ablation == "onlyRGB"):
-                    img[:, 0:3] = 0 
+                    img[:, 3] = 0 
                 bin_edges, pred = None, model(img)
                 # bin_edges, pred = None, model(img[: ,0:3])
             pc_image = batch["pc_image"].to(device)
