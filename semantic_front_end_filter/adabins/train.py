@@ -449,8 +449,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                     time_total = -time.time()
                     time_core = 0.
                 if metrics['traj/abs_rel'] < best_loss and should_write:
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
-                                             root=saver.data_dir)
+                    # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
+                    #                          root=saver.data_dir)
                     best_loss = metrics['traj/abs_rel']
                 model.train()
                 #################################################################################################
