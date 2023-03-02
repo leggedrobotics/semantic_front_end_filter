@@ -246,12 +246,13 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     # l_mask = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
     # Apply anomaly mask    
     l_mask = criterion_mask(pred[:, 0:2], mask_gt.squeeze(dim=1).long())
+    l_mask_regulation = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
     
     mask_weight = (pred[:, 1:2] > pred[:, :1]).long()
     mask_soft = nn.functional.softmax(pred[:, 0:2], dim = 1)
     # l_mask_regulation = (torch.sum(mask_weight) - mask_weight.numel()/2)**2
     # l_mask_regulation = (torch.sum(mask_soft[:, 1:]) - torch.sum(mask_soft[:, :1])*args.trainconfig.mask_ratio)**2
-    l_mask_regulation = (torch.sum(mask_soft[:, 1:]) - torch.sum(mask_soft[:, :1])*args.trainconfig.mask_ratio)**2
+    # l_mask_regulation = (torch.sum(mask_soft[:, 1:]) - torch.sum(mask_soft[:, :1])*args.trainconfig.mask_ratio)**2
     # pred = pred[:, 1:] + pred[:, :1]
     # pred[:, 2:][mask_weight<1] = 
     
@@ -499,8 +500,9 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 mask_weight = (pred[:, 1:2]>pred[:, 0:1])
                 pred =  pred[:, 2:].clone()
                 pred[~mask_weight] = pc_image[~mask_weight]
-            loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation
-            
+            # loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation
+            loss = args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation + l_dense
+
             # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
             # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
             # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
