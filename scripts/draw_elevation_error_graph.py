@@ -42,7 +42,7 @@ from semantic_front_end_filter.Labelling.GroundfromTrajs import GFT
 # Adabins
 from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
 from semantic_front_end_filter.adabins.models import UnetAdaptiveBins
-from semantic_front_end_filter.adabins.model_io import load_checkpoint, load_param_from_path
+from semantic_front_end_filter.adabins.model_io import load_checkpoint, load_param_from_path, load_train_param_from_path
 from semantic_front_end_filter.adabins.elevation_vis import WorldViewElevationMap
 from semantic_front_end_filter.adabins.elevation_eval_util import ElevationMapEvaluator
 
@@ -63,14 +63,25 @@ def main (modelname, overwrite = False):
     
     #### Italy Configurations
     
-    # rosbagpath = "/Data/Italy_0820/18-20-34-01/Reconstruct_2022-07-18-20-34-01_0.bag" # testing set
-    # foottrajpath = "/Data/Italy_0820/18-20-34-01/FeetTrajs.msgpack"
-    # groundmappath = "/Data/Italy_0820/18-20-34-01/GroundMap.msgpack"
-    rosbagpath = "/Data/Italy_0820/19-20-06-22/Reconstruct_2022-07-19-20-06-22_0.bag"
-    foottrajpath = "/Data/Italy_0820/19-20-06-22/FeetTrajs.msgpack"
-    groundmappath = "/Data/Italy_0820/19-20-06-22/GroundMap.msgpack"
-    # model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
-    model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_latest.pt"
+    ## Testing set
+    rosbagpath = "/Data/Italy_0820/18-20-34-01/Reconstruct_2022-07-18-20-34-01_0.bag" # testing set
+    foottrajpath = "/Data/Italy_0820/18-20-34-01/FeetTrajs.msgpack"
+    groundmappath = "/Data/Italy_0820/18-20-34-01/GroundMap.msgpack"
+    OUTDIR_NAME = "Italy_2022-07-18-20-34-01_0"
+    START_TIME = 10
+    END_TIME = 200
+
+    ## Train set
+    # rosbagpath = "/Data/Italy_0820/19-20-06-22/Reconstruct_2022-07-19-20-06-22_0.bag"
+    # foottrajpath = "/Data/Italy_0820/19-20-06-22/FeetTrajs.msgpack"
+    # groundmappath = "/Data/Italy_0820/19-20-06-22/GroundMap.msgpack"
+    # OUTDIR_NAME = "Italy_2022-07-19-20-06-22_0"
+    # START_TIME = 100
+    # END_TIME = 300
+
+
+    # model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_latest.pt"
+    model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
     image_topic = "/alphasense_driver_ros/cam4/debayered"
     pc_topic = "/bpearl_rear/point_cloud"
     TF_BASE = "base"
@@ -89,9 +100,9 @@ def main (modelname, overwrite = False):
     GENERATE_VIDEO = True
     if GENERATE_VIDEO: # this should be corresponded to the `play`
         # outputdir = f"checkpoints/{modelname}/Identity"
-        outputdir = f"checkpoints/{modelname}/Italy0-2008x8-nearest_"
+        outputdir = f"checkpoints/{modelname}/{OUTDIR_NAME}Vid_T{START_TIME}--{END_TIME}"
     else:
-        outputdir = f"checkpoints/{modelname}/Italywhole"
+        outputdir = f"checkpoints/{modelname}/{OUTDIR_NAME}_T{START_TIME}--{END_TIME}"
 
     if not overwrite and os.path.exists(outputdir):
         return
@@ -114,8 +125,10 @@ def main (modelname, overwrite = False):
 
     ## Initialize model
     model_cfg = load_param_from_path(model_path)
-    model_cfg["input_channel"] = 4
+    # model_cfg["input_channel"] = 4
     model = UnetAdaptiveBins.build(**model_cfg)
+
+    train_cfg = load_train_param_from_path(model_path)
 
     model = load_checkpoint(model_path, model)[0]
     model.to(device)
@@ -156,10 +169,19 @@ def main (modelname, overwrite = False):
         # get prediction
         model_in = torch.cat([image/255., pc_img],axis=0)
         model_in = model_in[None, ...]
+        if(model_cfg.get("ablation", None) == "onlyPC"):
+            model_in[:, 0:3] = 0
+        elif(model_cfg.get("ablation",None) == "onlyRGB"):
+            model_in[:, 3] = 0 
         for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
             model_in[0, i, ...] = (model_in[0, i, ...] - m)/s
 
         pred = model(model_in)
+        if(train_cfg.get("sprase_traj_mask", False)):
+            pred[:, 2:] = pred[:, 2:] + pc_img[None,0,...].to(device) # with or without pc_image
+        else:
+            pred[:, 2:] = pred[:, 2:]
+
         # print("pred_shape",pred.shape)
         # print("pc_img_shape",pc_img.shape)
         mask_weight = (pred[0, 1:2] > pred[0, 0:1])
@@ -245,14 +267,13 @@ def main (modelname, overwrite = False):
         v["pcbuffer"].append(pc_array[:,:3])
     player.register_callback(pc_topic, pointcloud_cb)
 
-    if(GENERATE_VIDEO): # video generation is expensive in memory
-        # 100 to 200 is good
-        player.play(start_time=player.bag.get_start_time()+100, end_time=player.bag.get_start_time()+300)
-        # player.play(start_time=player.bag.get_end_time()-200)
-    else:
-        # player.play(end_time=player.bag.get_start_time()+5)
-        player.play(end_time=player.bag.get_start_time()+200)# play from start to before entering the forest
-        player.play(start_time=player.bag.get_start_time()+420)# play from in the foresst
+    start_time_ = player.bag.get_start_time()+START_TIME if(START_TIME>0) else player.bag.get_end_time()-START_TIME
+    end_time_ = player.bag.get_start_time()+END_TIME if(END_TIME>0) else player.bag.get_end_time()-END_TIME
+    player.play(start_time=start_time_, end_time=end_time_)
+
+        # # player.play(end_time=player.bag.get_start_time()+5)
+        # player.play(end_time=player.bag.get_start_time()+200)# play from start to before entering the forest
+        # player.play(start_time=player.bag.get_start_time()+420)# play from in the foresst
 
 
     ## Output
@@ -419,7 +440,7 @@ def main (modelname, overwrite = False):
         f.write("fh mean err: %.3f\n"%(evaluator_fh.get_mean_err()))
 
 if __name__ == "__main__":
-    for m in ["2023-02-12-20-24-22_All3Envs",]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
+    for m in ["2023-02-26-15-51-28_onlyRGB","2023-02-12-20-24-22_All3Envs"][1:]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
         main(m, overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-29-*"):

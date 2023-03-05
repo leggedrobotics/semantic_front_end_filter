@@ -9,6 +9,12 @@ def load_param_from_path(data_path):
     # model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
     return model_cfg
 
+def load_train_param_from_path(data_path):
+    train_cfg = yaml.load(
+        open(os.path.join(os.path.dirname(data_path), "TrainConfig.yaml"), 'r'), Loader=yaml.FullLoader)
+    # train_cfg = YAML().load(open(os.path.join(data_path, "TrainConfig.yaml"), 'r'))
+    return train_cfg
+
 def save_weights(model, filename, path="./saved_models"):
     if not os.path.isdir(path):
         os.makedirs(path)
