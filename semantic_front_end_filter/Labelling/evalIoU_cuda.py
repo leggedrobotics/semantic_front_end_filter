@@ -3,6 +3,7 @@
 
 # from train import *
 import os
+from tomlkit import string
 import torch
 from torch import nn
 import numpy as np
@@ -11,6 +12,7 @@ from semantic_front_end_filter.adabins import model_io, models
 from semantic_front_end_filter.adabins.cfgUtils import parse_args
 from simple_parsing import ArgumentParser
 import yaml
+import pandas as pd
 
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
@@ -151,8 +153,8 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
 
         sample_num += 1
         # print("raw: ", rawREL)
-        # if(i>10):
-        #     break
+        if(i>2):
+            break
 
     torch.set_printoptions(precision=3)
     print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
@@ -161,13 +163,16 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
             "RMSELog: ", RMSElogs/total_pixel_num)
     print("{:.3f} & {:.3f} & {:.3f}".format(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num))
     print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num))
-
+    IOU = torch.Tensor([ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num])
+    DE = torch.Tensor([torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num])
+    
     print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
             "rawRMSE: ", torch.sqrt(rawRMSEs/total_pixel_num),
             "rawREL: ", rawRELs/total_pixel_num,
             "rawRMSELog: ", rawRMSElogs/total_pixel_num)
     print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(rawRMSEs/total_pixel_num), rawRELs/total_pixel_num, rawRMSElogs/total_pixel_num))
     
+    return IOU, DE
             # pred_origin = pred[:, 2:]
             # pred = pred[:, 2:].clone()
             # pred[~mask_weight] = sample["pc_image"][~mask_weight]
@@ -199,10 +204,15 @@ def load_param_from_path(data_path):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-04-18-27-56/UnetAdaptiveBins_latest.pt")
+        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-06-04-58-23/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
     parser.add_argument(
         "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
+    parser.add_argument(
+        "--save_path", default='/home/anqiao/semantic_front_end_filter/Labelling/Example_Files//Evaluate_Table.csv', type=str)
+    parser.add_argument(
+        "--dataset_path", default='/media/anqiao/Semantic/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories', type=str)
+    
     parser.add_argument('--gpu', default=None, type=int,
                         help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
@@ -224,7 +234,9 @@ if __name__ == "__main__":
 
     args = parse_args(parser)
     # args.data_path = "/home/anqiao/catkin_ws/SA_dataset/extract_trajectories_test"
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
+    save_path = args.save_path
+    args.data_path = args.dataset_path
+    # args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
     # args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories"
 
     # if not os.path.exists(args.outdir):
@@ -263,8 +275,22 @@ if __name__ == "__main__":
     #     plt.savefig(os.path.join(args.outdir, "%d.jpg" % i))
         # plt.show()
     # vis_network_structure()
+
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
-    computeIoUs(model, loader='test', env='grassland')
-    computeIoUs(model, loader='test', env='high grass')
-    computeIoUs(model, loader='test', env='forest')
+    IOU_data = torch.Tensor([])
+    DE_data = torch.Tensor([])
+    # computeIoUs(model, loader='train', env="grassland")
+    for env in list(['grassland', 'high grass', 'forest']):
+        print(env)
+        IOU, DE = computeIoUs(model, loader='test', env=env)
+        IOU_data = torch.concat([IOU_data, IOU])
+        DE_data = torch.concat([DE_data, DE])
+
+    if save_path is not None:
+        df = pd.read_csv(save_path, header=0)
+
+        df.loc[len(df)] = (torch.concat([IOU_data, DE_data])).cpu().numpy()
+        df.to_csv(save_path, index=False)
+    # computeIoUs(model, loader='test', env='high grass')
+    # computeIoUs(model, loader='test', env='forest')
 

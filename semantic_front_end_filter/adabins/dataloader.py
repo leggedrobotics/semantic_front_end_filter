@@ -51,7 +51,7 @@ class DepthDataLoader(object):
                 self.eval_sampler = None
             else:
                 self.eval_sampler = None
-            self.data = DataLoader(self.testing_samples, 1,
+            self.data = DataLoader(self.testing_samples, args.batch_size,
                                    shuffle=False,
                                    num_workers=1,
                                    pin_memory=False,
