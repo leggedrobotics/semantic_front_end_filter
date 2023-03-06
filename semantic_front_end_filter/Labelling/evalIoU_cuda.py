@@ -283,13 +283,13 @@ if __name__ == "__main__":
     for env in list(['grassland', 'high grass', 'forest']):
         print(env)
         IOU, DE = computeIoUs(model, loader='test', env=env)
-        IOU_data = torch.concat([IOU_data, IOU])
-        DE_data = torch.concat([DE_data, DE])
+        IOU_data = torch.cat([IOU_data, IOU])
+        DE_data = torch.cat([DE_data, DE])
 
     if save_path is not None:
         df = pd.read_csv(save_path, header=0)
 
-        df.loc[len(df)] = (torch.concat([IOU_data, DE_data])).cpu().numpy()
+        df.loc[len(df)] = (torch.cat([IOU_data, DE_data])).cpu().numpy()
         df.to_csv(save_path, index=False)
     # computeIoUs(model, loader='test', env='high grass')
     # computeIoUs(model, loader='test', env='forest')
