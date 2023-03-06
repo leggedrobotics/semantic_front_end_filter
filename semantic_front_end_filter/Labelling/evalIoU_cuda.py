@@ -153,8 +153,8 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
 
         sample_num += 1
         # print("raw: ", rawREL)
-        if(i>2):
-            break
+        # if(i>2):
+        #     break
 
     torch.set_printoptions(precision=3)
     print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
