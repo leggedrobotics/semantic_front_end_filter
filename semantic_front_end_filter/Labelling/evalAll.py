@@ -26,4 +26,4 @@ with open(file_path + '/Evaluate_Table.csv', 'w+') as f:
 key_word = '2023-03-05'
 for checkpoint in os.listdir(checkpoints_dir):
     if key_word in checkpoint:
-        os.system("python /home/anqiao/tmp/semantic_front_end_filter/semantic_front_end_filter/Labelling/evalIoU_cuda.py --models " + checkpoints_dir + '/' + checkpoint + "/UnetAdaptiveBins_latest.pt --save_path " + file_path + 'Evaluate_Table.csv --dataset_path '+args.data_path)
+        os.system("python ./semantic_front_end_filter/Labelling/evalIoU_cuda.py --models " + checkpoints_dir + '/' + checkpoint + "/UnetAdaptiveBins_latest.pt --save_path " + file_path + 'Evaluate_Table.csv --dataset_path '+args.data_path)
