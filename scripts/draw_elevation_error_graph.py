@@ -64,24 +64,24 @@ def main (modelname, overwrite = False):
     #### Italy Configurations
     
     ## Testing set
-    rosbagpath = "/Data/Italy_0820/18-20-34-01/Reconstruct_2022-07-18-20-34-01_0.bag" # testing set
-    foottrajpath = "/Data/Italy_0820/18-20-34-01/FeetTrajs.msgpack"
-    groundmappath = "/Data/Italy_0820/18-20-34-01/GroundMap.msgpack"
-    OUTDIR_NAME = "Italy_2022-07-18-20-34-01_0"
-    START_TIME = 10
-    END_TIME = 200
+    # rosbagpath = "/Data/Italy_0820/18-20-34-01/Reconstruct_2022-07-18-20-34-01_0.bag" # testing set
+    # foottrajpath = "/Data/Italy_0820/18-20-34-01/FeetTrajs.msgpack"
+    # groundmappath = "/Data/Italy_0820/18-20-34-01/GroundMap.msgpack"
+    # OUTDIR_NAME = "Italy_2022-07-18-20-34-01_0"
+    # START_TIME = 10
+    # END_TIME = 200
 
     ## Train set
-    # rosbagpath = "/Data/Italy_0820/19-20-06-22/Reconstruct_2022-07-19-20-06-22_0.bag"
-    # foottrajpath = "/Data/Italy_0820/19-20-06-22/FeetTrajs.msgpack"
-    # groundmappath = "/Data/Italy_0820/19-20-06-22/GroundMap.msgpack"
-    # OUTDIR_NAME = "Italy_2022-07-19-20-06-22_0"
-    # START_TIME = 100
-    # END_TIME = 300
+    rosbagpath = "/Data/Italy_0820/19-20-06-22/Reconstruct_2022-07-19-20-06-22_0.bag"
+    foottrajpath = "/Data/Italy_0820/19-20-06-22/FeetTrajs.msgpack"
+    groundmappath = "/Data/Italy_0820/19-20-06-22/GroundMap.msgpack"
+    OUTDIR_NAME = "Italy_2022-07-19-20-06-22_0"
+    START_TIME = 100
+    END_TIME = 300
 
 
-    # model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_latest.pt"
-    model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
+    model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_latest.pt"
+    # model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_best.pt"
     image_topic = "/alphasense_driver_ros/cam4/debayered"
     pc_topic = "/bpearl_rear/point_cloud"
     TF_BASE = "base"
@@ -440,7 +440,7 @@ def main (modelname, overwrite = False):
         f.write("fh mean err: %.3f\n"%(evaluator_fh.get_mean_err()))
 
 if __name__ == "__main__":
-    for m in ["2023-02-26-15-51-28_onlyRGB","2023-02-12-20-24-22_All3Envs"][1:]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
+    for m in ["2023-02-28-12-00-40_fixed"]:#,"2022-09-05-23-28-07", "2022-09-06-00-11-32"]:
         main(m, overwrite=True)
     # from glob import glob
     # for m in glob("checkpoints/2022-08-29-*"):
