@@ -63,21 +63,21 @@ def main (modelname, overwrite = False):
     
     #### Italy Configurations
     
-    ## Testing set
-    # rosbagpath = "/Data/Italy_0820/18-20-34-01/Reconstruct_2022-07-18-20-34-01_0.bag" # testing set
-    # foottrajpath = "/Data/Italy_0820/18-20-34-01/FeetTrajs.msgpack"
-    # groundmappath = "/Data/Italy_0820/18-20-34-01/GroundMap.msgpack"
-    # OUTDIR_NAME = "Italy_2022-07-18-20-34-01_0"
-    # START_TIME = 10
-    # END_TIME = 200
+    # Testing set
+    rosbagpath = "/Data/Italy_0820/18-20-34-01/Reconstruct_2022-07-18-20-34-01_0.bag" # testing set
+    foottrajpath = "/Data/Italy_0820/18-20-34-01/FeetTrajs.msgpack"
+    groundmappath = "/Data/Italy_0820/18-20-34-01/GroundMap.msgpack"
+    OUTDIR_NAME = "Italy_2022-07-18-20-34-01_0"
+    START_TIME = 10
+    END_TIME = 200
 
-    ## Train set
-    rosbagpath = "/Data/Italy_0820/19-20-06-22/Reconstruct_2022-07-19-20-06-22_0.bag"
-    foottrajpath = "/Data/Italy_0820/19-20-06-22/FeetTrajs.msgpack"
-    groundmappath = "/Data/Italy_0820/19-20-06-22/GroundMap.msgpack"
-    OUTDIR_NAME = "Italy_2022-07-19-20-06-22_0"
-    START_TIME = 100
-    END_TIME = 300
+    # ## Train set
+    # rosbagpath = "/Data/Italy_0820/19-20-06-22/Reconstruct_2022-07-19-20-06-22_0.bag"
+    # foottrajpath = "/Data/Italy_0820/19-20-06-22/FeetTrajs.msgpack"
+    # groundmappath = "/Data/Italy_0820/19-20-06-22/GroundMap.msgpack"
+    # OUTDIR_NAME = "Italy_2022-07-19-20-06-22_0"
+    # START_TIME = 100
+    # END_TIME = 300
 
 
     model_path = f"checkpoints/{modelname}/UnetAdaptiveBins_latest.pt"
