@@ -38,7 +38,8 @@ class DepthDataLoader(object):
                 self.train_sampler = None
 
             self.data = DataLoader(self.training_samples, args.batch_size,
-                                   shuffle=(self.train_sampler is None),
+                                #    shuffle=(self.train_sampler is None),
+                                   shuffle =  False,
                                    num_workers=args.num_threads,
                                    pin_memory=True,
                                    sampler=self.train_sampler)
@@ -86,7 +87,7 @@ class DataLoadPreprocess(Dataset):
             args.data_path = os.path.join(os.environ["TMPDIR"], args.data_path)
         print("data_path",args.data_path)
         for root, dirs, files in os.walk(args.data_path):
-            for file in files:
+            for file in sorted(files, key=lambda x : (int(x.split('_')[1]), int(x.split('_')[-1].split('.')[0]))):
                 if file.startswith('traj') and file.endswith('.msgpack'):
                     # print("loading file: %s"%file, end =" ")
                     sample_path = os.path.join(root,file)
@@ -97,7 +98,7 @@ class DataLoadPreprocess(Dataset):
                     # if(root.split('/')[-1] in {"Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"}):
                     if(root.split('/')[-1] in args.trainconfig.testing):
                         self.test_filenames.append(sample_path)
-                    else:
+                    elif (root.split('/')[-1] in args.trainconfig.training):
                         self.filenames.append(sample_path)
                         # print("success")
                     # else:
@@ -110,7 +111,8 @@ class DataLoadPreprocess(Dataset):
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
         self.filenames = self.filenames if self.mode == 'train' else self.test_filenames
-        random.Random(0).shuffle(self.filenames)
+        if self.mode == 'train':
+            random.Random(0).shuffle(self.filenames)  
         print(self.mode, len(self.filenames))
 
     def __getitem__(self, idx):
@@ -127,6 +129,8 @@ class DataLoadPreprocess(Dataset):
             depth_gt = np.moveaxis(data["depth_var"],0,2)
             pc_image_label = data["pc_image"][:,:,self.args.trainconfig.pc_img_label_channel,None]
             pc_image_input = data["pc_image"][:,:,self.args.trainconfig.pc_img_input_channel,None]
+            pose = data["pose"].copy()
+            mask_gt = data['anomaly_mask'][..., None].copy()
         else:
             image = Image.fromarray(np.moveaxis(data["images"]["cam4"].astype(np.uint8), 0, 2))
             depth_gt = np.moveaxis(data["images"]["cam4depth"],0,2)
@@ -163,11 +167,12 @@ class DataLoadPreprocess(Dataset):
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
             pc_image_input = np.asarray(pc_image_input, dtype=np.float32)
             
-            image, depth_gt, pc_image_label, pc_image_input = self.random_crop(
-                image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
-                pc_image_label, pc_image_input)
-            image, depth_gt, pc_image_label, pc_image_input = self.train_preprocess(
-                image, depth_gt, pc_image_label, pc_image_input)
+            if(self.args.trainconfig.random_crop):
+                image, depth_gt, pc_image_label, pc_image_input, mask_gt = self.random_crop(
+                    image, depth_gt, self.args.modelconfig.input_height, self.args.modelconfig.input_width, 
+                    pc_image_label, pc_image_input, mask_gt)
+            image, depth_gt, pc_image_label, pc_image_input, mask_gt = self.train_preprocess(self.args.trainconfig.random_flip,
+                image, depth_gt, pc_image_label, pc_image_input, mask_gt)
             depth_gt_mean = depth_gt[:, :, 0:1].copy()
             depth_gt_variance = depth_gt[:, :, 1:].copy()
             depth_gt_mean [depth_gt_variance > self.args.trainconfig.traj_variance_threashold] = 0
@@ -175,7 +180,7 @@ class DataLoadPreprocess(Dataset):
             sample = {'image': image.copy(), 'depth': depth_gt_mean, 
                 'pc_image': pc_image_label.copy(), 'focal': focal, 
                 'depth_variance': depth_gt_variance,
-                'path': sample_path}
+                'path': sample_path, 'pose': pose, "mask_gt": mask_gt}
 
         else:
             image = np.asarray(image, dtype=np.float32) / 255.0
@@ -186,17 +191,17 @@ class DataLoadPreprocess(Dataset):
             pc_image_label = np.asarray(pc_image_label, dtype=np.float32)
 
             if self.mode == 'online_eval':
-                    has_valid_depth = True
-                    depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
+                has_valid_depth = True
+                depth_gt_mean = np.asarray(depth_gt_mean, dtype=np.float32)
 
 
             if self.args.trainconfig.do_kb_crop is True:
                 image,depth_gt_mean = image,depth_gt_mean
             if self.mode == 'online_eval':
                 sample = {'image': image.copy(), 'depth': depth_gt_mean, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy()}
+                          'path': sample_path,  'depth_variance': depth_gt_variance, 'pc_image': pc_image_label.copy(), 'pose': pose, "mask_gt": mask_gt}
             else:
-                sample = {'image': image.copy(), 'focal': focal}
+                sample = {'image': image.copy(), 'focal': focal, 'pose': pose, "mask_gt": mask_gt}
 
         if self.transform:
             sample = self.transform(sample)
@@ -220,11 +225,11 @@ class DataLoadPreprocess(Dataset):
         retargs = [i[y:y + height, x:x + width, :] for i in args]
         return img, depth, *retargs
 
-    def train_preprocess(self, image, depth_gt, *args):
+    def train_preprocess(self, flip, image, depth_gt, *args):
         # Random flipping
         do_flip = random.random()
         retargs = args
-        if do_flip > 0.5:
+        if flip & (do_flip > 0.5):
             image = (image[:, ::-1, :]).copy()
             depth_gt = (depth_gt[:, ::-1, :]).copy()
             retargs = [(i[:, ::-1, :]).copy() for i in args]
@@ -277,13 +282,14 @@ class ToTensor(object):
         depth_variance = self.to_tensor(depth_variance)
         pc_image = sample['pc_image']
         pc_image = self.to_tensor(pc_image)
+        mask_gt = self.to_tensor(sample['mask_gt'])
         if self.mode == 'train':
             return {'image': image, 'depth': depth, "pc_image":pc_image, 
-                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path']}
+                    'focal': focal, "depth_variance": depth_variance, 'path': sample['path'], 'pose':torch.from_numpy(sample['pose']), 'mask_gt':mask_gt}
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth,
-                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image}
+                    'path': sample['path'],  "depth_variance": depth_variance, "pc_image":pc_image, 'pose':torch.from_numpy(sample['pose']), 'mask_gt':mask_gt}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

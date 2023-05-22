@@ -6,7 +6,7 @@ from scipy.spatial.transform import Rotation
 try:
     from .messageToVectors import msg_to_pose
     from cv_bridge import CvBridge, CvBridgeError
-    from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
+    # from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
 except ModuleNotFoundError as ex:
     print("ImageMassage Warning: ros package fails to load")
     print(ex)
@@ -51,7 +51,7 @@ class Camera:
         rel_pose = msg_to_pose(tf)
         position = np.array(rel_pose[:3])
         quat = rel_pose[3:]
-        R = np.array(quaternion_matrix(quat))
+        R = Rotation.from_quat(quat).as_matrix()
 
         self.tf_base_to_sensor = (position, R)
 

@@ -29,11 +29,11 @@ def denormalize(x, device='cpu'):
     return x * std + mean
 
 
-class RunningAverageDict:
+class RunningAverageDict_avg:
     def __init__(self):
         self._dict = None
-
-    def update(self, new_dict):
+        self._total_pixel_num = 0
+    def update(self, new_dict, pixel_num):
         if self._dict is None:
             self._dict = dict()
             for key, value in new_dict.items():
@@ -45,10 +45,55 @@ class RunningAverageDict:
             except KeyError as e:
                 self._dict[key] = RunningAverage()
                 self._dict[key].append(value)
+        self._total_pixel_num += pixel_num
 
     def get_value(self):
+        # new_dict = {}
+        # for key, value in self._dict.items():
+        #     if value is None:
+        #         new_dict[key] = value
+        #     else:
+        #         new_dict[key] = value.get_value()
         return {key: value.get_value() for key, value in self._dict.items()}
+        # return new_dict
 
+class RunningAverageDict:
+    def __init__(self):
+        self._dict = None
+        self._total_pixel_num = 0
+    def update(self, new_dict, pixel_num):
+        if self._dict is None:
+            self._dict = dict()
+            for key, value in new_dict.items():
+                self._dict[key] = value
+
+        for key, value in new_dict.items():
+            try:
+                self._dict[key] += value
+            except KeyError as e:
+                self._dict[key] = value
+        self._total_pixel_num += pixel_num
+
+    def get_value(self):
+        # new_dict = {}
+        # for key, value in self._dict.items():
+        #     if value is None:
+        #         new_dict[key] = value
+        #     else:
+        #         new_dict[key] = value.get_value()
+        mdict = {}
+        prefix = list(self._dict.keys())[0].split('/')[0]
+        for key, value in self._dict.items():
+            if 'rmse' in key or ('rmse_log' in key):
+                mdict[key] = np.sqrt(value/self._total_pixel_num)
+            elif 'err' in key:
+                continue
+            else:
+                mdict[key] = value/self._total_pixel_num
+        mdict[prefix + '/silog'] = np.sqrt(self._dict[prefix + '/err2']/self._total_pixel_num - (self._dict[prefix + '/err']/self._total_pixel_num)**2) * 100
+
+        return mdict
+        # return new_dict
 
 def colorize(value, vmin=10, vmax=1000, cmap='magma_r'):
     value = value.cpu().numpy()[0, :, :]
@@ -84,25 +129,25 @@ def compute_errors(gt, pred, prefix):
     gt = np.array(gt)
     pred = np.array(pred)
     thresh = np.maximum((gt / pred), (pred / gt))
-    a1 = (thresh < 1.25).mean()
-    a2 = (thresh < 1.25 ** 2).mean()
-    a3 = (thresh < 1.25 ** 3).mean()
+    a1 = (thresh < 1.25).sum()
+    a2 = (thresh < 1.25 ** 2).sum()
+    a3 = (thresh < 1.25 ** 3).sum()
 
-    abs_rel = np.mean(np.abs(gt - pred) / gt)
-    sq_rel = np.mean(((gt - pred) ** 2) / gt)
+    abs_rel = np.sum(np.abs(gt - pred) / gt)
+    sq_rel = np.sum(((gt - pred) ** 2) / gt)
 
-    rmse = (gt - pred) ** 2
-    rmse = np.sqrt(rmse.mean())
+    rmse = ((gt - pred) ** 2).sum()
+    # rmse = np.sqrt(rmse.mean())
 
-    rmse_log = (np.log(gt) - np.log(pred)) ** 2
-    rmse_log = np.sqrt(rmse_log.mean())
+    rmse_log = ((np.log(gt) - np.log(pred)) ** 2).sum()
+    # rmse_log = np.sqrt(rmse_log.mean())
 
-    err = np.log(pred) - np.log(gt)
-    silog = np.sqrt(np.mean(err ** 2) - np.mean(err) ** 2) * 100
+    err = (np.log(pred) - np.log(gt)).sum()
+    # silog = np.sqrt(np.mean(err ** 2) - np.mean(err) ** 2) * 100
 
-    log_10 = (np.abs(np.log10(gt) - np.log10(pred))).mean()
+    log_10 = (np.abs(np.log10(gt) - np.log10(pred))).sum()
     error_dict =  dict(a1=a1, a2=a2, a3=a3, abs_rel=abs_rel, rmse=rmse, log_10=log_10, rmse_log=rmse_log,
-                silog=silog, sq_rel=sq_rel)
+                err=err, err2=err**2, sq_rel=sq_rel)
     error_dict_with_prefix = {prefix+key: value for key, value in error_dict.items()}
     return error_dict_with_prefix
 

@@ -1,3 +1,4 @@
+from math import ceil
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,8 +7,15 @@ from .miniViT import mViT
 import os
 
 class UpSampleBN(nn.Module):
-    def __init__(self, skip_input, output_features, deactivate_bn):
+    def __init__(self, skip_input, output_features, deactivate_bn, mode = 'convT', input_size = None, concat_size = None):
         super(UpSampleBN, self).__init__()
+        self.mode = mode
+        if(self.mode == 'convT'):
+            paddingx = ceil((input_size[2]*2 - concat_size[2])/2)
+            output_paddingx = (input_size[2]*2 - concat_size[2])%2
+            paddingy = ceil((input_size[3]*2 - concat_size[3])/2) 
+            output_paddingy = (input_size[3]*2 - concat_size[3])%2
+            self.up = nn.ConvTranspose2d(input_size[1], input_size[1], kernel_size=2, stride=2, padding=(paddingx, paddingy), output_padding=(output_paddingx, output_paddingy))
         if(deactivate_bn):
             self._net = nn.Sequential(nn.Conv2d(skip_input, output_features, kernel_size=3, stride=1, padding=1),
                                     # nn.BatchNorm2d(output_features),
@@ -23,26 +31,36 @@ class UpSampleBN(nn.Module):
                                     nn.BatchNorm2d(output_features),
                                     nn.LeakyReLU())
 
+
     def forward(self, x, concat_with):
-        up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='nearest')
+        if(self.mode=='convT'):
+            up_x = self.up(x)
+        else:
+            up_x = F.interpolate(x, size=[concat_with.size(2), concat_with.size(3)], mode='nearest')
         f = torch.cat([up_x, concat_with], dim=1)
         return self._net(f)
 
 
 class DecoderBN(nn.Module):
-    def __init__(self, num_features=2048, num_classes=1, bottleneck_features=2048, deactivate_bn = False, skip_connection = False):
+    def __init__(self, num_features=2048, num_classes=1, bottleneck_features=2048, deactivate_bn = False, skip_connection = False, mode = 'convT', output_mask = False, decoder_num = None, output = 'mask'):
         super(DecoderBN, self).__init__()
         features = int(num_features)
         self.skip_connection = skip_connection
+        self.output_mask = output_mask
+        self.decoder_num = decoder_num
         self.conv2 = nn.Conv2d(bottleneck_features, features, kernel_size=1, stride=1, padding=1)
-
-        self.up1 = UpSampleBN(skip_input=features // 1 + 112 + 64, output_features=features // 2, deactivate_bn = deactivate_bn)
-        self.up2 = UpSampleBN(skip_input=features // 2 + 40 + 24, output_features=features // 4, deactivate_bn = deactivate_bn)
-        self.up3 = UpSampleBN(skip_input=features // 4 + 24 + 16, output_features=features // 8, deactivate_bn = deactivate_bn)
-        self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16, deactivate_bn = deactivate_bn)
-        self.up5_add = UpSampleBN(skip_input=features // 16 + 1, output_features=features // 32, deactivate_bn = deactivate_bn)
-        self.conv3 = nn.Conv2d(features // 16, num_classes, kernel_size=3, stride=1, padding=1)
+        self.output = output
+        input_size = [[1, 2048, 19, 25], [1, 1024, 34, 45], [1, 512, 68, 90], [1, 256, 135, 180]]
+        concat_size = [[1, 176, 34, 45], [1, 64, 68, 90], [1, 40, 135, 180], [1, 24, 269, 359]]
+        self.up1 = UpSampleBN(skip_input=features // 1 + 112 + 64, output_features=features // 2, deactivate_bn = deactivate_bn, input_size=input_size[0], concat_size=concat_size[0], mode=mode)
+        self.up2 = UpSampleBN(skip_input=features // 2 + 40 + 24, output_features=features // 4, deactivate_bn = deactivate_bn, input_size=input_size[1], concat_size=concat_size[1], mode=mode)
+        self.up3 = UpSampleBN(skip_input=features // 4 + 24 + 16, output_features=features // 8, deactivate_bn = deactivate_bn, input_size=input_size[2], concat_size=concat_size[2], mode=mode)
+        self.up4 = UpSampleBN(skip_input=features // 8 + 16 + 8, output_features=features // 16, deactivate_bn = deactivate_bn, input_size=input_size[3], concat_size=concat_size[3], mode=mode)
+        # self.up5_add = UpSampleBN(skip_input=features // 16 + 1, output_features=features // 32, deactivate_bn = deactivate_bn)
+        self.conv3 = nn.Conv2d(features // 16, features // 32, kernel_size=3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(features // 32, num_classes, kernel_size=1, stride=1)
         self.distance_maintainer = nn.ReLU()
+        self.mask_softer = nn.Sigmoid()
         #         self.up5 = UpSample(skip_input=features // 16 + 3, output_features=features//16)
         # if(self.skip_connection):
         #     self.conv3 = nn.Conv2d(features // 32, num_classes, kernel_size=3, stride=1, padding=1)
@@ -53,19 +71,34 @@ class DecoderBN(nn.Module):
     def forward(self, features):
         x_block_skip, x_block0, x_block1, x_block2, x_block3, x_block4 = features[0], features[4], features[5], features[6], features[8], features[
             11]
-
         x_d0 = self.conv2(x_block4)
 
         x_d1 = self.up1(x_d0, x_block3)
         x_d2 = self.up2(x_d1, x_block2)
         x_d3 = self.up3(x_d2, x_block1)
         x_d4 = self.up4(x_d3, x_block0)
-        if(self.skip_connection):
+        if(self.skip_connection and not self.output_mask):
             # x_d5 = self.up5_add(x_d4, x_block_skip[:, 3, :, :])
-            x_d5 = self.conv3(x_d4)
+            x_d5 = self.conv4(self.conv3(x_d4))
             out = x_block_skip[:, 3:, :, :] +  self.distance_maintainer(F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest'))
+        
+        elif self.output_mask and self.decoder_num == 1:
+            ## One encoder output two channel one channel is original prediction
+            x_d5 = self.conv4(self.conv3(x_d4))
+            out_with_mask = F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest')
+            # mask = self.mask_softer(out_with_mask[:, 1:, :, :])
+            # out = mask * out_with_mask[:, :1, :, :] + (1-mask)*x_block_skip[:, 3:, :, :]
+            # out_with_mask[:, 1:, :, :]= self.mask_softer(out_with_mask[:, 1:, :, :])
+            out = out_with_mask
+        elif self.output_mask and self.decoder_num == 2:
+            x_d5 = self.conv4(self.conv3(x_d4))
+            out = F.interpolate(x_d5, size=[x_block_skip.size(2), x_block_skip.size(3)], mode='nearest')
+            # pred = x_d5[:, :1, :, :]
+            # if(self.output == 'mask'):
+            #     out = self.mask_softer(out)
+            # out = mask * out_with_mask[:, :1, :, :] + (1-mask)*x_block_skip[:, 3:, :, :]
         else:
-            out = self.conv3(x_d4)
+            out = self.conv4(self.conv3(x_d4))
         # out = self.act_out(out)
         # if with_features:
         #     return out, features[-1]
@@ -108,23 +141,38 @@ class UnetAdaptiveBins(nn.Module):
         self.min_val = min_depth
         self.max_val = max_depth
         self.encoder = Encoder(backend)
+        # for param in self.encoder.parameters():
+        #     param.requires_grad = False
         self.skip_connection = skip_connection
+        self.interpolate_mode = kwargs['interpolate_mode']
+        self.args = kwargs
         if(self.use_adabins==True):
             self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
                                             dim_out=n_bins,
                                             embedding_dim=128, norm=norm)
 
         if(use_adabins):
-            self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
+            self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
+        elif kwargs['output_mask'] and kwargs['decoder_num'] == 1:
+            self.decoder = DecoderBN(num_classes=3, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'])
+        elif kwargs['output_mask'] and kwargs['decoder_num'] == 2:
+            self.decoder_pred = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'prediction')
+            self.decoder_mask = DecoderBN(num_classes=2, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'mask')
         else:
-            self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection)
+            self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
 
         self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
                                       nn.Softmax(dim=1))
         self.normalize = transforms.Normalize(mean=[-normalize_output_mean/normalize_output_std], std=[1/normalize_output_std])
 
     def forward(self, x, **kwargs):
-        unet_out = self.decoder(self.encoder(x), **kwargs)
+        if(self.args['decoder_num']==1):
+            unet_out = self.decoder(self.encoder(x), **kwargs)
+        if(self.args['decoder_num']==2):
+            encoding = self.encoder(x)
+            pred_origin = self.decoder_pred(encoding, **kwargs)
+            mask = self.decoder_mask(encoding, **kwargs)
+            unet_out = torch.cat([mask, pred_origin], dim=1)
         if(self.use_adabins==True):
             bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
             out = self.conv_out(range_attention_maps)
@@ -144,7 +192,7 @@ class UnetAdaptiveBins(nn.Module):
             pred = torch.sum(out * centers, dim=1, keepdim=True)
         else:
             pred = unet_out
-            pred = self.normalize(pred)
+            pred[:, 0 ,:, :] = self.normalize(pred[:, 0 ,:, :])
             return pred
 
         pred = self.normalize(pred)
@@ -153,8 +201,11 @@ class UnetAdaptiveBins(nn.Module):
     def get_1x_lr_params(self):  # lr/10 learning rate
         return self.encoder.parameters()
 
-    def get_10x_lr_params(self):  # lr learning rate
-        modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
+    def get_10x_lr_params(self):  # lr learning rateQ
+        if(self.use_adabins):
+            modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
+        else:
+            modules = [self.decoder]
         for m in modules:
             yield from m.parameters()
 
@@ -173,13 +224,13 @@ class UnetAdaptiveBins(nn.Module):
 
 
         print('Done.')
+        # Change input
         if(input_channel == 4):
             # Change first layer to 4 channel
             orginal_first_layer_weight = basemodel.conv_stem.weight
             basemodel.conv_stem= torch.nn.Conv2d(4, 48, kernel_size=(3, 3), stride=(2, 2), bias=False)
             with torch.no_grad():
                 basemodel.conv_stem.weight[:, 0:3, :, :] = orginal_first_layer_weight
-                # basemodel.conv_stem.weight[:, 0:3, :, :] = 0
 
 
         # Remove last layer
