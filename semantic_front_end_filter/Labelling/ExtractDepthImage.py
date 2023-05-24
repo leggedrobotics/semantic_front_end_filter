@@ -183,7 +183,7 @@ class DIFG:
     def get_distance(self, start_points, directions=None):
             """Raycasts environment mesh.
             If no direction is provide raycasts z down (0,0,-1) for all rays.
-
+            
             Args:
                 start_points (torch.Tensor): origin of the rays
                 directions (torch.Tensor): optionally directions of rays
@@ -228,7 +228,6 @@ class DIFG:
     def get_positions(self, start_points, directions=None):
         """Raycasts environment mesh.
         If no direction is provide raycasts z down (0,0,-1) for all rays.
-
         Args:
             start_points (torch.Tensor): origin of the rays
             directions (torch.Tensor): optionally directions of rays
@@ -269,15 +268,19 @@ class DIFG:
         y = wp_to_torch(y)
         return x, y
         
-    def getDImage(self, transition, rotation, ratation_is_matrix = False, return_variance = True):
+    def getDImage(self, transition, rotation, rotation_is_matrix = False, return_variance = True):
         H_map_cam = np.eye(4)
 
         H_map_cam[:3,3] =  np.array( [transition])
-        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
-#         H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-np.math.pi-rotation[2], rotation[1], rotation[0]]], degrees=False).as_matrix() # looking down
-
-        H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
-
+        if rotation_is_matrix:
+            rotation = Rotation.from_matrix(rotation).as_euler('xyz')
+        # for SA
+        # H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-math.pi-rotation[2], rotation[1], rotation[0]]]).as_matrix() # looking down
+        # H_map_cam[:3,:3] = Rotation.from_euler('yz', [0, 180], degrees=True).as_matrix() @ H_map_cam[:3,:3]
+        
+        # for Italy
+        H_map_cam[:3,:3] = Rotation.from_euler('zyx', [[-rotation[2], -rotation[1], -rotation[0]+math.pi/2]]).as_matrix() # looking down
+        H_map_cam[:3,:3] = Rotation.from_euler('yz', [-90, 0], degrees=True).as_matrix() @ H_map_cam[:3,:3]
 
         R = torch.from_numpy( H_map_cam ).to(device)[:3,:3]
         directions = torch.from_numpy( self.ray_dir )
