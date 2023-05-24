@@ -131,16 +131,16 @@ if __name__ == "__main__":
     key = "002502c9bfbc0a2f44271dbb5ff3ee82ca6c439a"
     client = SegmentsClient(key)
     # dataset_identifier = "yangcyself/Zurich-Reconstruct_2022-08-13-08-48-50_0"
-    dataset_identifier = "Anqiao/Italy-Reconstruct_2022-07-18-20-34-01_0"
+    dataset_identifier = "Anqiao/Italy-Reconstruct_2022-07-18-20-34-01_0-Handlabel"
 
     # Get dataset from cloud and disk
     samples = client.get_samples(dataset_identifier)
     # traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Zurich_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
-    traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/" + dataset_identifier.split('-', 1)[-1]
+    traj_path = "/media/anqiao/Semantic/Data/extract_trajectories_006_Italy_slim/extract_trajectories/" + (dataset_identifier.split('-', 1)[-1]).rsplit('-', 1)[0]
     
     # Build model
-    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-04-02-05-45_edge5/UnetAdaptiveBins_best.pt"
-    # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
+    model_path = "/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2023-01-05-23-53-59_4Grass&Forest/UnetAdaptiveBins_best.pt"
+    model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-12-06-23-43-01/UnetAdaptiveBins_latest.pt"
     model_cfg = YAML().load(open(os.path.join(os.path.dirname(model_path), "ModelConfig.yaml"), 'r'))
     model_cfg["input_channel"] = 4
     # model_cfg["deactivate_bn"] = False
@@ -159,10 +159,10 @@ if __name__ == "__main__":
     rmse6_8 = maskBasedRMSE()
     rmse8_10 = maskBasedRMSE()
     for num, sample in enumerate(samples):
-        if num ==1 or num ==2:
-            continue        
-        if num <100:
-            continue
+        # if num ==1 or num ==2:
+        #     continue        
+        # if num <100:
+        #     continue
         # if num < 127:
             # continue
         # Get labels
@@ -192,7 +192,12 @@ if __name__ == "__main__":
         for i, (m, s) in enumerate(zip(mean, std)):
             input[0, i, ...] = (input[0, i, ...] - m)/s
         # input[0, 0:3] = 0
-        pred = model(input)[0][0]
+        pred = model(input)
+        mask_weight = (pred[:, 1:2] > pred[:, 0:1])
+        pred_origin = pred[:, 2:]
+        pred = pred[:, 2:].clone()
+        pred[~mask_weight] = pc_img[None, ...][~mask_weight]
+        pred = pred[0, 0]
         # pred = nn.functional.interpolate(pred[None, None, ...], torch.tensor(pc_img[0]).shape, mode='nearest')
         pred_show = pred.detach().cpu().numpy().copy()
         # pred = pred[0, 0]
@@ -231,7 +236,7 @@ if __name__ == "__main__":
         except:
             print("no data")
         # Plot the result
-        PLOT = True
+        PLOT = False
         if(PLOT ):
             fig, axs = plt.subplots(2, 4,figsize=(16, 8))
             # fig.suptitle(traj_path + '/' + sample.name.split('.')[0]+'.msgpack')

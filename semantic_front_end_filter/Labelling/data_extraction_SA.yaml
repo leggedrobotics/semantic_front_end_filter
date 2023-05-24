@@ -8,7 +8,7 @@ skip_no_patch: True
 visualize: False
 dt: 0.5
 
-max_traj_len: 100  # to avoid filling up memory (number of max time steps to process at once)
+max_traj_len: 50  # to avoid filling up memory (number of max time steps to process at once)
 min_traj_len: 10
 image_patch_shape: [64, 64]
 
