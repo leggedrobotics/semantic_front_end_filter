@@ -151,6 +151,7 @@ def extractFeetTrajs(file_name, out_dir, cfg, raisim_objects):
 
     # Dict stores feet trajectories
     footTrajectory = {}
+    footTrajectory["timestep"] = []
     for foot_indicies in raisim_objects["foot_indices"]:
         footTrajectory[foot_indicies] = []
     
@@ -195,7 +196,7 @@ def extractFeetTrajs(file_name, out_dir, cfg, raisim_objects):
                 # TODO: filter out feet in contact using foot contact state
                 for foot_idx in raisim_objects['foot_indices']:
                     footTrajectory[foot_idx].append((raisim_objects['anymal'].getFramePosition(foot_idx)).tolist())  
-    
+                footTrajectory["timestep"].append(t.to_sec())
     # Convert to 2D np.array & Change indeicies to 
     for foot_index in raisim_objects["foot_indices"]:
         # footTrajectory[foot_index] = np.array(footTrajectory[foot_index])
@@ -215,13 +216,15 @@ def main():
     # Load cfg
     cfg_path = os.path.dirname(os.path.realpath(__file__)) + '/data_extraction_SA.yaml'
     parser = ArgumentParser()
+    parser.add_argument('--bag_path', default='', help = 'bag file path')
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
     cfg = YAML().load(open(cfg_path, 'r'))
 
-    bag_file_path = cfg['bagfile']
+    # bag_file_path = cfg['bagfile']
+    bag_file_path = args.bag_path
     output_path = cfg['outdir']
     camera_calibration_path = cfg['calibration']
 
@@ -237,7 +240,7 @@ def main():
     # SETUP ANYMAL SIMULATION FOR COLLISION DETECTION
     import raisimpy as raisim
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    urdf_path = dir_path + '/../rsc/robot/chimera/urdf/anymal_minimal.urdf'  # TODO: load from sim2real repo
+    urdf_path = dir_path + '/../../rsc/robot/chimera/urdf/anymal_minimal.urdf'  # TODO: load from sim2real repo
     raisim_objects = {}
     raisim_objects['world'] = raisim.World()
     raisim_objects['anymal'] = raisim_objects['world'].addArticulatedSystem(urdf_path)
