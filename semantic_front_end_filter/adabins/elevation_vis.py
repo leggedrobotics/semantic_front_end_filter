@@ -10,7 +10,7 @@ import cupy as xp
 from elevation_mapping_cupy.parameter import Parameter
 from elevation_mapping_cupy.elevation_mapping import ElevationMap
 import numpy as np
-from scipy.spatial.transform import Rotation as Rotation
+from scipy.spatial.transform import Rotation
 from ruamel.yaml import YAML
 import yaml
 # from dacite import from_dict
@@ -101,7 +101,7 @@ class WorldViewElevationMap:
     """
     A convinent warper for ElevationMap
     """
-    def __init__(self, resolution, map_length, init_with_initialize_map = True):
+    def __init__(self, resolution=None, map_length=None, init_with_initialize_map = True):
         """
         arg: init_with_initialize_map: (True, False, None, "nearest", "linear", "cubic")
         """
@@ -121,6 +121,8 @@ class WorldViewElevationMap:
         self.param = Parameter()
         for key, value in conf['elevation_mapping'].items():
             self.param.set_value(key, value)
+        self.param.resolution = self.param.resolution if resolution is None else resolution
+        self.param.map_length = self.param.map_length if map_length is None else map_length
         self.param.weight_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/weights.dat")
         self.param.plugin_config_file=os.path.join(os.path.dirname(__file__), "../../elevation_mapping_cupy/elevation_mapping_cupy/config/plugin_config.yaml")
         p = dict(enable_overlap_clearance = False, max_height_range = 10, ramped_height_range_c = 10)
@@ -158,7 +160,6 @@ class WorldViewElevationMap:
         points = xp.array(points)# change the frame of points, translate them into pos's frame
         self.elevation.move_to(pos)
         if(not self.is_init):
-            print("input called")
             points -= t
             self.elevation.input(points, R, t, 0, 0)
         else:
@@ -174,6 +175,13 @@ class WorldViewElevationMap:
         self.elevation.get_map_with_name_ref("elevation", data)
         return xp.asnumpy(data)
 
+    def get_layer_map(self, layer_name):
+        """
+        Output the elevation map, in the form of numpy array
+        """
+        data = np.zeros((self.elevation.cell_n - 2, self.elevation.cell_n - 2), dtype=np.float32)
+        self.elevation.get_map_with_name_ref(layer_name, data)
+        return xp.asnumpy(data)
 
 
 if __name__ == "__main__":
@@ -217,7 +225,7 @@ if __name__ == "__main__":
     checkpoint_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-08-03-16-26-08/UnetAdaptiveBins_latest.pt"
     # model = UnetAdaptiveBins.build(**model_cfg)
     # model,_,_ = model_io.load_checkpoint(checkpoint_path ,model)
-    model = UnetAdaptiveBins.build(input_channel = 4, **model_cfg)
+    model = UnetAdaptiveBins.build(**model_cfg)
     model = load_checkpoint(args.model_path ,model)[0] 
     model.cuda()
 
