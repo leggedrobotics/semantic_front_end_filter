@@ -240,20 +240,20 @@ class GFT:
 
     def save(self, out_dir, GPMap=True, FeetTrajs = False):
         save_dict = {}
-        save_dict["res"] = self.res
-        save_dict["xNormal"] = self.xNormal
+        save_dict["res"] = self.res # the resolution of the map
+        save_dict["xNormal"] = self.xNormal # the shape of the grid map (x, y), always int 
         save_dict["yNormal"] = self.yNormal
-        save_dict["xRealRange"] = self.xRealRange
-        save_dict["yRealRange"] = self.yRealRange
-        save_dict["meanHeight"] = self.meanHeight
+        save_dict["xRealRange"] = self.xRealRange # real shape of the grid map in unit meter
+        save_dict["yRealRange"] = self.yRealRange 
+        save_dict["meanHeight"] = self.meanHeight 
         save_dict["GroundArray"] = self.GroundArray.tolist()
         save_dict["timespan"] = self.timespan
         if(FeetTrajs):
             save_dict["FeetTrajs"] = self.FeetTrajsDictList
         if(GPMap):
             self.initializeGPMap()
-            save_dict["GPMap"] = self.GPMap.tolist()
-            save_dict["Confidence"] = self.Confidence.tolist()
+            save_dict["GPMap"] = self.GPMap.tolist() # the map recovered from gaussian process
+            save_dict["Confidence"] = self.Confidence.tolist() # the recording confidence
 
         # print("Saving one msgpack...")
         if(out_dir.rsplit('.', 1)[1]!='msgpack'):
@@ -270,8 +270,8 @@ class GFT:
         with open(ground_dir, "rb") as data_file:
             data = data_file.read()
             ground_dict = msgpack.unpackb(data)
-        self.res = ground_dict["res"]
-        self.xNormal = ground_dict["xNormal"]
+        self.res = ground_dict["res"] # the resolution of the map
+        self.xNormal = ground_dict["xNormal"] # the shape of the grid map (x, y), always int 
         self.yNormal = ground_dict["yNormal"]
         self.GroundArray = np.array(ground_dict["GroundArray"])
         self.xlength = self.GroundArray.shape[0]
