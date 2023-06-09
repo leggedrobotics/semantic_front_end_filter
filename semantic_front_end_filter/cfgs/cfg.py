@@ -3,7 +3,6 @@ import os
 
 @dataclass
 class ModelConfig:
-    n_bins: int =  256
     input_channel: int = 4
     load_pretrained: bool = False
     input_height: int= 500
@@ -20,88 +19,18 @@ class ModelConfig:
     # One way to configure this values is to keep it same with the normalize in class `ToTensor`
     normalize_output_mean: float = 0.120
     normalize_output_std: float = 1.17
-    use_adabins: bool = False
     deactivate_bn: bool = True
     skip_connection: bool = False
     interpolate_mode : str = "bilinear" # "bilinear" or "convT", define what is used in upsampling of decoder 
     output_mask : bool = True # Please keep this true
     # output_mask_channels : int = 1
-    decoder_num: int = 2 # One or two
-    ablation: str = "onlyRGB" # "onlyRGB", "onlyPC"
+    decoder_num: int = 1 # One or two
+    ablation: str = "" # "onlyRGB", "onlyPC"
 
 @dataclass
 class TrainConfig:
-    """ 
-        ('--epochs', default=25, type=int, help='number of total epochs to run')
-        ('--workers', default=11, type = int, help = "Number of workers for data loading")
-        ('--n-bins', '--n_bins', default=80, type=int,
-                            help='number of bins/buckets to divide depth range into')
-        ('--lr', '--learning-rate', default=0.000357, type=float, help='max learning rate')
-        ('--wd', '--weight-decay', default=0.1, type=float, help='weight decay')
-        ('--w_chamfer', '--w-chamfer', default=0.1, type=float, help="weight value for chamfer loss")
-        ('--div-factor', '--div_factor', default=25, type=float, help="Initial div factor for lr")
-        ('--final-div-factor', '--final_div_factor', default=100, type=float,
-                            help="final div factor for lr")
-
-        ('--bs', default=16, type=int, help='batch size')
-        ('--validate-every', '--validate_every', default=100, type=int, help='validation period')
-        ('--gpu', default=None, type=int, help='Which gpu to use')
-        ("--name", default="UnetAdaptiveBins")
-        ("--norm", default="linear", type=str, help="Type of norm/competition for bin-widths",
-                            choices=['linear', 'softmax', 'sigmoid'])
-        ("--same-lr", '--same_lr', default=False, action="store_true",
-                            help="Use same LR for all param groups")
-        ("--distributed", default=False, action="store_true", help="Use DDP if set")
-        ("--root", default=".", type=str,
-                            help="Root folder to save data in")
-        ("--resume", default='', type=str, help="Resume from checkpoint")
-        ("--load_pretrained", action="store_true", default=False, help="Load pretrained weights of kitti dataset")
-
-        ("--notes", default='', type=str, help="Wandb notes")
-        ("--tags", default='sweep', type=str, help="Wandb tags")
-
-        ("--dataset", default='nyu', type=str, help="Dataset to train on")
-
-        ("--data_path", default='../dataset/nyu/sync/', type=str,
-                            help="path to dataset")
-        ("--gt_path", default='../dataset/nyu/sync/', type=str,
-                            help="path to dataset")
-
-        ('--filenames_file',
-                            default="./train_test_inputs/nyudepthv2_train_files_with_gt.txt",
-                            type=str, help='path to the filenames text file')
-
-        ('--input_height', type=int, help='input height', default=416)
-        ('--input_width', type=int, help='input width', default=544)
-        ('--max_depth', type=float, help='maximum depth in estimation', default=10)
-        ('--min_depth', type=float, help='minimum depth in estimation', default=1e-3)
-
-        ('--do_random_rotate', default=True,
-                            help='if set, will perform random rotation for augmentation',
-                            action='store_true')
-        ('--degree', type=float, help='random rotation maximum degree', default=2.5)
-        ('--do_kb_crop', help='if set, crop input images as kitti benchmark images', action='store_true')
-        ('--use_right', help='if set, will randomly use right images when train on KITTI',
-                            action='store_true')
-
-        ('--data_path_eval',
-                            default="../dataset/nyu/official_splits/test/",
-                            type=str, help='path to the data for online evaluation')
-        ('--gt_path_eval', default="../dataset/nyu/official_splits/test/",
-                            type=str, help='path to the groundtruth data for online evaluation')
-        ('--filenames_file_eval',
-                            default="./train_test_inputs/nyudepthv2_test_files_with_gt.txt",
-                            type=str, help='path to the filenames text file for online evaluation')
-
-        ('--min_depth_eval', type=float, help='minimum depth for evaluation', default=1e-3)
-        ('--max_depth_eval', type=float, help='maximum depth for evaluation', default=10)
-        ('--eigen_crop', default=True, help='if set, crops according to Eigen NIPS14',
-                            action='store_true')
-        ('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
-
- """
     wandb_name: str = "random"
-    bs: int = 10
+    bs: int = 6
     workers: int = 16 # Number of workers for data loading
     dataset: str = "anymal"
     slim_dataset: bool = True # whether or not the dataset is slimed version: (contain projected pc instead of full point cloud information)
@@ -111,7 +40,7 @@ class TrainConfig:
     wd: float =  0.1
     div_factor: int =  25 
     final_div_factor: int =  100
-    epochs: int =  10
+    epochs: int =  30
     w_chamfer: float =  0.1
     data_path: str = None
     camera_cali_path: str = "/semantic_front_end_filter/Labelling/Example_Files/alphasense"
@@ -124,20 +53,16 @@ class TrainConfig:
     random_crop: bool=True
     random_flip: bool=True
     traj_variance_threashold: float = 1 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
-    validate_every: int = 5
+    validate_every: int = 100
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 1 # pc_image_label_W and traj_label_W_4mask are used to control the crossentropy loss for the mask
     traj_label_W_4mask: float = 1
-    traj_label_W: float = 1 # 0.002
-    edge_aware_label_W: float = 0
-    consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
+    traj_label_W: float = 0.02 # 0.002
     mask_loss_W: float = 1
-    mask_regulation_W: float = 0 # Here is the regulation term 
-    mask_regulation_CE_W: float = 0.0000
     mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True
-    sprase_traj_mask: bool = True # True, if you want to train with support surface mask filtered by the pc label, 
+    sprase_traj_mask: bool = False # True, if you want to train with support surface mask filtered by the pc label, 
                                    # only in this brach it will set the model to predict the delta depth
     mask_ratio: float = 1 # Expected ratio of mask_ground/mask_nonground
 

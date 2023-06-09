@@ -30,46 +30,28 @@ class DepthDataLoader(object):
     def __init__(self, args, mode):
         if mode == 'train':
             self.training_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
-            if args.distributed:
-                self.train_sampler = torch.utils.data.distributed.DistributedSampler(self.training_samples)
-            else:
-                self.train_sampler = None
-
             self.data = DataLoader(self.training_samples, args.batch_size,
-                                #    shuffle=(self.train_sampler is None),
-                                   shuffle =  False,
+                                   shuffle=True,
                                    num_workers=args.num_threads,
                                    pin_memory=True,
-                                   sampler=self.train_sampler)
+                                   sampler=None)
 
         elif mode == 'online_eval':
             self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
-            if args.distributed:  # redundant. here only for readability and to be more explicit
-                # Give whole test set to all processes (and perform/report evaluation only on one) regardless
-                self.eval_sampler = None
-            else:
-                self.eval_sampler = None
             #change when using evalIoU_cuda.py for evaluation  
             self.data = DataLoader(self.testing_samples, 1,
                                    shuffle=False,
                                    num_workers=1,
                                    pin_memory=False,
-                                   sampler=self.eval_sampler)
+                                   sampler=None)
 
         elif mode == 'offline_eval':
             self.testing_samples = DataLoadPreprocess(args, "online_eval", transform=preprocessing_transforms(mode))
-            if args.distributed:  # redundant. here only for readability and to be more explicit
-                # Give whole test set to all processes (and perform/report evaluation only on one) regardless
-                self.eval_sampler = None
-            else:
-                self.eval_sampler = None
-            #change when using evalIoU_cuda.py for evaluation  
-            # self.data = DataLoader(self.testing_samples, 1,
             self.data = DataLoader(self.testing_samples, args.batch_size,
                                    shuffle=False,
                                    num_workers=1,
                                    pin_memory=False,
-                                   sampler=self.eval_sampler)
+                                   sampler=None)
 
         elif mode == 'test':
             self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
@@ -77,12 +59,6 @@ class DepthDataLoader(object):
 
         else:
             print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
-
-
-def remove_leading_slash(s):
-    if s[0] == '/' or s[0] == '\\':
-        return s[1:]
-    return s
 
 
 class DataLoadPreprocess(Dataset):

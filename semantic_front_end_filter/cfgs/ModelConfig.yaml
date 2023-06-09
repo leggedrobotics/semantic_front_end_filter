@@ -1,6 +1,4 @@
-n_bins: 256
 input_channel: 4
-load_pretrained: false
 input_height: 500
 input_width: 720
 norm: linear
@@ -11,7 +9,6 @@ max_depth_eval: 10
 max_pc_depth: 15
 normalize_output_mean: 0.12
 normalize_output_std: 1.17
-use_adabins: false
 deactivate_bn: true
 skip_connection: false
 interpolate_mode: bilinear

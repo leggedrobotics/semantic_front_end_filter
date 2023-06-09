@@ -26,11 +26,7 @@ use_right: false
 pc_image_label_W: 1
 traj_label_W_4mask: 1
 traj_label_W: 0.02
-edge_aware_label_W: 0
-consistency_W: 0
 mask_loss_W: 1
-mask_regulation_W: 0
-mask_regulation_CE_W: 0.0
 mask_weight_mode: sigmoid
 filter_image_before_loss: true
 sprase_traj_mask: false

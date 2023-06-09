@@ -130,13 +130,12 @@ class Encoder(nn.Module):
 
 
 class UnetAdaptiveBins(nn.Module):
-    def __init__(self, backend, n_bins, min_depth, max_depth, norm,
+    def __init__(self, backend, min_depth, max_depth, norm,
                     normalize_output_mean, normalize_output_std, 
-                    use_adabins, deactivate_bn, skip_connection,
+                    deactivate_bn, skip_connection,
                     **kwargs):
         super(UnetAdaptiveBins, self).__init__()
 
-        self.num_classes = n_bins
         self.min_val = min_depth
         self.max_val = max_depth
         self.encoder = Encoder(backend)
@@ -154,8 +153,6 @@ class UnetAdaptiveBins(nn.Module):
         else:
             self.decoder = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
 
-        self.conv_out = nn.Sequential(nn.Conv2d(128, n_bins, kernel_size=1, stride=1, padding=0),
-                                      nn.Softmax(dim=1))
         self.normalize = transforms.Normalize(mean=[-normalize_output_mean/normalize_output_std], std=[1/normalize_output_std])
 
     def forward(self, x, **kwargs):
@@ -166,27 +163,10 @@ class UnetAdaptiveBins(nn.Module):
             pred_origin = self.decoder_pred(encoding, **kwargs)
             mask = self.decoder_mask(encoding, **kwargs)
             unet_out = torch.cat([mask, pred_origin], dim=1)
-        if(self.use_adabins==True):
-            bin_widths_normed, range_attention_maps = self.adaptive_bins_layer(unet_out)
-            out = self.conv_out(range_attention_maps)
 
-            # Post process
-            # n, c, h, w = out.shape
-            # hist = torch.sum(out.view(n, c, h * w), dim=2) / (h * w)  # not used for training
-
-            bin_widths = (self.max_val - self.min_val) * bin_widths_normed  # .shape = N, dim_out
-            bin_widths = nn.functional.pad(bin_widths, (1, 0), mode='constant', value=self.min_val)
-            bin_edges = torch.cumsum(bin_widths, dim=1)
-
-            centers = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
-            n, dout = centers.size()
-            centers = centers.view(n, dout, 1, 1)
-
-            pred = torch.sum(out * centers, dim=1, keepdim=True)
-        else:
-            pred = unet_out
-            pred[:, 0 ,:, :] = self.normalize(pred[:, 0 ,:, :])
-            return pred
+        pred = unet_out
+        pred[:, 0 ,:, :] = self.normalize(pred[:, 0 ,:, :])
+        return pred
 
         pred = self.normalize(pred)
         return bin_edges, pred
@@ -195,15 +175,12 @@ class UnetAdaptiveBins(nn.Module):
         return self.encoder.parameters()
 
     def get_10x_lr_params(self):  # lr learning rateQ
-        if(self.use_adabins):
-            modules = [self.decoder, self.adaptive_bins_layer, self.conv_out]
-        else:
-            modules = [self.decoder]
+        modules = [self.decoder]
         for m in modules:
             yield from m.parameters()
 
     @classmethod
-    def build(cls, n_bins, input_channel, use_adabins, **kwargs):
+    def build(cls, input_channel, **kwargs):
         basemodel_name = 'tf_efficientnet_b5_ap'
 
         print('Loading base model ()...'.format(basemodel_name), end='')
@@ -235,7 +212,7 @@ class UnetAdaptiveBins(nn.Module):
         print('Building Encoder-Decoder model..', end='')
         if(kwargs['deactivate_bn']):
             basemodel.apply(deactivate_batchnorm)
-        m = cls(basemodel, n_bins=n_bins, use_adabins=use_adabins, **kwargs)
+        m = cls(basemodel, **kwargs)
         print('Done.')
         return m
     

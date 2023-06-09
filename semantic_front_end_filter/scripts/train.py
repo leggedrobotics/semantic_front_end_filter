@@ -72,7 +72,7 @@ def train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
     l_pc = args.trainconfig.pc_image_label_W * criterion_depth(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
     
-    print("MASK_L: ",l_mask.item(), "Mask_R", args.trainconfig.mask_regulation_W * l_mask_regulation.item(), "SSL: ", l_dense.item())
+    print("MASK_L: ",l_mask.item(), "SSL: ", l_dense.item())
     return l_dense, l_mask, l_mask_regulation, masktraj, maskpc
 
 
@@ -141,14 +141,12 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
-            if(args.modelconfig.use_adabins):
-                bin_edges, pred = model(img)
-            else:
-                if(args.modelconfig.ablation == "onlyPC"):
-                    img[:, 0:3] = 0
-                elif(args.modelconfig.ablation == "onlyRGB"):
-                    img[:, 3] = 0    
-                bin_edges, pred = None, model(img)
+
+            if(args.modelconfig.ablation == "onlyPC"):
+                img[:, 0:3] = 0
+            elif(args.modelconfig.ablation == "onlyRGB"):
+                img[:, 3] = 0    
+            pred = model(img)
             pc_image = batch["pc_image"].to(device)
 
             if(args.trainconfig.sprase_traj_mask):
@@ -157,7 +155,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred[:, 2:] = pred[:, 2:]
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
+            l_dense, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -166,7 +164,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred =  pred[:, 2:].clone()
                 pred[~mask_weight] = pc_image[~mask_weight]
 
-            loss = args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation + l_dense
+            loss = args.trainconfig.mask_loss_W*l_mask + l_dense
 
             pred[pred < args.min_depth] = args.min_depth
             max_depth_gt = max(args.max_depth, args.max_pc_depth)
@@ -174,15 +172,11 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             pred[torch.isinf(pred)] = max_depth_gt
             pred[torch.isnan(pred)] = args.min_depth
 
-            pred = pred.detach().cpu()
-            depth = depth.cpu()
-            pc_image = pc_image.cpu()
-            train_metrics.update(compute_errors(depth[masktraj], pred[masktraj], 'traj/'), depth[masktraj].shape[0])
-
+            pred = pred.detach()
+            train_metrics.update(compute_errors(depth[masktraj].cpu(), pred[masktraj].cpu(), 'traj/'), depth[masktraj].shape[0])
 
             writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
-            writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
@@ -198,26 +192,25 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
                 ################################# Validation loop ##################################################
                 model.eval()
-                metrics, val_si = validate(args, model, test_loader, criterion_depth, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device, step_count)
+                metrics, val_si = validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, epochs, device, step_count)
                 [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 print("Validated: {}".format(metrics))
                 save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
-                                            root=saver.data_dir)
+                                            root=data_dir)
                                         
                 print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                 time_total = -time.time()
                 time_core = 0.
                 if metrics['traj/abs_rel'] < best_loss:
                     save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
-                                             root=saver.data_dir)
+                                             root=data_dir)
                     best_loss = metrics['traj/abs_rel']
                 model.train()
                 #################################################################################################
-        wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
     return model
 
 
-def validate(args, model, test_loader, criterion_depth, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device='cpu', step = 0):
+def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, epochs, device='cpu', step = 0):
     with torch.no_grad():
         val_si = RunningAverage()
         metrics = RunningAverageDict()
@@ -229,22 +222,19 @@ def validate(args, model, test_loader, criterion_depth, criterion_edge, criterio
             if 'has_valid_depth' in batch:
                 if not batch['has_valid_depth']:
                     continue
-            if(args.modelconfig.use_adabins):
-                bin_edges, pred = model(img)
-            else:
-                if(args.modelconfig.ablation == "onlyPC"):
-                    img[:, 0:3] = 0
-                elif(args.modelconfig.ablation == "onlyRGB"):
-                    img[:, 3] = 0 
-                bin_edges, pred = None, model(img)
-                # bin_edges, pred = None, model(img[: ,0:3])
+
+            if(args.modelconfig.ablation == "onlyPC"):
+                img[:, 0:3] = 0
+            elif(args.modelconfig.ablation == "onlyRGB"):
+                img[:, 3] = 0 
+            pred = model(img)
             pc_image = batch["pc_image"].to(device)
             if(args.trainconfig.sprase_traj_mask):
                 pred[:, 2:] = pred[:, 2:] + pc_image # with or withour pc_image
             else:
                 pred[:, 2:] = pred[:, 2:]
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
+            l_dense, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -252,7 +242,7 @@ def validate(args, model, test_loader, criterion_depth, criterion_edge, criterio
                 mask_weight = (pred[:, 1:2]>pred[:, 0:1])
                 pred =  pred[:, 2:].clone()
                 pred[~mask_weight] = pc_image[~mask_weight]
-            loss = args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation + l_dense
+            loss = args.trainconfig.mask_loss_W*l_mask + l_dense
 
             writer.add_scalar("Loss/test/l_sum", loss, global_step=epoch)
             writer.add_scalar("Loss/test/l_dense", l_dense, global_step=epoch)
@@ -340,6 +330,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir=data_dir, flush_secs=60)
 
     model = UnetAdaptiveBins.build(**asdict(args.modelconfig))
+    model = model.to(device)
 
     args.epoch = 0
     args.last_epoch = -1
