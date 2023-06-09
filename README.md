@@ -1,3 +1,19 @@
+# Install
+
+### create and activate conda environment
+
+```bash
+conda env create -f environment.yaml
+conda activate spf_venv
+```
+
+### SPF
+
+```bash
+cd semantic_front_end_filter
+pip install -e .
+```
+
 # semantic_front_end_filter
 **notice**: In this branch, the skip connection is removed, since the consistency is required when we predict the depth of teh whole picture instaed of only some points. And also for convinent the preparation of the image like cropping and flipping is commented. Because after cropping the calibration of camera is changed and the prejection will be very complex. Also since the view of robot is our task is nearly the same, so maybe its not that necerssry to do these pre process
 ## Setup
