@@ -10,7 +10,6 @@ wd: 0.1
 div_factor: 25
 final_div_factor: 100
 epochs: 30
-w_chamfer: 0.1
 data_path: extract_trajectories
 camera_cali_path: /semantic_front_end_filter/Labelling/Example_Files/alphasense
 do_random_rotate: true

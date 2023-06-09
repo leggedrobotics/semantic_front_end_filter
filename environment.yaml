@@ -17,5 +17,6 @@ dependencies:
   - tensorboard
   - tqdm
   - pip
+  - ruamel.yaml
   - pip:
       - opencv-python

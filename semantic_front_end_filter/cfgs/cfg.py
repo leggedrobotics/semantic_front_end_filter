@@ -113,7 +113,7 @@ class TrainConfig:
     final_div_factor: int =  100
     epochs: int =  10
     w_chamfer: float =  0.1
-    data_path: str = "extract_trajectories"
+    data_path: str = None
     camera_cali_path: str = "/semantic_front_end_filter/Labelling/Example_Files/alphasense"
     do_random_rotate: bool = True
     degree: float =  1.0

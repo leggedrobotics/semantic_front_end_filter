@@ -1,4 +1,4 @@
-# Install
+## Install
 
 ### create and activate conda environment
 
@@ -12,6 +12,19 @@ conda activate spf_venv
 ```bash
 cd semantic_front_end_filter
 pip install -e .
+```
+
+## Getting started
+
+### Train model
+
+Download dataset from xxxx
+
+
+Run 
+
+```bash
+python semantic_front_end_filter/scripts/train.py --data_path <path-to-data-folder>
 ```
 
 # semantic_front_end_filter

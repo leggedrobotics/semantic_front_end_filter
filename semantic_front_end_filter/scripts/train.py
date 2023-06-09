@@ -12,23 +12,41 @@ from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
+from ruamel.yaml import dump, RoundTripDumper
 
 from semantic_front_end_filter.utils.file_util import save_checkpoint
 from semantic_front_end_filter.models import UnetAdaptiveBins
 from semantic_front_end_filter.cfgs import ModelConfig, TrainConfig, parse_args, dataclass, asdict
 from semantic_front_end_filter.utils.dataloader import DepthDataLoader
-from semantic_front_end_filter.utils.loss_util import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss, ConsistencyLoss, MaskLoss
 from semantic_front_end_filter.utils.train_util import RunningAverage, colorize, RunningAverageDict, compute_errors
 
 
-DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-PROJECT = "semantic_front_end_filter-Anomaly"
-logging = True
+class UncertaintyLoss(nn.Module):  # Add variance to loss
+    def __init__(self, train_args):
+        super(UncertaintyLoss, self).__init__()
+        self.name = 'SILog'
+        self.args = train_args
+        self.depth_variance_ratio = self.args.traj_distance_variance_ratio
 
-count_val = 0
+    def forward(self, input, target, target_variance, mask=None, interpolate=True):
+        if interpolate:
+            input = nn.functional.interpolate(input, target.shape[-2:], mode='bilinear', align_corners=True)
+
+        if mask is not None:
+            input = input[mask]
+            target = target[mask]
+            target_variance = target_variance[mask]
+        if(target_variance.numel() !=0):
+            Dg = torch.sum(0.5 * torch.pow(input - target, 2)/(1e-3 + target*self.depth_variance_ratio + target_variance))
+            if(self.args.scale_loss_with_point_number):
+                Dg /= input.shape[0]
+        else:
+            Dg = torch.tensor(0.).to('cuda')
+        return Dg
 
 
-def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, image, pose, mask_gt):
+
+def train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, image, mask_gt):
     # Only apply l_mask and l_mask_regulation
     l_mask = torch.tensor(0).to('cuda')
     l_mask_regulation = torch.tensor(0).to('cuda')
@@ -48,25 +66,18 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     mask_soft = nn.functional.softmax(pred[:, 0:2], dim = 1)
 
     pred = pred[:, 2:]
-    l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
+    l_dense = args.trainconfig.traj_label_W * criterion_depth(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
     depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
-    l_pc = args.trainconfig.pc_image_label_W * criterion_ueff(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
-    l_edge = criterion_edge(pred, image, interpolate = True)
-    if bin_edges is not None and args.trainconfig.w_chamfer > 0:
-        l_chamfer = criterion_bins(bin_edges, depth)
-    else:
-        l_chamfer = torch.Tensor([0]).to(l_dense.device)
+    l_pc = args.trainconfig.pc_image_label_W * criterion_depth(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
     
-    l_consis = criterion_consistency(pred, pose) if args.trainconfig.consistency_W > 1e-3 else torch.tensor(0.).to('cuda')
     print("MASK_L: ",l_mask.item(), "Mask_R", args.trainconfig.mask_regulation_W * l_mask_regulation.item(), "SSL: ", l_dense.item())
-    return l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc
+    return l_dense, l_mask, l_mask_regulation, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
           optimizer_state_dict=None):
-    global PROJECT
     if device is None:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -74,12 +85,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     test_loader = DepthDataLoader(args, 'online_eval').data
     
     ###################################### losses ##############################################
-    # criterion_ueff = SILogLoss()
-    criterion_ueff = UncertaintyLoss(args.trainconfig)
-    criterion_bins = BinsChamferLoss() if args.chamfer else None
-    criterion_edge = EdgeAwareLoss(args.trainconfig)
-    criterion_consistency = ConsistencyLoss(args.trainconfig)
-    # criterion_mask = MaskLoss(args.trainconfig)
+    criterion_depth = UncertaintyLoss(args.trainconfig)
     criterion_mask = nn.CrossEntropyLoss(weight=torch.tensor([args.trainconfig.pc_image_label_W, args.trainconfig.traj_label_W_4mask]).to('cuda').float())
     ################################################################################################
 
@@ -151,7 +157,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred[:, 2:] = pred[:, 2:]
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_chamfer, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)
+            l_dense, l_edge, l_consis,l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -174,8 +180,6 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             train_metrics.update(compute_errors(depth[masktraj], pred[masktraj], 'traj/'), depth[masktraj].shape[0])
 
 
-
-            writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
             writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
@@ -183,14 +187,6 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
-            if step_count % 5 == 0:
-                # wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/{criterion_edge.name}": l_edge.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=step_count)
-                wandb.log({f"Loss/train/RegulationMask": args.trainconfig.mask_regulation_W * l_mask_regulation.item()/args.batch_size}, step=step_count)
-                wandb.log({"Loss/train/l_sum": loss/args.batch_size}, step=step_count)
 
             step_count += 1
             scheduler.step()
@@ -202,7 +198,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
                 ################################# Validation loop ##################################################
                 model.eval()
-                metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device, step_count)
+                metrics, val_si = validate(args, model, test_loader, criterion_depth, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device, step_count)
                 [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 print("Validated: {}".format(metrics))
                 save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
@@ -221,8 +217,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     return model
 
 
-def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device='cpu', step = 0):
-    global count_val
+def validate(args, model, test_loader, criterion_depth, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device='cpu', step = 0):
     with torch.no_grad():
         val_si = RunningAverage()
         metrics = RunningAverageDict()
@@ -249,7 +244,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             else:
                 pred[:, 2:] = pred[:, 2:]
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, img, batch['pose'], mask_gt)
+            l_dense, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -259,14 +254,12 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 pred[~mask_weight] = pc_image[~mask_weight]
             loss = args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation + l_dense
 
-            writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
-            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
-            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
+            writer.add_scalar("Loss/test/l_sum", loss, global_step=epoch)
+            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=epoch)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
             mask = depth > args.min_depth
-            count_val = count_val + 1
             val_si.append(loss.item())
 
             pred = pred.squeeze().cpu().numpy()
@@ -329,7 +322,7 @@ if __name__ == '__main__':
     args.num_workers = args.trainconfig.workers
     
     saver_dir = os.path.join(args.root,"checkpoints")
-    data_dir = os.path.join(saver_dir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    data_dir = os.path.join(saver_dir, datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
     os.makedirs(data_dir)
     with open(os.path.join(data_dir, "args.txt"), "w") as f:
         for key, value in args.__dict__.items():
@@ -337,18 +330,19 @@ if __name__ == '__main__':
 
     for cfg in [TrainConfig(**vars(args.trainconfig)), 
                 ModelConfig(**vars(args.modelconfig))]:
-        assert is_dataclass(cfg)
         dict_data = asdict(cfg)
         name = type(cfg).__name__ + ".yaml"
         with open(os.path.join(data_dir, name), 'w') as f:
             dump(dict_data, f, Dumper=RoundTripDumper)
 
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+    writer = SummaryWriter(log_dir=data_dir, flush_secs=60)
 
     model = UnetAdaptiveBins.build(**asdict(args.modelconfig))
 
     args.epoch = 0
     args.last_epoch = -1
-    train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
+    
+    train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=device, root=args.root,
           experiment_name=args.name, optimizer_state_dict=None)
