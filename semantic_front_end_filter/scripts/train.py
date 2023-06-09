@@ -23,12 +23,12 @@ import matplotlib.pyplot as plt
 
 from . import model_io
 from . import models
-from . import utils
-from .cfgUtils import parse_args, TrainConfig, ModelConfig, asdict
-from .experimentSaver import ConfigurationSaver
-from .dataloader import DepthDataLoader
-from .loss import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss, ConsistencyLoss, MaskLoss
-from .utils import RunningAverage, colorize
+from semantic_front_end_filter.models import UnetAdaptiveBins
+from semantic_front_end_filter.cfgs import ModelConfig, TrainConfig, parse_args, dataclass, asdict
+from semantic_front_end_filter.utils.dataloader import DepthDataLoader
+from semantic_front_end_filter.utils.loss_util import EdgeAwareLoss, SILogLoss, BinsChamferLoss, UncertaintyLoss, ConsistencyLoss, MaskLoss
+from semantic_front_end_filter.utils.train_util import RunningAverage, colorize, RunningAverageDict, compute_errors
+
 
 DTSTRING = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 PROJECT = "semantic_front_end_filter-Anomaly"
@@ -39,31 +39,10 @@ count_val = 0
 import matplotlib
 
 
-def colorize(value, vmin=10, vmax=40, cmap='plasma'):
-    # normalize
-    vmin = value.min() if vmin is None else vmin
-    vmax = value.max() if vmax is None else vmax
-    if vmin != vmax:
-        value = (value - vmin) / (vmax - vmin)  # vmin..vmax
-    else:
-        # Avoid 0-division
-        value = value * 0.
-    # squeeze last dim if it exists
-    # value = value.squeeze(axis=0)
-
-    cmapper = matplotlib.cm.get_cmap(cmap)
-    value = cmapper(value, bytes=True)  # (nxmx4)
-
-    img = value[:, :, :3]
-
-    #     return img.transpose((2, 0, 1))
-    return img
-
-
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
-    model = models.UnetAdaptiveBins.build(**asdict(args.modelconfig))
+    model = UnetAdaptiveBins.build(**asdict(args.modelconfig))
 
     if args.gpu is not None:  # If a gpu is set by user: NO PARALLELISM!!
         torch.cuda.set_device(args.gpu)
@@ -165,7 +144,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         print("EPOCH:", epoch)
         time_core = 0.
         time_total = -time.time()
-        train_metrics = utils.RunningAverageDict()
+        train_metrics = RunningAverageDict()
         ################################# Train loop ##########################################################
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
                              total=len(train_loader)) if args.tqdm else enumerate(train_loader):
@@ -217,7 +196,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             pred = pred.detach().cpu()
             depth = depth.cpu()
             pc_image = pc_image.cpu()
-            train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'), depth[masktraj].shape[0])
+            train_metrics.update(compute_errors(depth[masktraj], pred[masktraj], 'traj/'), depth[masktraj].shape[0])
 
 
 
@@ -271,7 +250,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
     global count_val
     with torch.no_grad():
         val_si = RunningAverage()
-        metrics = utils.RunningAverageDict()
+        metrics = RunningAverageDict()
         for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
@@ -344,7 +323,7 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask_traj = np.logical_and(valid_mask, masktraj.cpu().numpy())
             valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
-            metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'), gt_depth[valid_mask_traj].shape[0])
+            metrics.update(compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'), gt_depth[valid_mask_traj].shape[0])
 
         return metrics.get_value(), val_si
 
@@ -382,11 +361,20 @@ if __name__ == '__main__':
     args.ngpus_per_node = ngpus_per_node
     
     saver_dir = os.path.join(args.root,"checkpoints")
-    saver = ConfigurationSaver(log_dir=saver_dir,
-                            save_items=[os.path.realpath(__file__)],
-                            args=args,
-                            dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
-                                ModelConfig(**vars(args.modelconfig))])
-                
+    data_dir = os.path.join(saver_dir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    os.makedirs(data_dir)
+    with open(os.path.join(data_dir, "args.txt"), "w") as f:
+        for key, value in args.__dict__.items():
+            f.write(key + ': ' + str(value) + '\n')
+
+    for cfg in [TrainConfig(**vars(args.trainconfig)), 
+                ModelConfig(**vars(args.modelconfig))]:
+        assert is_dataclass(cfg)
+        dict_data = asdict(cfg)
+        name = type(cfg).__name__ + ".yaml"
+        with open(os.path.join(data_dir, name), 'w') as f:
+            dump(dict_data, f, Dumper=RoundTripDumper)
+
+
     writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
     main_worker(args.gpu, ngpus_per_node, args)

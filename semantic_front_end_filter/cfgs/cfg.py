@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 import os
 
 @dataclass
@@ -162,3 +162,33 @@ class TrainConfig:
                                                     # "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
                                                     # "Reconstruct_2022-04-26-17-05-24_0"  # South Africa 
                                                     ]) 
+
+
+
+def parse_args(parser, flatten = False, argstr = None):
+
+    parser.add_arguments(TrainConfig, dest="trainconfig")
+    parser.add_arguments(ModelConfig, dest="modelconfig")
+    
+    args, _ = parser.parse_known_args() if argstr is None else parser.parse_args(argstr)
+    args.batch_size = args.trainconfig.bs
+    args.num_threads = args.trainconfig.workers
+    args.mode = 'train'
+    args.data_path = args.trainconfig.data_path
+    args.min_depth = args.modelconfig.min_depth
+    args.max_depth = args.modelconfig.max_depth
+    args.max_pc_depth = args.modelconfig.max_pc_depth
+    args.min_depth_eval = args.modelconfig.min_depth_eval
+    args.max_depth_eval = args.modelconfig.max_depth_eval
+    args.load_pretrained = args.modelconfig.load_pretrained
+
+    args.chamfer = args.trainconfig.w_chamfer > 0
+
+    if(flatten):
+        # flatten nested configs, to make it easier to wandb
+        for k,v in asdict(args.trainconfig).items():
+            setattr(args, f"trainconfig:{k}", v)
+        for k,v in asdict(args.modelconfig).items():
+            setattr(args, f"modelconfig:{k}", v)
+
+    return args

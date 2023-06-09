@@ -95,10 +95,7 @@ class RunningAverageDict:
         return mdict
         # return new_dict
 
-def colorize(value, vmin=10, vmax=1000, cmap='magma_r'):
-    value = value.cpu().numpy()[0, :, :]
-    invalid_mask = value == -1
-
+def colorize(value, vmin=10, vmax=40, cmap='plasma'):
     # normalize
     vmin = value.min() if vmin is None else vmin
     vmax = value.max() if vmax is None else vmax
@@ -109,13 +106,15 @@ def colorize(value, vmin=10, vmax=1000, cmap='magma_r'):
         value = value * 0.
     # squeeze last dim if it exists
     # value = value.squeeze(axis=0)
+
     cmapper = matplotlib.cm.get_cmap(cmap)
     value = cmapper(value, bytes=True)  # (nxmx4)
-    value[invalid_mask] = 255
+
     img = value[:, :, :3]
 
     #     return img.transpose((2, 0, 1))
     return img
+
 
 
 def count_parameters(model):
