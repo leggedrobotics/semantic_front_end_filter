@@ -1,19 +1,13 @@
 import os
 import torch
-import yaml
+from ruamel.yaml import YAML
 
 
 def load_param_from_path(data_path):
-    model_cfg = yaml.load(
-        open(os.path.join(os.path.dirname(data_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
-    # model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
-    return model_cfg
+    model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
+    train_cfg = YAML().load(open(os.path.join(data_path, "TrainConfig.yaml"), 'r'))
+    return model_cfg, train_cfg
 
-def load_train_param_from_path(data_path):
-    train_cfg = yaml.load(
-        open(os.path.join(os.path.dirname(data_path), "TrainConfig.yaml"), 'r'), Loader=yaml.FullLoader)
-    # train_cfg = YAML().load(open(os.path.join(data_path, "TrainConfig.yaml"), 'r'))
-    return train_cfg
 
 def save_weights(model, filename, path="./saved_models"):
     if not os.path.isdir(path):

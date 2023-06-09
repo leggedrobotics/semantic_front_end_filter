@@ -2,9 +2,9 @@ import os
 import torch
 from torch import nn
 import numpy as np
-from semantic_front_end_filter.adabins.dataloader import DepthDataLoader
-from semantic_front_end_filter.adabins import model_io, models
-from semantic_front_end_filter.adabins.cfgUtils import parse_args
+from semantic_front_end_filter.utils.file_util import load_checkpoint, load_param_from_path
+import semantic_front_end_filter.models as models
+from semantic_front_end_filter.cfgs import parse_args
 from simple_parsing import ArgumentParser
 import yaml
 
@@ -18,8 +18,7 @@ from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML
 import cv2
 from tqdm import tqdm
-from semantic_front_end_filter.Labelling.evalIoU_cuda import computeIoUs
-from semantic_front_end_filter.Labelling.evalIoU_cuda import load_param_from_path
+from semantic_front_end_filter.utils.evalIoU_cuda import computeIoUs
 
 # color configs
 mpl.rc('font',family='Times New Roman')
@@ -94,7 +93,7 @@ if __name__ == '__main__':
     args= parse_args(parser)
     args.trainconfig.bs = 3
     args.batch_size = 5
-    args.data_path = "/media/anqiao/T7/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
+    # args.data_path = "/media/anqiao/T7/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
 
     model_cfg, train_cfg = load_param_from_path(os.path.dirname(args.models))    
     args.modelconfig.ablation = model_cfg['ablation']
@@ -102,13 +101,13 @@ if __name__ == '__main__':
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
 
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
-    model = model_io.load_checkpoint(args.models ,model)[0]
+    model = load_checkpoint(args.models ,model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    depth_list_G, err_list_G, err_list_raw_G = computeIoUs(model, args, loader='test', env='grassland', print_result=False, depth_limit=10)
-    depth_list_H, err_list_H, err_list_raw_H = computeIoUs(model, args, loader='test', env='high grass', print_result=False, depth_limit=10)
-    depth_list_F, err_list_F, err_list_raw_F = computeIoUs(model, args, loader='test', env='forest', print_result=False, depth_limit=10)
+    depth_list_G, err_list_G, err_list_raw_G = computeIoUs(model, args, loader='offline_eval', env='grassland', print_result=False, depth_limit=10)
+    depth_list_H, err_list_H, err_list_raw_H = computeIoUs(model, args, loader='offline_eval', env='high grass', print_result=False, depth_limit=10)
+    depth_list_F, err_list_F, err_list_raw_F = computeIoUs(model, args, loader='offline_eval', env='forest', print_result=False, depth_limit=10)
 
 
     # bins = ["0-2m", "2-4m", "4-6m", "6-8m", "8-10m"]

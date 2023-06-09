@@ -5,9 +5,10 @@ import os
 import torch
 from torch import nn
 import numpy as np
-from semantic_front_end_filter.adabins.dataloader import DepthDataLoader
-from semantic_front_end_filter.adabins import model_io, models
-from semantic_front_end_filter.adabins.cfgUtils import parse_args
+from semantic_front_end_filter.utils.dataloader import DepthDataLoader
+from semantic_front_end_filter.utils.file_util import load_checkpoint, load_param_from_path
+import semantic_front_end_filter.models as models
+from semantic_front_end_filter.cfgs import parse_args
 from simple_parsing import ArgumentParser
 import yaml
 
@@ -71,8 +72,6 @@ def computeIoUs(model, args, loader = 'offline_eval', env = 'forest', depth_limi
             input_[:, 0:3] = 0        
         elif (args.modelconfig.ablation == 'onlyRGB'):
             input_[:, 3] = 0
-        if(model.use_adabins):
-            bins, images = model(input_)
         else:
             pred = model(input_)
         
@@ -135,20 +134,6 @@ def computeIoUs(model, args, loader = 'offline_eval', env = 'forest', depth_limi
     return depth_list, err_list, err_list_raw            
         
 
-
-
-
-"""
-Load the parameters from the 
-"""
-
-
-def load_param_from_path(data_path):
-    model_cfg = YAML().load(open(os.path.join(data_path, "ModelConfig.yaml"), 'r'))
-    train_cfg = YAML().load(open(os.path.join(data_path, "TrainConfig.yaml"), 'r'))
-    return model_cfg, train_cfg
-
-
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
@@ -189,7 +174,7 @@ if __name__ == "__main__":
     args.modelconfig.ablation = model_cfg['ablation']
     args.trainconfig.sprase_traj_mask = train_cfg['sprase_traj_mask']
     model = models.UnetAdaptiveBins.build(**model_cfg) 
-    model = model_io.load_checkpoint(args.models, model)[0]
+    model = load_checkpoint(args.models, model)[0]
     model = model.to(device)
     
     # Print results
