@@ -1,7 +1,7 @@
-name: plr
+name: spf-venv
 channels:
   - pytorch
-  - conda-forge
+  - nvidia
   - defaults
 dependencies:
   - cupy
@@ -9,34 +9,14 @@ dependencies:
   - numpy
   - pillow
   - pytest
-  - python=3.9.12=h12debd9_1
-  - pytorch=1.10.2=py3.9_cuda11.3_cudnn8.2.0_0
-  - scikit-learn
-  - scipy
-  - torchaudio
+  - python=3.8
+  - pytorch>=1.10
   - torchvision
-  - tornado
-  - typing_extensions
-  - tzdata
-  - wheel
-  - x264
-  - xz
-  - zlib
-  - zstd
+  - matplotlib
+  - pandas
+  - tensorboard
+  - tqdm
+  - pip
+  - ruamel.yaml
   - pip:
-    - argparse
-    - debugpy
-    - decorator
-    - defusedxml
-    - ipykernel
-    - ipython
-    - matplotlib
-    - matplotlib-inline
-    - opencv-python
-    - pandas
-    - pytorch3d
-    - tensorboard
-    - tqdm
-    - urllib3
-    - wandb
-
+      - opencv-python

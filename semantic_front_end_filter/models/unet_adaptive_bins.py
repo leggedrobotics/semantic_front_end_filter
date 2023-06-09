@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-from .miniViT import mViT
 import os
 
 class UpSampleBN(nn.Module):
@@ -136,7 +135,7 @@ class UnetAdaptiveBins(nn.Module):
                     use_adabins, deactivate_bn, skip_connection,
                     **kwargs):
         super(UnetAdaptiveBins, self).__init__()
-        self.use_adabins = use_adabins
+
         self.num_classes = n_bins
         self.min_val = min_depth
         self.max_val = max_depth
@@ -146,14 +145,8 @@ class UnetAdaptiveBins(nn.Module):
         self.skip_connection = skip_connection
         self.interpolate_mode = kwargs['interpolate_mode']
         self.args = kwargs
-        if(self.use_adabins==True):
-            self.adaptive_bins_layer = mViT(128, n_query_channels=128, patch_size=16,
-                                            dim_out=n_bins,
-                                            embedding_dim=128, norm=norm)
 
-        if(use_adabins):
-            self.decoder = DecoderBN(num_classes=128, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode)
-        elif kwargs['output_mask'] and kwargs['decoder_num'] == 1:
+        if kwargs['output_mask'] and kwargs['decoder_num'] == 1:
             self.decoder = DecoderBN(num_classes=3, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'])
         elif kwargs['output_mask'] and kwargs['decoder_num'] == 2:
             self.decoder_pred = DecoderBN(num_classes=1, deactivate_bn = deactivate_bn, skip_connection = self.skip_connection, mode = self.interpolate_mode, output_mask = kwargs['output_mask'], decoder_num= kwargs['decoder_num'], output = 'prediction')

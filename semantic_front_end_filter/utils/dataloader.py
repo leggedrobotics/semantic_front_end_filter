@@ -1,5 +1,3 @@
-# This file is mostly taken from BTS; author: Jin Han Lee, with only slight modifications
-
 import os
 import random
 
@@ -105,20 +103,11 @@ class DataLoadPreprocess(Dataset):
         for root, dirs, files in os.walk(args.data_path):
             for file in sorted(files, key=lambda x : (int(x.split('_')[1]), int(x.split('_')[-1].split('.')[0]))):
                 if file.startswith('traj') and file.endswith('.msgpack'):
-                    # print("loading file: %s"%file, end =" ")
                     sample_path = os.path.join(root,file)
-                    # with open(sample_path, "rb") as data_file:
-                    #     byte_data = data_file.read()
-                    #     data = msgpack.unpackb(byte_data)
-                    # if("images" in data.keys()):
-                    # if(root.split('/')[-1] in {"Reconstruct_2022-04-26-17-35-27_0", "WithPointCloudReconstruct_2022-03-26-22-28-54_0"}):
                     if(root.split('/')[-1] in args.trainconfig.testing):
                         self.test_filenames.append(sample_path)
                     elif (root.split('/')[-1] in args.trainconfig.training):
                         self.filenames.append(sample_path)
-                        # print("success")
-                    # else:
-                        # print("empty")
         if args.trainconfig.train_with_sample:
             self.filenames = self.test_filenames
 
@@ -169,14 +158,6 @@ class DataLoadPreprocess(Dataset):
             pc_image[pc_proj_loc[:,1], pc_proj_loc[:,0], 0] = pc_distance
             pc_image_label = pc_image_input = pc_image
         if self.mode == 'train':
-
-            # if self.args.do_kb_crop is True:
-            #       .....
-            #     depth_gt = depth_gt.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
-            #     image = image.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
-            # if self.args.do_random_rotate is True:
-            #       .....
-            #     depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
 
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.asarray(depth_gt, dtype=np.float32)

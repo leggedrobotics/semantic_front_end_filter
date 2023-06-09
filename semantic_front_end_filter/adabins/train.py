@@ -280,8 +280,6 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
           optimizer_state_dict=None):
     global PROJECT
-    if device is None:
-        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     ###################################### Logging setup #########################################
     print(f"Training {experiment_name}")
