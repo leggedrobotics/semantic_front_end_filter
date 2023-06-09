@@ -36,10 +36,6 @@ logging = True
 
 count_val = 0
 
-def is_rank_zero(args):
-    return args.rank == 0
-
-
 import matplotlib
 
 
@@ -67,45 +63,11 @@ def colorize(value, vmin=10, vmax=40, cmap='plasma'):
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
-    ###################################### Load model ##############################################
-    input_channel = 3 if args.load_pretrained else 4
-
     model = models.UnetAdaptiveBins.build(**asdict(args.modelconfig))
-    # model,_,_ = model_io.load_checkpoint("/home/anqiao/tmp/semantic_front_end_filter/checkpoints/2023-02-21-08-04-21/UnetAdaptiveBins_latest.pt", model)
-
-    ## Load pretrained kitti
-    if args.load_pretrained:
-        model,_,_ = model_io.load_checkpoint("./models/AdaBins_kitti.pt", model)
-    
-    if input_channel == 3:
-        model.transform()
-    ################################################################################################
 
     if args.gpu is not None:  # If a gpu is set by user: NO PARALLELISM!!
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-
-    args.multigpu = False
-    if args.distributed:
-        # Use DDP
-        args.multigpu = True
-        args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
-        args.batch_size = int(args.batch_size / ngpus_per_node)
-        args.workers = int((args.num_workers + ngpus_per_node - 1) / ngpus_per_node)
-        print(args.gpu, args.rank, args.batch_size, args.workers)
-        torch.cuda.set_device(args.gpu)
-        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = model.cuda(args.gpu)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], output_device=args.gpu,
-                                                          find_unused_parameters=True)
-
-    elif args.gpu is None:
-        # Use DP
-        args.multigpu = True
-        model = model.cuda()
-        model = torch.nn.DataParallel(model)
 
     args.epoch = 0
     args.last_epoch = -1
@@ -116,19 +78,6 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
     # Only apply l_mask and l_mask_regulation
     l_mask = torch.tensor(0).to('cuda')
     l_mask_regulation = torch.tensor(0).to('cuda')
-    # if(pred.shape[1]==2):
-    #     if(args.trainconfig.mask_weight_mode == 'sigmoid'):
-    #         mask_weight = nn.functional.sigmoid(pred[:, 1:, :, :])
-    #         pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
-    #     elif(args.trainconfig.mask_weight_mode == 'binary'):
-    #         # mask_weight = nn.Sigmoid(pred[:, 1:, :, :])
-    #         mask_weight = pred[:, 1:, :, :]
-    #         pred = pred[:, :1, :, :]
-    #         pred[mask_weight>0.5] = pc_image[:, 0:, :, :][mask_weight>0.5]
-    #         mask_weight[mask_weight<0.5] = 1
-    #         mask_weight[mask_weight>=0.5] = 0
-        # l_mask_regulation = torch.sum(mask_weight)
-        # l_mask_regulation_ce = args.trainconfig.mask_regulation_CE_W * torch.sum(torch.abs(mask_weight*torch.log(mask_weight+1e-5)))
 
     if(args.trainconfig.sprase_traj_mask):
         masktraj = (depth > args.min_depth) & (depth < args.max_depth) & (pc_image > 1e-9)
@@ -136,23 +85,14 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         masktraj = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~masktraj] = 0.
     # Apply traj mask
-    # l_mask = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
+
     # Apply anomaly mask    
     l_mask = criterion_mask(pred[:, 0:2], mask_gt.squeeze(dim=1).long())
     l_mask_regulation = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
     
     mask_weight = (pred[:, 1:2] > pred[:, :1]).long()
     mask_soft = nn.functional.softmax(pred[:, 0:2], dim = 1)
-    # l_mask_regulation = (torch.sum(mask_weight) - mask_weight.numel()/2)**2
-    # l_mask_regulation = (torch.sum(mask_soft[:, 1:]) - torch.sum(mask_soft[:, :1])*args.trainconfig.mask_ratio)**2
-    # l_mask_regulation = (torch.sum(mask_soft[:, 1:]) - torch.sum(mask_soft[:, :1])*args.trainconfig.mask_ratio)**2
-    # pred = pred[:, 1:] + pred[:, :1]
-    # pred[:, 2:][mask_weight<1] = 
-    
-    # if(args.trainconfig.sprase_traj_mask):
-        # pred = pred[:, 2:] + pc_image # with or withour pc_image
-    # else:
-        # pred = pred[:, 2:]
+
     pred = pred[:, 2:]
     l_dense = args.trainconfig.traj_label_W * criterion_ueff(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
@@ -175,20 +115,6 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     global PROJECT
     if device is None:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-    ###################################### Logging setup #########################################
-    print(f"Training {experiment_name}")
-
-    should_write = ((not args.distributed) or args.rank == 0)
-    should_log = should_write and logging
-    if should_log:
-        tags = args.tags.split(',') if args.tags != '' else None
-        wandb.init(project=PROJECT, name=args.trainconfig.wandb_name+"_"+DTSTRING, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="online")
-        # wandb.init(project=PROJECT, name=DTSTRING+"_"+args.trainconfig.wandb_name, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes, mode="disabled")
-        # wandb.init(mode="disabled", project=PROJECT, entity="semantic_front_end_filter", config=args, tags=tags, notes=args.notes)
-
-        # wandb.watch(model)
-    ################################################################################################
 
     train_loader = DepthDataLoader(args, 'train').data
     test_loader = DepthDataLoader(args, 'online_eval').data
@@ -241,7 +167,6 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
         time_total = -time.time()
         train_metrics = utils.RunningAverageDict()
         ################################# Train loop ##########################################################
-        if should_log: wandb.log({"Epoch": epoch}, step=step_count)
         for i, batch in tqdm(enumerate(train_loader), desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Train",
                              total=len(train_loader)) if args.tqdm else enumerate(train_loader):
 
@@ -280,11 +205,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 mask_weight = (pred[:, 1:2]>pred[:, 0:1])
                 pred =  pred[:, 2:].clone()
                 pred[~mask_weight] = pc_image[~mask_weight]
-                # = mask_weight * pred[:, 2:, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
-            # loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation
+
             loss = args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation + l_dense
-            # if(pred.shape != depth.shape): # need to enlarge the output prediction
-            #     pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
 
             pred[pred < args.min_depth] = args.min_depth
             max_depth_gt = max(args.max_depth, args.max_pc_depth)
@@ -296,18 +218,18 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             depth = depth.cpu()
             pc_image = pc_image.cpu()
             train_metrics.update(utils.compute_errors(depth[masktraj], pred[masktraj], 'traj/'), depth[masktraj].shape[0])
-            # train_metrics.update(utils.compute_errors(pc_image[maskpc], pred[maskpc], 'pc/'))
 
 
-            # writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
-            # writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
-            # writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
-            # writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
+
+            writer.add_scalar("Loss/train/l_chamfer", l_chamfer/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_sum", loss/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_dense", l_dense/args.batch_size, global_step=epoch*len(train_loader)+i)
+            writer.add_scalar("Loss/train/l_edge", l_edge/args.batch_size, global_step=epoch*len(train_loader)+i)
 
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.1)  # optional
             optimizer.step()
-            if should_log and step_count % 5 == 0:
+            if step_count % 5 == 0:
                 # wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
                 wandb.log({f"Loss/train/{criterion_ueff.name}": l_dense.item()/args.batch_size}, step=step_count)
                 wandb.log({f"Loss/train/{criterion_bins.name}": l_chamfer.item()/args.batch_size}, step=step_count)
@@ -322,42 +244,26 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             time_core += time.time()
             ########################################################################################################
 
-            if should_write and step_count % args.trainconfig.validate_every == 0:
-            # if False:
+            if step_count % args.trainconfig.validate_every == 0:
 
                 ################################# Validation loop ##################################################
                 model.eval()
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device, step_count)
-                # [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
-                # print("Validated: {}".format(metrics))
-                if should_log:
-                    wandb.log({
-                        f"Test/{criterion_ueff.name}": val_si.get_value(),
-                        # f"Test/{criterion_bins.name}": val_bins.get_value()
-                    }, step=step_count)
-
-                    wandb.log({f"test/{k}": v for k, v in metrics.items()}, step=step_count)
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
+                print("Validated: {}".format(metrics))
+                model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                                            root=saver.data_dir)
+                                        
+                print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
+                time_total = -time.time()
+                time_core = 0.
+                if metrics['traj/abs_rel'] < best_loss:
+                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
                                              root=saver.data_dir)
-                                            
-                    print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
-                    time_total = -time.time()
-                    time_core = 0.
-                if metrics['traj/abs_rel'] < best_loss and should_write:
-                    # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
-                    #                          root=saver.data_dir)
                     best_loss = metrics['traj/abs_rel']
                 model.train()
                 #################################################################################################
         wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
-        if (epoch+1)%2==0:
-            print("log_image")
-            log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
-            log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
-        
-        # model.eval()
-        # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
-        #                                      root=saver.data_dir)
     return model
 
 
@@ -365,7 +271,6 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
     global count_val
     with torch.no_grad():
         val_si = RunningAverage()
-        # val_bins = RunningAverage()
         metrics = utils.RunningAverageDict()
         for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
             img = batch['image'].to(device)
@@ -398,15 +303,11 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
                 mask_weight = (pred[:, 1:2]>pred[:, 0:1])
                 pred =  pred[:, 2:].clone()
                 pred[~mask_weight] = pc_image[~mask_weight]
-            # loss = l_dense + args.trainconfig.w_chamfer * l_chamfer + args.trainconfig.edge_aware_label_W * l_edge + args.trainconfig.consistency_W * l_consis + args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation
             loss = args.trainconfig.mask_loss_W*l_mask + args.trainconfig.mask_regulation_W *l_mask_regulation + l_dense
 
-            # writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
-            # writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
-            # writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
-            # wandb.log({f"Loss/test/MASKLoss": args.trainconfig.mask_loss_W * l_mask.item()/args.batch_size}, step=count_val, commit=False)
-            # wandb.log({f"Loss/test/SSLoss": l_dense/args.batch_size}, step=count_val, commit=False)
-            # wandb.log({f"Loss/test/l_sum": (args.trainconfig.mask_loss_W * l_mask.item() + args.trainconfig.mask_regulation_W * l_mask_regulation.item())/args.batch_size}, step=count_val, commit=False)
+            writer.add_scalar("Loss/test/l_chamfer", l_chamfer, global_step=count_val)
+            writer.add_scalar("Loss/test/l_sum", loss, global_step=count_val)
+            writer.add_scalar("Loss/test/l_dense", l_dense, global_step=count_val)
 
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             depth_var = depth_var.squeeze().unsqueeze(0).unsqueeze(0)
@@ -444,8 +345,6 @@ def validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion
             valid_mask_pc = np.logical_and(eval_mask, maskpc.cpu().numpy()) 
             if(not (valid_mask_traj.any() & valid_mask_pc.any())): continue
             metrics.update(utils.compute_errors(gt_depth[valid_mask_traj], pred[valid_mask_traj], 'traj/'), gt_depth[valid_mask_traj].shape[0])
-            # metrics.update(utils.compute_errors(pc_image[valid_mask_pc], pred[valid_mask_pc], 'pc/'))
-            # metrics.update({ "l_chamfer": l_chamfer, "l_sum": loss, "/l_dense": l_dense})
 
         return metrics.get_value(), val_si
 
@@ -477,29 +376,6 @@ if __name__ == '__main__':
     if args.root != "." and not os.path.isdir(args.root):
         os.makedirs(args.root)
 
-    try:
-        node_str = os.environ['SLURM_JOB_NODELIST'].replace('[', '').replace(']', '')
-        nodes = node_str.split(',')
-
-        args.world_size = len(nodes)
-        args.rank = int(os.environ['SLURM_PROCID'])
-
-    except KeyError as e:
-        # We are NOT using SLURM
-        args.world_size = 1
-        args.rank = 0
-        nodes = ["127.0.0.1"]
-
-    if args.distributed:
-        mp.set_start_method('forkserver')
-
-        print(args.rank)
-        port = np.random.randint(15000, 15025)
-        args.dist_url = 'tcp://{}:{}'.format(nodes[0], port)
-        print(args.dist_url)
-        args.dist_backend = 'nccl'
-        args.gpu = None
-
 
     ngpus_per_node = torch.cuda.device_count()
     args.num_workers = args.trainconfig.workers
@@ -512,12 +388,5 @@ if __name__ == '__main__':
                             dataclass_configs=[TrainConfig(**vars(args.trainconfig)), 
                                 ModelConfig(**vars(args.modelconfig))])
                 
-    # writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
-
-    if args.distributed:
-        args.world_size = ngpus_per_node * args.world_size
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    else:
-        if ngpus_per_node == 1:
-            args.gpu = 0
-        main_worker(args.gpu, ngpus_per_node, args)
+    writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
+    main_worker(args.gpu, ngpus_per_node, args)
