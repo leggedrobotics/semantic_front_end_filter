@@ -1,28 +1,19 @@
 import argparse
 import os
-import sys
-
-from matplotlib import image
 import time
 from datetime import datetime
 
 
 import numpy as np
-
 import torch
-import torch.distributed as dist
-import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
-import torch.utils.data.distributed
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 from simple_parsing import ArgumentParser
-import matplotlib.pyplot as plt
 
-from . import model_io
-from . import models
+from semantic_front_end_filter.utils.file_util import save_checkpoint
 from semantic_front_end_filter.models import UnetAdaptiveBins
 from semantic_front_end_filter.cfgs import ModelConfig, TrainConfig, parse_args, dataclass, asdict
 from semantic_front_end_filter.utils.dataloader import DepthDataLoader
@@ -36,22 +27,6 @@ logging = True
 
 count_val = 0
 
-import matplotlib
-
-
-def main_worker(gpu, ngpus_per_node, args):
-    args.gpu = gpu
-
-    model = UnetAdaptiveBins.build(**asdict(args.modelconfig))
-
-    if args.gpu is not None:  # If a gpu is set by user: NO PARALLELISM!!
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
-
-    args.epoch = 0
-    args.last_epoch = -1
-    train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
-          experiment_name=args.name, optimizer_state_dict=None)
 
 def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, pred, bin_edges, depth, depth_var, pc_image, image, pose, mask_gt):
     # Only apply l_mask and l_mask_regulation
@@ -230,14 +205,14 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 metrics, val_si = validate(args, model, test_loader, criterion_ueff, criterion_bins, criterion_edge, criterion_consistency, criterion_mask, epoch, epochs, device, step_count)
                 [writer.add_scalar("test/"+k, v, step_count) for k,v in metrics.items()]
                 print("Validated: {}".format(metrics))
-                model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
                                             root=saver.data_dir)
                                         
                 print(f"Total time spent: {time_total+time.time()}, core time spent:{time_core}")
                 time_total = -time.time()
                 time_core = 0.
                 if metrics['traj/abs_rel'] < best_loss:
-                    model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
+                    save_checkpoint(model, optimizer, epoch, f"{experiment_name}_best.pt",
                                              root=saver.data_dir)
                     best_loss = metrics['traj/abs_rel']
                 model.train()
@@ -339,26 +314,19 @@ def convert_arg_line_to_args(arg_line):
 if __name__ == '__main__':
     # Arguments
     parser = ArgumentParser()
-    parser.add_argument('--gpu', default=None, type=int, help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
-    parser.add_argument("--distributed", default=False, action="store_true", help="Use DDP if set")
     parser.add_argument("--root", default=".", type=str,
                         help="Root folder to save data in")
     parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
     parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
 
-    parser.add_argument("--notes", default='', type=str, help="Wandb notes")
-    parser.add_argument("--tags", default='', type=str, help="Wandb tags, seperate by `,`")
 
     args = parse_args(parser, flatten = True)
 
     if args.root != "." and not os.path.isdir(args.root):
         os.makedirs(args.root)
 
-
-    ngpus_per_node = torch.cuda.device_count()
     args.num_workers = args.trainconfig.workers
-    args.ngpus_per_node = ngpus_per_node
     
     saver_dir = os.path.join(args.root,"checkpoints")
     data_dir = os.path.join(saver_dir, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
@@ -377,4 +345,10 @@ if __name__ == '__main__':
 
 
     writer = SummaryWriter(log_dir=saver.data_dir, flush_secs=60)
-    main_worker(args.gpu, ngpus_per_node, args)
+
+    model = UnetAdaptiveBins.build(**asdict(args.modelconfig))
+
+    args.epoch = 0
+    args.last_epoch = -1
+    train(model, args, epochs=args.trainconfig.epochs, lr=args.trainconfig.lr, device=args.gpu, root=args.root,
+          experiment_name=args.name, optimizer_state_dict=None)
