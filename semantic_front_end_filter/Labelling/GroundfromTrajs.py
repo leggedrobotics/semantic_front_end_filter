@@ -1,5 +1,6 @@
 from cProfile import label
 from cmath import nan
+from re import X
 from turtle import color
 from cv2 import mean
 import msgpack
@@ -11,10 +12,10 @@ import numpy
 from pandas import value_counts
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
-from numpy import asarray as ar, ndarray
+from numpy import asarray as ar, meshgrid, ndarray
 from torch import true_divide, zero_
 import os
-
+from tqdm import tqdm
 # Class GFT provides utility functions to work with ground map extracted from feet trajctories. 
 # The class can be instantiated by feet trajectory file (saved by extractFeetTrajsFromRosbag.py in pyenv)
 # or by file saved by the calss itself. The main method is getHeight(self, x, y, method = 'sparse'), 
@@ -41,7 +42,44 @@ def visualizeArray(Larray):
     ax.scatter3D(nonzero[0], nonzero[1], Larray[nonzero[0], nonzero[1]])
     plt.show()
 
+def getRoundKernel(radius = 3):
+    """get a 0-1 kernel with radius sidelength and 1 filled in the center cicle"""
+    X = range(2*radius+1)
+    x, y = np.meshgrid(X, X)
+    kernel = (np.sqrt((x.flatten()-radius)**2 + (y.flatten()-radius)**2).reshape((2*radius+1, 2*radius+1))<=radius).astype('int')
+    return kernel
 
+def saveLocalMaps(feet_traj, save_path, localftLength = 2e4, step = 1e4):
+    # Open feet trajectories 
+    with open (feet_traj , 'rb') as data_file:
+        data = data_file.read()
+        data = msgpack.unpackb(data)
+        print("Feettraj file is loaded successfully.")
+    FeetTrajs = {}
+    for key, value in data.items():
+        FeetTrajs[key] = np.array(value)
+
+    save_path = save_path + '/localGroundMaps'
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    # Slice the trajectories into overlapped subtrajectories
+    ftLength = FeetTrajs['LF_shank_fixed_LF_FOOT'].shape[0]
+    starts = np.arange(0, ftLength-localftLength, step)
+    ends = starts + localftLength
+    ends[-1] = ftLength-1
+
+    # Save a ground msgpack for each subtrajectories
+    for i, (start, end) in enumerate(tqdm(zip(starts, ends), total=starts.size)):
+        localFeetTrajs = {}
+        for key, value in FeetTrajs.items():
+            if key != "timestep":
+                localFeetTrajs[key] = value[int(start):int(end)]
+        timespan = [FeetTrajs["timestep"][int(start)], FeetTrajs["timestep"][int(end)]]    
+        gft = GFT(FeetDict = localFeetTrajs, timespan=timespan)
+        gft.save(save_path + '/localGroundMap_{:03d}.msgpack'.format(i))
+    
+    print("Done!")
 class GFT:
     """This class provides utility functions to work with 
     ground map extracted from feet trajctories."""
@@ -62,34 +100,42 @@ class GFT:
     res = 0
     meanHeight = 0
 
-    def __init__(self, GroundMapFile=None, FeetTrajsFile=None, InitializeGP = True) -> None:
+    def __init__(self, GroundMapFile=None, FeetTrajsFile=None, FeetDict=None, InitializeGP = True, timespan = None) -> None:
 
-        assert (GroundMapFile!=None and FeetTrajsFile==None) or (GroundMapFile==None and FeetTrajsFile!=None), \
-            f"One and only one file should be provided"
-
+        # assert (GroundMapFile!=None and FeetTrajsFile==None) or (GroundMapFile==None and FeetTrajsFile!=None), \
+        #     f"One and only one file or dict should be provided"
+        self.timespan = timespan
         # Get GroundArray from saved GFT msgpack
         if GroundMapFile is not None:
             self.GroundArray = self.load(GroundMapFile)
-        else:
+        elif FeetTrajsFile is not None:
         # Get GroundArray from saved Feet Trajectories
             self.ContactArray, self.FeetTrajs = self.getContactPointsFromFile(
                 FeetTrajsFile)
             self.GroundArray = self.getGroundFromContact(self.ContactArray)
             if(InitializeGP):
                 self.initializeGPMap()
+        elif FeetDict is not None:
+            self.ContactArray, self.FeetTrajs = self.getContactPointsFromFile(
+                FeetDict, type='dict')
+            self.GroundArray = self.getGroundFromContact(self.ContactArray)
+            if(InitializeGP):
+                self.initializeGPMap()
 
-    def getContactPointsFromFile(self, FeetTrajsFile):
+    def getContactPointsFromFile(self, FeetTrajsFile, type='string'):
         """Get contact points from four feet Trajectories"""
-        with open(FeetTrajsFile, 'rb') as data_file:
-            data = data_file.read()
-            data = msgpack.unpackb(data)
-            print("File is loaded successfully.")
-
-        self.FeetTrajsDictList = data
-
-        FeetTrajs = {}
-        for key, value in data.items():
-            FeetTrajs[key] = np.array(value)
+        if(type=='string'):
+            with open(FeetTrajsFile, 'rb') as data_file:
+                data = data_file.read()
+                data = msgpack.unpackb(data)
+                print("File is loaded successfully.")
+            self.FeetTrajsDictList = data
+            FeetTrajs = {}
+            for key, value in data.items():
+                FeetTrajs[key] = np.array(value)
+        elif (type=='dict'):
+            self.FeetTrajsDictList = FeetTrajsFile
+            FeetTrajs = FeetTrajsFile
 
         ContactPoints = []
         for value in FeetTrajs.values():
@@ -101,8 +147,8 @@ class GFT:
     def getContactPoints(self, FootTrajSlice):
         """Get contact points from one foot's Trajectories. Construct big window and small window.
         Use the mean of the big window and extrame deviation to filter the points"""
-        print("Extracting Contact points ......")
-    # FootTrajSlice = FeetTrajs['LF_shank_fixed_LF_FOOT']
+        # print("Extracting Contact points ......")
+        # FootTrajSlice = FeetTrajs['LF_shank_fixed_LF_FOOT']
         ContactShow = []
         ContactPoints = []
         BIGWINDOW = 500
@@ -172,7 +218,9 @@ class GFT:
         for i in range(x.size):
             CountContactArray[x[i], y[i]] = CountContactArray[x[i], y[i]]+1
             GroundArray[x[i], y[i]] = GroundArray[x[i], y[i]] + z[i]
-        GroundArray = np.true_divide(GroundArray, CountContactArray)
+        
+        with np.errstate(divide='ignore', invalid='ignore'):
+            GroundArray = np.true_divide(GroundArray, CountContactArray)
 
         GroundArray = np.nan_to_num(GroundArray)
         nonZero = np.where(GroundArray[:,:]!=0)
@@ -199,6 +247,7 @@ class GFT:
         save_dict["yRealRange"] = self.yRealRange 
         save_dict["meanHeight"] = self.meanHeight 
         save_dict["GroundArray"] = self.GroundArray.tolist()
+        save_dict["timespan"] = self.timespan
         if(FeetTrajs):
             save_dict["FeetTrajs"] = self.FeetTrajsDictList
         if(GPMap):
@@ -206,7 +255,12 @@ class GFT:
             save_dict["GPMap"] = self.GPMap.tolist() # the map recovered from gaussian process
             save_dict["Confidence"] = self.Confidence.tolist() # the recording confidence
 
-        save_path = out_dir + "/GroundMap.msgpack"
+        # print("Saving one msgpack...")
+        if(out_dir.rsplit('.', 1)[1]!='msgpack'):
+            save_path = out_dir + "/GroundMap.msgpack"
+        else:
+            save_path = out_dir
+
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, "wb") as out_file:
             out_data = msgpack.packb(save_dict)
@@ -315,7 +369,7 @@ class GFT:
             MSE = self.Confidence[self.intArray(x/self.res) - self.xNormal, self.intArray(y/self.res)-self.yNormal]
         return height, MSE
 
-    def initializeGPMap(self, teststep = 10, trainstep = 50):
+    def initializeGPMap(self, teststep = 5, trainstep = 10, trainstride = 2):
         """Reconsturct the map use Gaussian Process and contacts."""
         # Container
         self.GPMap = self.GroundArray.copy()
@@ -326,12 +380,14 @@ class GFT:
         occArray[np.where(self.GroundArray[:, :]!=0)] = 1
         # Testing set (The points we want to estimate) preparation
         enhaceOccArray = occArray.copy()
+        kernel = getRoundKernel(teststep)
         for movex in range(-teststep, teststep+1):
-            for movey in range(-teststep, teststep+1): 
-                enhaceOccArray = enhaceOccArray + moveArray(occArray.copy(), movex, movey)
+            for movey in range(-teststep, teststep+1):
+                if(kernel[movex+teststep, movey+teststep]): 
+                    enhaceOccArray = enhaceOccArray + moveArray(occArray.copy(), movex, movey)
         enhaceOccArray[np.where(enhaceOccArray[:, :]!=0)] = 1
         #Construct the windows
-        xxBW, yyBW = np.meshgrid(np.arange(0,self.GroundArray.shape[0], trainstep - 2*teststep), np.arange(0,self.GroundArray.shape[1], trainstep - 2*teststep))
+        xxBW, yyBW = np.meshgrid(np.arange(0,self.GroundArray.shape[0], trainstride), np.arange(0,self.GroundArray.shape[1], trainstride))
         xxBW = xxBW.flatten()
         yyBW = yyBW.flatten()
         BWS = np.stack([xxBW, yyBW]).T
@@ -345,7 +401,7 @@ class GFT:
             localOcc = occArray[xGround: xGround+xLocalLength, yGround: yGround+yLocalLength]
             # visualizeArray(localOcc)
             # print(np.sum(localOcc))
-            if(np.sum(localOcc)<=10):
+            if(np.sum(localOcc)<=0):
                 # print("No GP")
                 continue
             else:
@@ -359,8 +415,8 @@ class GFT:
                 trainX = np.stack([localTrain[0], localTrain[1]]).T
                 trainY = (LocalArray[localTrain[0], localTrain[1]] - prior).reshape(-1, 1)
 
-                kernel = C(1.0, (1e-3, 1e3)) * RBF([5,5], length_scale_bounds=(1e-2, 1e2))
-                # kernel = C(1.0, (1e-3, 1e3)) * RBF([3,3], length_scale_bounds="fixed")
+                # kernel = C(1.0, (1e-5, 1e3)) * RBF([5,5], length_scale_bounds=(1e-5, 1e2))
+                kernel = RBF([1e-5,1e-5], length_scale_bounds="fixed")
                 # kernel =  C(1.0, (1e-3, 1e3)) * RBF([3,3], length_scale_bounds="fixed")
 
 
@@ -374,8 +430,8 @@ class GFT:
                 self.GPMap[localTest[0] + xGround, localTest[1] + yGround] += zz[0]
                 GPMapCounter[localTest[0] + xGround, localTest[1] + yGround] += 1
                 self.Confidence[localTest[0] + xGround, localTest[1] + yGround] = MSET.T
-
-        self.GPMap = np.true_divide(self.GPMap, GPMapCounter + occArray)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            self.GPMap = np.true_divide(self.GPMap, GPMapCounter + occArray)
 
         self.Confidence[self.Confidence==0] = self.Confidence.max() + (self.Confidence.max() - self.Confidence.min())
         # self.Confidence = 1 - (self.Confidence - self.Confidence.min()) / (self.Confidence.max() - self.Confidence.min())
@@ -461,24 +517,39 @@ def main():
     # y = 400
     # gft = GFT(FeetTrajsFile = '/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_10/mission1/Recontruct_2022-04-18-19-40-09_0/FeetTrajs.msgpack')
     # gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/FeetTrajs.msgpack')
-    dir_path = os.path.dirname(os.path.realpath(__file__))
+    # dir_path = os.path.dirname(os.path.realpath(__file__))
     
-    gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0/FeetTrajs.msgpack', InitializeGP = True)
+    gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-21-10-47-29_0/FeetTrajs.msgpack', InitializeGP = True)
     # print(gft.getHeight(30.842474971923533,462.984496350972, method="GP"))
-    gft.save('/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_08/mission3/WithPointCloudReconstruct_2022-04-01-21-41-55_0')
+    gft.save('/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/test')
     # gft.save(dir_path+"/Example_Files", GPMap=True)
     
-    # gft2 = GFT(GroundMapFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/GroundMap.msgpack')
+    # gft2 = GFT(GroundMapFile='/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-21-10-47-29_0/GroundMap.msgpack')
+    gft2 = GFT(GroundMapFile='/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/test/GroundMap.msgpack')
     # print(gft2.getHeight(34.842474971923533, 461.984496350972, method="GP", visualize=True))
     # gft.visualizeContacts3D()
     # gft.visualizeOneFootTraj3D()
     # gft.conver2GPMap()
     # gft2.visualizeGPMap()
-
+    Larray = gft2.GPMap
+    Larray2 = gft2.GroundArray
+    nonzero = np.where(Larray[:, :]!=0)
+    nonzero2 = np.where(Larray2[:, :]!=0)
+    ax = plt.axes(projection='3d')
+    ax.scatter3D(nonzero[0], nonzero[1], Larray[nonzero[0], nonzero[1]])
+    ax.scatter3D(nonzero2[0], nonzero2[1], Larray2[nonzero2[0], nonzero2[1]], c = 'r', s=30)
+    ax.set_xlim(xmin=630, xmax=640)
+    ax.set_ylim(ymin=500, ymax=510)
+    ax.set_zlim(zmin=1, zmax=3)
+    plt.show()
+    
     # print(gft2.getHeight(x, y, method="GP"))
 
     # gft2.visualizeContacts3D(range=np.arange(1, 100))
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    save_path = '/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_007_Italy/extract_trajectories/reconstruct_2023-05-24-05-48-22_0/'
+    feet_traj = '/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_007_Italy/extract_trajectories/reconstruct_2023-05-24-05-48-22_0/FeetTrajs.msgpack' 
+    saveLocalMaps(feet_traj, save_path)

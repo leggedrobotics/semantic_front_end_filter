@@ -42,7 +42,7 @@ AnnotatedObstaclesIoUs = np.array([])
 SelfGenratedSSIoUs = np.array([])
 
 @torch.no_grad()
-def computeIoUs(model, args, loader = 'test', env = 'forest', depth_limit = 10, print_result=True):
+def computeIoUs(model, args, loader = 'test', env = 'forest', depth_limit = 5, print_result=True):
     # load dataset
     if env == 'high grass':
         args.trainconfig.testing = ["Reconstruct_2022-07-19-18-16-39_0"] # 95
@@ -129,20 +129,20 @@ def computeIoUs(model, args, loader = 'test', env = 'forest', depth_limit = 10, 
 
 
         # Compute RMSE 
-        mask_de = mask_gt_self & (pc_image>0) & (pc_image<depth_limit) & (sample["depth_variance"]<1).to(device) & mask_gt
-        print("Good")
+        mask_de = mask_gt_self & (pc_image>0) & (pc_image<depth_limit) & (sample["depth_variance"]<1).to(device)
         # if ((pred[:, 2:] - sample['depth'])[mask_de]/sample['depth'][mask_de]).sum()>0:
         #     continue
         # RMSE_list = ((traj_label - pred[:, 2:])[mask_de])**2
         err_list = np.append(err_list, (traj_label - pred[:, 2:])[mask_de].detach().cpu().numpy())
-        depth_list = np.append(depth_list,traj_label[mask_de].detach().cpu().numpy())
+        depth_list = np.append(depth_list, traj_label[mask_de].detach().cpu().numpy())
         RMSE = (((traj_label - pred[:, 2:])[mask_de])**2).sum()
         RMSElog = (((torch.log10(traj_label[mask_de]) - torch.log10(pred[:, 2:][mask_de]))).abs()).sum()
         RMSEs += RMSE
         RMSElogs += RMSElog
         total_pixel_num += mask_de.sum()
 
-        REL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).sum()
+        # REL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).sum()
+        REL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).abs().sum()
         RELs += REL
         # print("pred: ", REL)
 
@@ -154,7 +154,7 @@ def computeIoUs(model, args, loader = 'test', env = 'forest', depth_limit = 10, 
         rawRMSEs += rawRMSE
         rawRMSElogs += rawRMSElog
 
-        rawREL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).sum()
+        rawREL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).abs().sum()
         rawRELs += rawREL
 
         sample_num += 1
@@ -164,17 +164,17 @@ def computeIoUs(model, args, loader = 'test', env = 'forest', depth_limit = 10, 
 
     torch.set_printoptions(precision=3)
     if(print_result):
-        print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
-                "RMSE: ", torch.sqrt(RMSEs/total_pixel_num),
-                "REL: ", RELs/total_pixel_num,
-                "RMSELog: ", RMSElogs/total_pixel_num)
+        # print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
+        #         "RMSE: ", torch.sqrt(RMSEs/total_pixel_num),
+        #         "REL: ", RELs/total_pixel_num,
+        #         "RMSELog: ", RMSElogs/total_pixel_num)
         print("{:.3f} & {:.3f} & {:.3f}".format(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num))
         print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num))
 
-        print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
-                "rawRMSE: ", torch.sqrt(rawRMSEs/total_pixel_num),
-                "rawREL: ", rawRELs/total_pixel_num,
-                "rawRMSELog: ", rawRMSElogs/total_pixel_num)
+        # print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
+        #         "rawRMSE: ", torch.sqrt(rawRMSEs/total_pixel_num),
+        #         "rawREL: ", rawRELs/total_pixel_num,
+        #         "rawRMSELog: ", rawRMSElogs/total_pixel_num)
         print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(rawRMSEs/total_pixel_num), rawRELs/total_pixel_num, rawRMSElogs/total_pixel_num))
     
             # pred_origin = pred[:, 2:]
@@ -209,7 +209,9 @@ def load_param_from_path(data_path):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-13-59-02_onlyPC/UnetAdaptiveBins_latest.pt")
+        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
+        # "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-13-58-27_onlyRGB/UnetAdaptiveBins_latest.pt")
+        # "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-13-59-02_onlyPC/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
     parser.add_argument(
         "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
@@ -274,7 +276,10 @@ if __name__ == "__main__":
         # plt.show()
     # vis_network_structure()
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
-    computeIoUs(model, args, loader='test', env='grassland')
-    computeIoUs(model, args, loader='test', env='high grass')
-    computeIoUs(model, args, loader='test', env='forest')
-
+    dg, eg, eg_raw = computeIoUs(model, args, loader='test', env='grassland')
+    dh, eh, eh_raw = computeIoUs(model, args, loader='test', env='high grass')
+    df, ef, ef_raw = computeIoUs(model, args, loader='test', env='forest')
+    print("{:.2f}".format(((np.abs(eg)/dg).mean() + (np.abs(eh)/dh).mean() + np.abs(ef/df).mean())/3))
+    print("{:.2f}".format(((np.abs(eg_raw)/dg).mean() + (np.abs(eh_raw)/dh).mean() + np.abs(ef_raw/df).mean())/3))
+    # print("{:.2f}".format((np.abs(eg_raw).mean() + np.abs(eh_raw).mean() + np.abs(ef_raw).mean())/3))
+    # print("{:.2f}".format((eg_raw.abs().mean() + eh_raw.abs().mean() + ef_raw.abs().mean())/3))

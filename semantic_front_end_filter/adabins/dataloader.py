@@ -51,7 +51,9 @@ class DepthDataLoader(object):
                 self.eval_sampler = None
             else:
                 self.eval_sampler = None
+            #change when using evalIoU_cuda.py for evaluation  
             self.data = DataLoader(self.testing_samples, 1,
+            # self.data = DataLoader(self.testing_samples, args.batch_size,
                                    shuffle=False,
                                    num_workers=1,
                                    pin_memory=False,

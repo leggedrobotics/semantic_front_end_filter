@@ -430,6 +430,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             ########################################################################################################
 
             if should_write and step_count % args.trainconfig.validate_every == 0:
+            # if False:
 
                 ################################# Validation loop ##################################################
                 model.eval()
@@ -460,6 +461,10 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
             print("log_image")
             log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
             log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
+        
+        # model.eval()
+        # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+        #                                      root=saver.data_dir)
     return model
 
 

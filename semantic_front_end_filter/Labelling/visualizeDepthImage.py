@@ -6,9 +6,11 @@ import numpy as np
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
+import cmapy
 
 # d = DIFG('/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_10/mission1/Recontruct_2022-04-18-19-40-09_0/GroundMap.msgpack' )
-d = DIFG('/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/GroundMap.msgpack')
+# d = DIFG('/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-18-20-34-01_0/localGroundMaps/localGroundMap_000.msgpack')
+d = DIFG('/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_007_Italy_onlyMap/extract_trajectories/Reconstruct_2022-07-19-20-46-08_0/localGroundMaps/localGroundMap_004.msgpack')
 rospy.init_node('DI_tf_listener')
 image_pub = rospy.Publisher("depth_image",Image)
 var_pub = rospy.Publisher("variance_of_depth_image", Image)
@@ -24,7 +26,7 @@ rate = rospy.Rate(3.0)
 while not rospy.is_shutdown():
     try:
         # d.close()
-        (trans,rot) = listener.lookupTransform('/map', '/cam0_sensor_frame', rospy.Time(0))
+        (trans,rot) = listener.lookupTransform('/map', '/cam4_sensor_frame', rospy.Time(0))
         euler = tf.transformations.euler_from_quaternion(rot)
         # print(euler)
         DImage, varianceDI = d.getDImage(transition=trans, rotation=euler)
@@ -40,8 +42,10 @@ while not rospy.is_shutdown():
         # imageCV[:, :, 2] = DImage*64/255 
 
         # image_message = bridge.cv2_to_imgmsg(imageCV, encoding="passthrough")
-        imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_JET)
-        imageVar = cv2.applyColorMap(varianceDI.astype(np.uint8), cv2.COLORMAP_PARULA)    
+        # imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_JET)
+        imageCV = cv2.applyColorMap(DImage.astype(np.uint8), cv2.COLORMAP_PLASMA)
+        # imageVar = cv2.applyColorMap(varianceDI.astype(np.uint8), cv2.COLORMAP_PARULA)    
+        imageVar = cv2.applyColorMap(varianceDI.astype(np.uint8), cmapy.cmap('RdYlBu'))    
         print("Publishing")
 
         # image_pub.publish(bridge.cv2_to_imgmsg(DImage.numpy().astype(np.uint8), "mono8"))

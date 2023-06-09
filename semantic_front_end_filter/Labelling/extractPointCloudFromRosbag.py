@@ -149,6 +149,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
     if not os.path.exists(GroundMap_filepath):
         ## if the map file not exist, then generate it
         FeetTrajs_filepath = os.path.join(out_dir, "FeetTrajs.msgpack")
+        print(FeetTrajs_filepath)
         assert os.path.exists(FeetTrajs_filepath) 
         gft = GFT(FeetTrajsFile = FeetTrajs_filepath)
         gft.save(out_dir, GPMap=True)
@@ -236,15 +237,27 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
 
     print("Number of sub sequences: {}".format(len(time_stamps_sequences)))
 
-    tf_buffer = tf2_py.BufferCore(rospy.Duration.from_sec(max_traj_len * dt.to_sec() * 1.1))
+    tf_buffer = tf2_py.BufferCore(rospy.Duration.from_sec(max_traj_len * dt.to_sec() * 2.5))
 
     for topic, msg, t in bag.read_messages(topics=['/tf_static']):
         for transform in msg.transforms:
             tf_buffer.set_transform_static(transform, 'rosbag')
 
     for cam_id in cfg['CAM_NAMES']:
-        cameras[cam_id].update_static_tf(
-            tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
+        # cameras[cam_id].update_static_tf(
+        #     tf_buffer.lookup_transform_core(TF_BASE, cameras[cam_id].frame_key, time_stamps_sequences[0][0]))
+        cameras["cam3"].tf_base_to_sensor = (np.array([-0.3496997 , -0.07530075,  0.24087976]), np.array([[-0.99997646,  0.00626061,  0.0028084 ,  0.        ],\
+        [-0.00386116, -0.17507344, -0.98454781,  0.        ],\
+        [-0.00567219, -0.98453547,  0.17509349,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        cameras["cam4"].tf_base_to_sensor = (np.array([-0.40548693, -0.00076062,  0.23253198]), np.array([[-0.00603566,  0.00181943, -0.99998013,  0.        ],\
+        [ 0.99997436,  0.00386421, -0.00602859,  0.        ],\
+        [ 0.00385317, -0.99999088, -0.00184271,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
+        cameras["cam5"].tf_base_to_sensor = (np.array([-0.34988457,  0.07470715,  0.24034518]), np.array([[ 0.99999023,  0.00205021, -0.00391555,  0.        ],\
+        [ 0.00349934,  0.17390848,  0.9847556 ,  0.        ],\
+        [ 0.00269991, -0.98475969,  0.1738996 ,  0.        ],\
+        [ 0.        ,  0.        ,  0.        ,  1.        ]]))
         print(cam_id, cameras[cam_id].tf_base_to_sensor)
 
     for topic, msg, t in bag.read_messages(topics=['/tf'], end_time=time_stamps_sequences[0][0]):
@@ -253,7 +266,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 tf_buffer.set_transform(transform, 'rosbag')
 
     # Process trajectories
-    for traj_idx, traj in enumerate(time_stamps_sequences[2:]):
+    for traj_idx, traj in enumerate(time_stamps_sequences[0:]):
         print(traj_idx, "-th sequence: ")
 
         start_time = traj[0]
@@ -307,25 +320,44 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     proprio_data.append(msg.header.stamp.to_sec(), proprio_state, 'proprio')
 
             # RGB images.
+            # if CAM_PREFIX in topic:
+            #     success, cam_id = getImageId(topic, CAM_NAMES)
+            #     map_frame_id = "map"
+            #     if(not success):
+            #         print('Unknown RGB image topic: ' + topic)
+            #         continue
+            #     if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)[0]): continue
+
+            #     img = rgb_msg_to_image(msg, cameras[cam_id].is_debayered, cameras[cam_id].rb_swap, ("compressed" in topic))
+            #     image_data.append(msg.header.stamp.to_sec(), img, cam_id)
+
+            #     tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)
+            #     pose = msg_to_pose(tf)
+            #     position = np.array(pose[:3])
+            #     euler = np.array(euler_from_quaternion(pose[3:]))
+
+            #     d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
+            #     d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
+            #     image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
             if CAM_PREFIX in topic:
                 success, cam_id = getImageId(topic, CAM_NAMES)
                 map_frame_id = "map"
                 if(not success):
                     print('Unknown RGB image topic: ' + topic)
                     continue
-                if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)[0]): continue
+                if not (tf_buffer.can_transform_core(map_frame_id, cameras[cam_id].frame_key,  t)[0]): continue
 
                 img = rgb_msg_to_image(msg, cameras[cam_id].is_debayered, cameras[cam_id].rb_swap, ("compressed" in topic))
-                image_data.append(msg.header.stamp.to_sec(), img, cam_id)
+                image_data.append(t.to_sec(), img, cam_id)
 
-                tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  msg.header.stamp)
+                tf = tf_buffer.lookup_transform_core(map_frame_id, cameras[cam_id].frame_key,  t)
                 pose = msg_to_pose(tf)
                 position = np.array(pose[:3])
                 euler = np.array(euler_from_quaternion(pose[3:]))
 
                 d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
                 d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
-                image_data.append(msg.header.stamp.to_sec(), d_img, cam_id+'depth')
+                image_data.append(t.to_sec(), d_img, cam_id+'depth')
                 
 
             # Elevation map
@@ -344,15 +376,17 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                     print('Unknown point cloud topic: ' + topic)
                     continue
                 pointcloud_data.append(msg.header.stamp.to_sec(), pc_array,  cam_id)
-
+        
         # Update poses & commands
+        base_key = TF_BASE
+        # base_key = 'cam4_sensor_frame'
         for i, stamp in enumerate(command_data.indices['base']):
             stamp_ros = rospy.Time.from_sec(stamp)
             command_base = command_data.data['base'][i]
 
             for key in TF_POSE_REF_LIST:
-                if (tf_buffer.can_transform_core(key, TF_BASE, stamp_ros)[0]):
-                    tf = tf_buffer.lookup_transform_core(key, TF_BASE, stamp_ros)
+                if (tf_buffer.can_transform_core(key, base_key, stamp_ros)[0]):
+                    tf = tf_buffer.lookup_transform_core(key, base_key, stamp_ros)
                     pose = msg_to_pose(tf)  # pose in fixed ref frame (odom or map)
                     pose_data.append(stamp, pose, key)
 
@@ -431,8 +465,14 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         else:
             state_df = resample_ffill(state_data, resampled_idx, dt.to_sec())
 
+        if(image_data.data=={}):
+            print("No images in this traj")
+            continue
         img_df = resample_dataid_ffill(image_data, resampled_idx, 1.0)  # tol > 0.7 second (darpa: img updates ~ 1.5 Hz)
         map_df = resample_dataid_ffill(map_data, resampled_idx, 0.3)  # tol > 0.2 second (map updates ~ 5 Hz)
+        if(pointcloud_data.data=={}):
+            print("No point cloud in this traj")
+            continue
         pointcloud_df = resample_dataid_ffill(pointcloud_data, resampled_idx, 0.15)  # tol > 0.1 second (pointcloud updates ~ 9.9 Hz)
         pose_df = resample_ffill(pose_data, resampled_idx, dt.to_sec())
         vel_df = resample_ffill(velocity_data, resampled_idx, dt.to_sec())
@@ -507,7 +547,7 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 for pck  in pc_keys:
                     pc_idx = int(df['pc'][pck].iloc[time_idx][0])
                     cloud = pointcloud_data.data[pck][pc_idx]
-                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 10)
+                    cloud = fuse_filter(pointcloud_data.data[pck], pc_idx, 1)
                     # cache some variables
                     imgs = []
                     for cam_id in CAM_NAMES:
@@ -550,9 +590,13 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 save_dict['velocity'] = {}
 
                 save_dict['images'] = {}
+                save_dict['time'] = 0
                 save_dict['map'] = None
 
                 save_dict['pointcloud'] = pointcloudinfo['pc'][time_idx]
+
+                #Save time
+                save_dict['time'] = df['map'].index[time_idx].value/1e9
 
                 # Save robot state
                 for key in cmd_keys:
@@ -599,7 +643,8 @@ def main():
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
-    parser.add_argument('--bag_path', default='', help = 'bag file path')
+    parser.add_argument('--bag_path', default='/media/anqiao/Semantic/Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_11/mission8_locomotino/Reconstruct_2022-04-25-13-57-28_0.bag', help = 'bag file path')
+    parser.add_argument('--out_dir', default='/media/anqiao/Semantic/Data/extract_trajectories_006_SA/extract_trajectories/', help = 'output path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
@@ -608,7 +653,8 @@ def main():
     # bag_file_path = cfg['bagfile']
     bag_file_path = args.bag_path
     print("Extracting file: " + bag_file_path)
-    output_path = cfg['outdir']
+    # output_path = cfg['outdir']
+    output_path = args.out_dir
     camera_calibration_path = cfg['calibration']
     print("camera_calibration_path :",camera_calibration_path)
     
