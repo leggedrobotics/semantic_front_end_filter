@@ -1,8 +1,0 @@
-network_address_base_router: &network_address_base_router
-  destination_addr: localhost
-
-pinger_anymal_to_baserouter:
-  <<: *network_address_base_router
-
-pinger_missionctrl_to_anymal:
-  <<: *network_address_base_router

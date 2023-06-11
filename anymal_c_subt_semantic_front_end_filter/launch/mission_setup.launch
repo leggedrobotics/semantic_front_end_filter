@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<launch>
-
-  <!-- Mission Setup stack -->
-  <include file="$(find stack_launcher)/launch/stack_launcher.launch">
-    <arg name="stack" value="mission_setup"/>
-  </include>
-
-</launch>

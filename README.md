@@ -1,8 +1,8 @@
 # Semantic Pointcloud Filter
 [[Project page]](https://sites.google.com/leggedrobotics.com/semantic-pointcloud-filter?usp=sharing)
 [[Paper]](https://arxiv.org/abs/2305.07995)
-[[Data](TBA)]()
-[[Video](TBA)]()
+[[Data(TBA)]]()
+[[Video(TBA)]]()
 ## Installation
 
 ### Dependencies
