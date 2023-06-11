@@ -1,17 +1,12 @@
 #!/usr/bin/env python
 
 import os
-
-import pandas
 import rospy
-import rospkg
 from ruamel.yaml import YAML
 from argparse import ArgumentParser
-import cv2
-from sensor_msgs.msg import Image
 import rosbag
+import torch
 
-from cv_bridge import CvBridge, CvBridgeError
 import tf2_py
 from tf.transformations import euler_from_quaternion, quaternion_matrix, euler_from_matrix, quaternion_from_matrix
 
@@ -23,14 +18,10 @@ import msgpack
 import msgpack_numpy as m
 
 import math
-import time
-
-import collections
-
-from messages.gridMapMessage import GridMapFromMessage
-from messages.imageMessage import Camera, getImageId, rgb_msg_to_image
-from messages.pointcloudMessage import rospcmsg_to_pcarray
-from messages.messageToVectors import msg_to_body_ang_vel, msg_to_body_lin_vel, msg_to_rotmat, msg_to_command, \
+from semantic_front_end_filter.utils.messages.gridMapMessage import GridMapFromMessage
+from semantic_front_end_filter.utils.messages.imageMessage import Camera, getImageId, rgb_msg_to_image
+from semantic_front_end_filter.utils.messages.pointcloudMessage import rospcmsg_to_pcarray
+from semantic_front_end_filter.utils.messages.messageToVectors import msg_to_body_ang_vel, msg_to_body_lin_vel, msg_to_rotmat, msg_to_command, \
     msg_to_pose, msg_to_joint_positions, msg_to_joint_velocities, msg_to_joint_torques, msg_to_grav_vec
 
 m.patch()
@@ -39,8 +30,9 @@ import pandas as pd
 import subprocess
 import yaml
 
-from ExtractDepthImage import DIFG
-from GroundfromTrajs import GFT
+# from ExtractDepthImage import DIFG
+from semantic_front_end_filter.utils.labelling.GroundfromTrajs import GFT
+from semantic_front_end_filter.utils.pointcloud_util import RaycastCamera
 
 
 # https://stackoverflow.com/questions/41493282/in-python-pandas-how-can-i-re-sample-and-interpolate-a-dataframe
@@ -115,6 +107,21 @@ def fuse_filter(data_list, index, fuse_step):
     indices = list(range(max(0, math.ceil(index - fuse_step/2)), min(math.ceil(index + fuse_step/2), len(data_list))))
     return np.concatenate([data_list[index] for index in indices], axis=0)
 
+def slim_dict(input, raycastCamera, device):
+    data = input
+    pc_img = torch.zeros(1, 540, 720).to(device)
+    pose = torch.Tensor(data["pose"]["map"]).to(device)
+    points = torch.Tensor(data["pointcloud"][:,:3]).to(device)
+    pc_img = raycastCamera.project_cloud_to_depth(pose, points, pc_img)
+    pc_image = pc_img.squeeze(0)[..., None].cpu().numpy()
+
+    output={"time": data['time'],
+            "pose":data["pose"]["map"],
+            "image":data["images"]["cam4"],
+            "pc_image":pc_image,
+        }
+    return output
+
 class Data:
     def __init__(self):
         self.images = []
@@ -145,15 +152,15 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         os.makedirs(out_dir)
 
     # load ground surface estimator
-    GroundMap_filepath = os.path.join(out_dir, "GroundMap.msgpack")
-    if not os.path.exists(GroundMap_filepath):
-        ## if the map file not exist, then generate it
-        FeetTrajs_filepath = os.path.join(out_dir, "FeetTrajs.msgpack")
-        print(FeetTrajs_filepath)
-        assert os.path.exists(FeetTrajs_filepath) 
-        gft = GFT(FeetTrajsFile = FeetTrajs_filepath)
-        gft.save(out_dir, GPMap=True)
-    depth_img_cam = DIFG(GroundMap_filepath, cfg['calibration'], 'cam4', cfg)
+    # GroundMap_filepath = os.path.join(out_dir, "GroundMap.msgpack")
+    # if not os.path.exists(GroundMap_filepath):
+    #     ## if the map file not exist, then generate it
+    #     FeetTrajs_filepath = os.path.join(out_dir, "FeetTrajs.msgpack")
+    #     print(FeetTrajs_filepath)
+    #     assert os.path.exists(FeetTrajs_filepath) 
+    #     gft = GFT(FeetTrajsFile = FeetTrajs_filepath)
+    #     gft.save(out_dir, GPMap=True)
+    # depth_img_cam = DIFG(GroundMap_filepath, cfg['calibration'], 'cam4', cfg)
     
 
     # Load parameters
@@ -260,6 +267,8 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
         [ 0.        ,  0.        ,  0.        ,  1.        ]]))
         print(cam_id, cameras[cam_id].tf_base_to_sensor)
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    raycastCamera = RaycastCamera(cfg['calibration'], device) 
     for topic, msg, t in bag.read_messages(topics=['/tf'], end_time=time_stamps_sequences[0][0]):
         for transform in msg.transforms:
             if transform.header.frame_id in TF_POSE_REF_LIST:
@@ -355,9 +364,9 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
                 position = np.array(pose[:3])
                 euler = np.array(euler_from_quaternion(pose[3:]))
 
-                d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
-                d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
-                image_data.append(t.to_sec(), d_img, cam_id+'depth')
+                # d_img, v_img = depth_img_cam.getDImage(transition=position, rotation=euler, ratation_is_matrix=False)
+                # d_img = np.concatenate([d_img[...,None], v_img[...,None]], axis = -1)
+                # image_data.append(t.to_sec(), d_img, cam_id+'depth')
                 
 
             # Elevation map
@@ -630,8 +639,9 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
 
                 datum_idx += 1
 
+                slimed_dict = slim_dict(save_dict, raycastCamera, device=device)
                 with open(out_file, "wb") as outfile:
-                    file_dat = msgpack.packb(save_dict)
+                    file_dat = msgpack.packb(slimed_dict)
                     outfile.write(file_dat)
 
     print('Complete.')
@@ -640,14 +650,16 @@ def extractAndSyncTrajs(file_name, out_dir, cfg, cameras):
 def main():
     # Load cfg
     cfg_path = os.path.join(os.path.dirname(os.path.realpath(__file__)) , 'data_extraction_SA.yaml')
+    cfg_path = "/home/anqiao/tmp/semantic_front_end_filter/semantic_front_end_filter/cfgs/data_extraction_SA.yaml"
     print("cfg_path :",cfg_path)
     parser = ArgumentParser()
     parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
-    parser.add_argument('--bag_path', default='/media/anqiao/Semantic/Data/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_11/mission8_locomotino/Reconstruct_2022-04-25-13-57-28_0.bag', help = 'bag file path')
-    parser.add_argument('--out_dir', default='/media/anqiao/Semantic/Data/extract_trajectories_006_SA/extract_trajectories/', help = 'output path')
+    parser.add_argument('--bag_path', default='/media/anqiao/ycyBigDrive/Data/Italy/reconstruct_Italy/Reconstruct_2022-07-18-20-34-01_0.bag', help = 'bag file path')
+    parser.add_argument('--out_dir', default='/media/anqiao/ycyBigDrive/Data/extract_trajectories_007_Italy_test/extract_trajectories', help = 'output path')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
+    print(cfg_path)
     cfg = YAML().load(open(cfg_path, 'r'))
 
     # bag_file_path = cfg['bagfile']
@@ -666,7 +678,8 @@ def main():
         cameras[cam_id] = Camera(camera_calibration_path,
                                  cam_id,
                                  cfg)
-        # print(cam_id, cameras[cam_id].tf_base_to_sensor)
+        # print(cam_id, cameras[cam_id].tf_base_to_sensor)   
+
 
 
     # Get all bag files

@@ -28,9 +28,9 @@ import time
 
 import collections
 
-from messages.gridMapMessage import GridMapFromMessage
-from messages.imageMessage import Camera, getImageId, rgb_msg_to_image
-from messages.messageToVectors import msg_to_body_ang_vel, msg_to_body_lin_vel, msg_to_rotmat, msg_to_command, \
+# from messages.gridMapMessage import GridMapFromMessage
+from semantic_front_end_filter.utils.messages.imageMessage import Camera, getImageId, rgb_msg_to_image
+from semantic_front_end_filter.utils.messages.messageToVectors import msg_to_body_ang_vel, msg_to_body_lin_vel, msg_to_rotmat, msg_to_command, \
     msg_to_pose, msg_to_joint_positions, msg_to_joint_velocities, msg_to_joint_torques, msg_to_grav_vec
 
 m.patch()
@@ -214,10 +214,11 @@ def extractFeetTrajs(file_name, out_dir, cfg, raisim_objects):
 
 def main():
     # Load cfg
-    cfg_path = os.path.dirname(os.path.realpath(__file__)) + '/data_extraction_SA.yaml'
+    default_cfg_path = os.path.dirname(os.path.realpath(__file__)) + '../../cfgs/data_extraction_SA.yaml'
     parser = ArgumentParser()
     parser.add_argument('--bag_path', default='', help = 'bag file path')
-    parser.add_argument('--cfg_path', default=cfg_path, help='Directory where data will be saved.')
+    parser.add_argument('--outdir', default='', help = 'output file path')
+    parser.add_argument('--cfg_path', default=default_cfg_path, help='Directory where data will be saved.')
     args = parser.parse_args()
     cfg_path = args.cfg_path
 
@@ -225,8 +226,10 @@ def main():
 
     # bag_file_path = cfg['bagfile']
     bag_file_path = args.bag_path
-    output_path = cfg['outdir']
+    # output_path = cfg['outdir']
+    output_path = args.outdir
     camera_calibration_path = cfg['calibration']
+    urdf_path = cfg['urdf_path']
 
     isdir = os.path.isdir(bag_file_path)
 
@@ -240,7 +243,8 @@ def main():
     # SETUP ANYMAL SIMULATION FOR COLLISION DETECTION
     import raisimpy as raisim
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    urdf_path = dir_path + '/../../rsc/robot/chimera/urdf/anymal_minimal.urdf'  # TODO: load from sim2real repo
+    
+    # urdf_path = dir_path + '/../../rsc/robot/chimera/urdf/anymal_minimal.urdf'  # TODO: load from sim2real repo
     raisim_objects = {}
     raisim_objects['world'] = raisim.World()
     raisim_objects['anymal'] = raisim_objects['world'].addArticulatedSystem(urdf_path)

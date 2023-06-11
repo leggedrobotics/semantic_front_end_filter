@@ -24,3 +24,6 @@ wandb
 .vscode/settings.json
 Labelling/extract_trajectories/
 tmp
+
+# robot models
+./semantic_front_end_filter/models/rsc/

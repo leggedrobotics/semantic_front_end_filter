@@ -10,7 +10,7 @@ import os
 from cv2 import projectPoints
 from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
 LabellingPath = os.path.join(SEMANTIC_FRONT_END_FILTER_ROOT_PATH,"Labelling")
-from semantic_front_end_filter.Labelling.messages.imageMessage import Camera
+from semantic_front_end_filter.utils.messages.imageMessage import Camera
 
 import numpy as np
 import torch
@@ -81,7 +81,7 @@ class RaycastCamera:
         depth: a torch tensor depth image
         image: the color image, can be numpy or torch
         """
-        self.camera.update_pose_from_base_pose(pose)
+        self.camera.update_pose_from_base_pose(pose.cpu())
         W,H = self.camera.image_width,self.camera.image_height
 
         position = self.camera.pose[0]
@@ -98,7 +98,7 @@ class RaycastCamera:
         return pts
 
     def project_cloud_to_depth(self, pose, points, pc_img, return_detail = False):
-        self.camera.update_pose_from_base_pose(pose)
+        self.camera.update_pose_from_base_pose(pose.cpu())
         camera_matrix = torch.Tensor(self.camera.camera_matrix).to(device)
         p = torch.Tensor(self.camera.tvec).to(device)
         H = torch.inverse(torch.Tensor(self.camera.pose[1]).to(device))

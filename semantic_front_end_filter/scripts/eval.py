@@ -91,8 +91,6 @@ if __name__ == '__main__':
     parser.add_argument("--tags", default='', type=str,
                         help="Wandb tags, seperate by `,`")
     args= parse_args(parser)
-    args.trainconfig.bs = 3
-    args.batch_size = 5
     # args.data_path = "/media/anqiao/T7/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
 
     model_cfg, train_cfg = load_param_from_path(os.path.dirname(args.models))    
