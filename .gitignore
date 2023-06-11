@@ -26,4 +26,4 @@ Labelling/extract_trajectories/
 tmp
 
 # robot models
-./semantic_front_end_filter/models/rsc/
+semantic_front_end_filter/models/rsc/*

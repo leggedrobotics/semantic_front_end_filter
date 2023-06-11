@@ -14,13 +14,11 @@ Visualize session depends on `msgpack-c`.
 
 -Add rospackage `anymal_c_subt_semantic_front_end_filter` in this repo to your catkin worksapce.
 
-## Dataset generation
+## Map generation
 
 1. Use `replayandrecord.launch` to get the re-record rosbag.
 2. Run `python3 extractFeetTrajsFromRosbag.py`
-3. Run `python3 extractPointCloudFromRosbag.py`. 
-   1. It automatically calls `GroundfromTrajs.py` `ExtractDepthImage.py`
-   2. It outputs a `msgpack` for each tuple of point clould, images, depth image, pos, and other information.
+3. Run `python3 GroundfromTrajs.py`. 
 
 
 ## Usage & Examples
@@ -29,7 +27,7 @@ Visualize session depends on `msgpack-c`.
 1. Use replay_and_record.launch to get the re-record rosbag. 
    
    ```bash
-   roslaunch anymal_c_subt_semantic_front_end_filter replay_and_record.launch bagfile:='...' dumped_rosparameters:='...' path_map_darpa_tf_file:=~/SADocker/anymal_docker/anymal-darpa/map_darpa_transformation.txt robot:=chimera
+   roslaunch semantic_front_end_filter_ros replay_and_record.launch bagfile:='...' output_file:='...' 
    ```
 
 2. Fill the data_extraction_SA.yaml with the re-recorded rosbag path and output path. Then run the extractFeetTrajsFromRosbag.py to get the file FeetTrajs.msgpack. This File contains a dict of four feet trajcetories. 
@@ -38,7 +36,7 @@ Visualize session depends on `msgpack-c`.
    python extractFeetTrajsFromRosbag.py
    ```
 
-3. Use getGroundFromTrajs.py to generate the a grid map and save it in a file named GroundMap.msgpack. This file contains the basice information of the reconstructed grid map, like shape, height and confidence of the height.
+3. Use getGroundFromTrajs.py to generate local grid maps and save them in the folder localGroundMaps. Each msgpack in this folder contains the basice information of the locally reconstructed grid map, like shape, height and confidence of the height.
 
     ```bash
    python getGroundFromTrajs.py
@@ -46,12 +44,9 @@ Visualize session depends on `msgpack-c`.
 
 4. Use replay_with_map.launch to visualize the gird_map and robot in rviz.
    ```bash
-   roslaunch anymal_c_subt_semantic_front_end_filter replay_with_map.launch bagfile:='...' dumped_rosparameters:='...' path_map_darpa_tf_file:=~/SADocker/anymal_docker/anymal-darpa/map_darpa_transformation.txt robot:=chimera map_file:='...'
+   roslaunch semantic_front_end_filter_ros replay_with_map.launch bagfile:='...' maps_path:='...' map_num:="..."
    ```
 
-### Get Point Cloud from a rosbag
-
-Similar to `extractFeetTrajsFromRosbag.py`, run `python3 extractPointCloudFromRosbag.py`. It outputs a `msgpack` for each tuple of point clould, images, pos, and etc information.
 
 ### Use of Grid Map
 GetGroundfromTrajs.py provides a class **GFT**, which allows you to generate a grid map from FeetTrajs.msgpack or load a grid map from GroundMap.msgpack. 
@@ -59,8 +54,8 @@ GetGroundfromTrajs.py provides a class **GFT**, which allows you to generate a g
 You can instantiate class **GFT** with one and only one of these two files. Then you can use multi API to access or visualize the grid map. For example, 
 
 ```python
-# Get a Grid Map by Gaussian Process. 
-# Since the Gaussian Process will consume some time(about 30s), if you only want to use a sparse grid map, you can also set InitializeGP = False and fit with Gaussian Process late by GFT::initializeGPMap().
+## Get a Grid Map by Gaussian Process. 
+# Since the Gaussian Process will consume some time(about 30s), if you only want to use a sparse grid map, you can also set InitializeGP = False and fit with Gaussian Process later by GPT::initializeGPMap().
 gft = GFT(FeetTrajsFile='./Examples/FeetTrajs.msgpack', InitializeGP = True)
 gft.save('./Examples/', GPMap=True)
 
@@ -80,6 +75,9 @@ GPMap = gftload.getGPMap()
 # Visualize
 gftload.visualizeGPMap()
 
+## To avoid the drift from long distance travel, you can choose only build local maps based on local footholds, which is also used in this project.
+
+saveLocalMaps(feet_traj='./Examples/FeetTrajs.msgpack', save_path = './Examples/')
 ```
 
 ## Definations
