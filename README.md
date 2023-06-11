@@ -43,7 +43,6 @@ After setting up the repo, change the model_path in semantic_front_end_filter_ro
 
 The reconstructed validation trajectory that we commonly use is [here](https://drive.google.com/drive/folders/1m1XzdB_q6GBZjpP_csMFxQ3IIILvXtjO?usp=sharing). You can directly play the bag and it will contain necessary pointcloud, image, and tf messages.
 
-## Visualize the result
 
 
 
