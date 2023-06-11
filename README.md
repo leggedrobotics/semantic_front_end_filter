@@ -33,7 +33,10 @@ For the details of how to build a map from the robot feet trajectories, see [her
 ```bash
 python semantic_front_end_filter/scripts/train.py --data_path <path-to-data-folder>
 ```
-
+To validate the trained model, run
+```bash
+python semantic_front_end_filter/scripts/eval.py --model <path-to-model-folder> --outdir <path-to-save-the-eveluation-plot> --data_path <path-to-data-folder>
+```
 <!-- **notice**: In this branch, the skip connection is removed, since the consistency is required when we predict the depth of teh whole picture instaed of only some points. And also for convinent the preparation of the image like cropping and flipping is commented. Because after cropping the calibration of camera is changed and the prejection will be very complex. Also since the view of robot is our task is nearly the same, so maybe its not that necerssry to do these pre process -->
 
 ## Running rosnode

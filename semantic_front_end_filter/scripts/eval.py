@@ -71,8 +71,7 @@ def cal_err_bins(depth_list, err_list_raw, err_list):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
-    parser.add_argument("--names", default="")
+        "--model", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
     parser.add_argument(
         "--outdir", default="/home/anqiao/Desktop/plr_figures/")
     parser.add_argument('--gpu', default=None, type=int,
@@ -99,7 +98,7 @@ if __name__ == '__main__':
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
 
     model = models.UnetAdaptiveBins.build(**model_cfg)                                        
-    model = load_checkpoint(args.models ,model)[0]
+    model = load_checkpoint(args.model ,model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
