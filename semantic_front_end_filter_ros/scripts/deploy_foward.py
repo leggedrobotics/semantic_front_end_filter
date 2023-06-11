@@ -15,9 +15,9 @@ from pip import main
 from scipy.spatial.transform import Rotation
 import message_filters
 import tf
-from semantic_front_end_filter.Labelling.messages.messageToVectors import msg_to_pose
-from semantic_front_end_filter.Labelling.messages.pointcloudMessage import rospcmsg_to_pcarray
-from semantic_front_end_filter.Labelling.messages.imageMessage import rgb_msg_to_image
+from semantic_front_end_filter.utils.messages.messageToVectors import msg_to_pose
+from semantic_front_end_filter.utils.messages.pointcloudMessage import rospcmsg_to_pcarray
+from semantic_front_end_filter.utils.messages.imageMessage import rgb_msg_to_image
 import rosgraph
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension
 from std_msgs.msg import Header
@@ -30,9 +30,10 @@ from geometry_msgs.msg import Point
 import rospy
 from email import message
 from semantic_front_end_filter import SEMANTIC_FRONT_END_FILTER_ROOT_PATH
-from semantic_front_end_filter.adabins import model_io, models
-from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
-from semantic_front_end_filter.adabins.cfgUtils import parse_args
+from semantic_front_end_filter.utils.file_util import load_checkpoint
+import semantic_front_end_filter.models as models
+from semantic_front_end_filter.cfgs import parse_args
+from semantic_front_end_filter.utils.pointcloud_util import RaycastCamera
 from threading import Lock
 import torch.nn as nn
 import torch
@@ -312,45 +313,33 @@ def callback(img_msg, point_cloud):
     Rot = torch.Tensor(quaternion_matrix(rot)[:3, :3]).to(device)
     points = torch.matmul(points, Rot.T) + pose[:3]
 
+    # Model 
     if(image is not None and pose is not None):
         # Get Input
         pc_img = torch.zeros_like(image[:1, ...]).to(device).float()
         if(points is not None):
             pc_img = rosv.raycastCamera.project_cloud_to_depth(
                 pose_base, points, pc_img)
-            # fig, axs = plt.subplots(1, 2,figsize=(20, 20))
-            # axs[0].imshow(pc_img[0].cpu().numpy())
-            # axs[1].imshow(image.moveaxis(0, 2).numpy())
         _image = torch.cat([image/255., pc_img],
                            axis=0)  # add the pc channel
         _image = _image[None, ...]
         normalized_image = torch.zeros_like(_image)
         for i, (m, s) in enumerate(zip([0.387, 0.394, 0.404, 0.120], [0.322, 0.32, 0.30,  1.17])):
             normalized_image[0, i, ...] = (_image[0, i, ...] - m)/s
+
         # Prediction
         _input = normalized_image.clone()
-        # _input[:, 3] = 0
         pred = model(_input)
-        if pred.shape[1] == 2:
-            mask_weight = torch.nn.functional.sigmoid(pred[:, 1:, :, :])
-            pred = mask_weight * pred[:, :1, :, :] + \
-                (1-mask_weight)*_image[0, 3:, ...]
-        if pred.shape[1] == 3:
-            mask_weight = (pred[:, 1:2] > pred[:, 0:1])
-            pred_origin = pred[:, 2:]
-            # pred = pred[:, 2:].clone() + _image[:, 3:, ...]
-            pred = pred[:, 2:].clone()
-            pred[~mask_weight] = _image[:, 3:, ...][~mask_weight]
+        mask_weight = (pred[:, 1:2] > pred[:, 0:1])
+        pred = pred[:, 2:].clone()
+        pred[~mask_weight] = _image[:, 3:, ...][~mask_weight]
         pred = pred[0].detach()
-        pred = nn.functional.interpolate(torch.tensor(
-            pred)[None, ...], torch.tensor(pc_img).shape[-2:])[0]
         m = torch.logical_or((pc_img < 1e-9), (pc_img > 10))
-        # m = torch.logical_or(m, (pred - pc_img)<0)
         pred[m] = torch.nan
         pc_img[m] = torch.nan
         pred = pred[0].T
-        # pred_color = ((pred-pred.min())/(pred.max()-pred.min())*255).numpy().astype(np.uint8)
-        # im_color = cv2.applyColorMap(pred_color, cv2.COLORMAP_OCEAN)
+
+        # Publish result
         cloud, marker = rosv.build_could_from_depth_image(
             pose_base, pred, None, pc_img.squeeze().T, pose)
 
@@ -359,16 +348,12 @@ def callback(img_msg, point_cloud):
             lines_pub.publish(marker)
         cloud.header.stamp = point_cloud.header.stamp
         predpub.publish(cloud)
+        # Publish intermediate result
         pc_img_publish = dialate_pc(pc_img[0].T, size=5)
         pc_image_pub.publish(rosv.build_imgmsg_from_depth_image(pc_img_publish, vmin=0, vmax=10))
-        # input pc
         pred = dialate_pc(pred, size=5)
         pred_image_pub.publish(
-            rosv.build_imgmsg_from_depth_image(torch.tensor(pred), vmin=0, vmax=10))
-            
-        # input image
-        input_image_pub.publish(img_msg)
-        predction_end = time.time()
+            rosv.build_imgmsg_from_depth_image(torch.tensor(pred), vmin=0, vmax=10))    
         print("---------------------------------------------------------------------")
 
 
@@ -378,14 +363,13 @@ if __name__ == "__main__":
     image_ph = None
     points_ph = None
     points_buffer = []
-    # image_topic = "alphasense_driver_ros/cam4/dropped/debayered/compressed"
+
     image_topic = "/alphasense_driver_ros/cam4/debayered"
-    input_image_topic = "/alphasense_driver_ros/cam4/debayered_input"
-    # image_topic = "/alphasense_driver_ros/cam4/image_raw/compressed"
+    # image_topic =  "/alphasense_driver_ros/cam4/dropped/debayered/compressed"
     pointcloud_topic = "/bpearl_rear/point_cloud"
     pts_lines_topic = "/bpearl_rear/raw_predtion_lines"
     prediction_topic = "/prediction/forward"
-    camera_calibration_path = "/home/anqiao/tmp/semantic_front_end_filter/anymal_c_subt_semantic_front_end_filter/config/calibrations/alphasense"
+    camera_calibration_path = "/home/anqiao/tmp/semantic_front_end_filter/semantic_front_end_filter/cfgs/alphasense/intrinsic"
     TF_BASE = "base"
 
     rospy.init_node('test_foward', anonymous=False)
@@ -399,21 +383,16 @@ if __name__ == "__main__":
     pred_image_pub = rospy.Publisher("pred_depth_image", Image, queue_size=1)
     pc_image_pub = rospy.Publisher("pointcloud_image", Image, queue_size=1)
     predpub = rospy.Publisher(prediction_topic, PointCloud2, queue_size=1)
-    input_image_pub = rospy.Publisher(input_image_topic, Image, queue_size=1)
     lines_pub = rospy.Publisher(pts_lines_topic, Marker, queue_size=1)
 
     # Build model
     rosv = RosVisulizer("pointcloud", camera_calibration_path)
-    # model_path = "/media/anqiao/Semantic/Models/2022-08-29-23-51-44_fixed/UnetAdaptiveBins_latest.pt"
-    # model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-04-02-05-45_edge5/UnetAdaptiveBins_best.pt"
-    # model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2022-11-19-11-44-00_reg0.0002+GrassForest/UnetAdaptiveBins_best.pt"
-    # model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-26-15-51-09_noskip/UnetAdaptiveBins_best.pt"
     model_path = "/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt"
     model_cfg = yaml.load(open(os.path.join(os.path.dirname(
         model_path), "ModelConfig.yaml"), 'r'), Loader=yaml.FullLoader)
     model_cfg["input_channel"] = 4
     model = models.UnetAdaptiveBins.build(**model_cfg)
-    model = model_io.load_checkpoint(model_path, model)[0]
+    model = load_checkpoint(model_path, model)[0]
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
