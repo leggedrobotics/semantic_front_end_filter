@@ -1,0 +1,105 @@
+motion_control_manager:
+  controller:
+    simulation: true
+controlmanager:
+  simulation: true
+darpa_locomotion_mission_bt:
+  global_planner:
+    control_mode: walk                              # Path follower mode that is used if local planner is disabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is disabled
+  local_planner:
+    control_mode: walk_precise                      # Path follower mode that is used if local planner is enabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is enabled
+    enabled: false
+  local_guidance_recovery_homing_mode: walk_precise
+  send_goal_to_local_planner: false
+  reverse:
+    local_guidance_traversability_mode: walk_precise
+    local_guidance_wifi_mode: walk_precise
+  wifi_beacon_deployment:
+    beacon_carrier: true
+elevation_mapping:
+  # Only used for sim (not the ..._cupy parameters)
+  length_in_x: 8.0
+  length_in_y: 8.0
+  map_frame_id: odom
+load_anymal_description:
+  custom_parameters:
+    interface_hatch: false
+    perception_head: false
+    bpearl_front: false
+    bpearl_rear: false
+    rsl_base: false
+    simulate_wide_angle_camera: false
+    simulate_depth_camera: false
+    simulate_perception_head_color_cameras: false
+    simulate_lidar: true
+    simulation: true
+gbplanner_node:
+  GeofenceParams:
+   AreaList: []
+gbplanner_pci_anymal_ros_node:
+  control_mode: walk_precise
+  stand_mode: stand
+mission_manager:
+  global_planner:
+    control_mode: walk                              # Path follower mode that is used if local planner is disabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is disabled
+  local_guidance_recovery_homing_mode: walk_precise
+  local_planner:
+    enabled: false                                  # (Default parameter) Send the goal of global planner to the local planner
+    control_mode: walk_precise                      # Path follower mode that is used if local planner is enabled
+    stand_mode: stand                               # Path follower mode that is used if local planner is enabled
+monitor_network_llpc:
+  simulation: true
+monitor_network_op:
+  simulation: true
+on_demand_elevation_map:
+  subscribers:
+    input:
+      topic: /todo_marcot_put_elevation_map_topic_sim # todo (marcot)
+      queue_size: 1
+on_demand_lidar1:
+  subscribers:
+    input:
+      topic: /lidar/point_cloud
+      queue_size: 1
+path_planning_and_following:
+  simulation: false
+point_cloud_odometry:
+  publishers:
+    robot_pose_in_map:
+      enable: false
+rqt_motion_control:
+  simulation: true
+rqt_darpa_supervision_plugin: # These parameters are read by the corresponding rqt plugin, do not remove them.
+  default_local_guidance_modes: # Associate a mode to the default mode based on the client
+    user: "walk"
+    user_local_planner: "walk_precise"
+  subscribers:
+    mission_manager_homing_timer:
+      topic: "/darpa_locomotion_mission_bt/homing_timer"
+bounding_box_tool:
+  bounding_box_world_frame_id: "map"
+waypoint_interactive_marker:
+  world_frame_id: map
+stack_launcher:
+  stacks:
+    autonomy_subt:
+      stacks:
+        safety_check_subt:
+          enabled: false
+    post_process_config:
+      nodes:
+        load_dodgeball_description:
+          enabled: true
+    sim_elevation_mapping_subt:
+      nodes:
+        elevation_mapping:
+          enabled: false
+state_estimator:
+  simulation: true
+system_behavior_plugins:
+  start_up:
+    simulation: true
+use_sim_time: true

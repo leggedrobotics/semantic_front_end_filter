@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- This file contains the description of the ANYmal robot. -->
+<robot name="anymal" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Params -->
+  <xacro:arg name="bpearl_front_face_parameter_file"  default="$(find anymal_c_subt)/urdf/face/sim_bpearl_front_face_parameters.yaml"/>
+  <xacro:arg name="bpearl_rear_face_parameter_file"   default="$(find anymal_c_subt)/urdf/face/sim_bpearl_rear_face_parameters.yaml"/>
+
+  <!-- Describes mesh scale factor and contact model parameters-->
+  <xacro:include filename="$(find anymal_c_rsl)/urdf/anymal_c_rsl.urdf.xacro"/>
+
+  <!-- Base to BaseSubt joint -->
+  <joint name="base_to_base_subt" type="fixed">
+    <parent link="base"/>
+    <child link="base_subt"/>
+    <origin xyz="0 0 0"
+            rpy="0 0 3.1415926535"/>
+  </joint>
+
+  <!-- Base Subt link -->
+  <link name="base_subt"/>
+
+</robot>
