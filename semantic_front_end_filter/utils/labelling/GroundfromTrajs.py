@@ -511,41 +511,8 @@ class GFT:
 
 
 def main():
-    # x = np.array([20, 20])
-    # y = np.array([462, 462])
-    # x = 20
-    # y = 400
-    # gft = GFT(FeetTrajsFile = '/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_10/mission1/Recontruct_2022-04-18-19-40-09_0/FeetTrajs.msgpack')
-    # gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/20211007_SA_Monkey_ANYmal_Chimera/chimera_mission_2021_10_12/mission9/FeetTraj/Reconstruct-_2022-04-03-13-06-35_0/FeetTrajs.msgpack')
-    # dir_path = os.path.dirname(os.path.realpath(__file__))
-    
     gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-21-10-47-29_0/FeetTrajs.msgpack', InitializeGP = True)
-    # print(gft.getHeight(30.842474971923533,462.984496350972, method="GP"))
     gft.save('/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/test')
-    # gft.save(dir_path+"/Example_Files", GPMap=True)
-    
-    # gft2 = GFT(GroundMapFile='/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-21-10-47-29_0/GroundMap.msgpack')
-    gft2 = GFT(GroundMapFile='/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/test/GroundMap.msgpack')
-    # print(gft2.getHeight(34.842474971923533, 461.984496350972, method="GP", visualize=True))
-    # gft.visualizeContacts3D()
-    # gft.visualizeOneFootTraj3D()
-    # gft.conver2GPMap()
-    # gft2.visualizeGPMap()
-    Larray = gft2.GPMap
-    Larray2 = gft2.GroundArray
-    nonzero = np.where(Larray[:, :]!=0)
-    nonzero2 = np.where(Larray2[:, :]!=0)
-    ax = plt.axes(projection='3d')
-    ax.scatter3D(nonzero[0], nonzero[1], Larray[nonzero[0], nonzero[1]])
-    ax.scatter3D(nonzero2[0], nonzero2[1], Larray2[nonzero2[0], nonzero2[1]], c = 'r', s=30)
-    ax.set_xlim(xmin=630, xmax=640)
-    ax.set_ylim(ymin=500, ymax=510)
-    ax.set_zlim(zmin=1, zmax=3)
-    plt.show()
-    
-    # print(gft2.getHeight(x, y, method="GP"))
-
-    # gft2.visualizeContacts3D(range=np.arange(1, 100))
 
 
 if __name__ == '__main__':
