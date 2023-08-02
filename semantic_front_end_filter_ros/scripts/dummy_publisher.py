@@ -8,7 +8,8 @@ import msgpack_numpy as m
 import numpy as np
 from cv_bridge import CvBridge
 import ros_numpy
-
+from semantic_front_end_filter.Labelling.csf import getCSFPoints, pc_to_msg
+import time
 import tf
 
 m.patch()
@@ -17,9 +18,11 @@ rospy.init_node('dummy_publisher', anonymous=True)
 pose_br = tf.TransformBroadcaster()
 image_pub = rospy.Publisher("/alphasense_driver_ros/cam4/image_raw/compressed", Image, queue_size=1)
 points_pub = rospy.Publisher("/bpearl_rear/point_cloud", PointCloud2, queue_size=1)
+points_pub_csf = rospy.Publisher("/bpearl_rear/point_cloud_csf", PointCloud2, queue_size=1)
 
 
-with open("/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-22-10-36-29_0/traj_0_datum_2.msgpack", "rb") as data_file:
+# with open("/media/anqiao/Semantic/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-22-10-36-29_0/traj_0_datum_2.msgpack", "rb") as data_file:
+with open("/home/anqiao/catkin_ws/SA_dataset/Reconstruct_2022-07-17-18-06-11_0/traj_0_datum_2.msgpack", "rb") as data_file:
     byte_data = data_file.read()
     data = msgpack.unpackb(byte_data)
 
@@ -61,6 +64,13 @@ while not rospy.is_shutdown():
 
     points_pub.publish(pc_msg)
 
+    # CSF points filter
+    pc_csf, _ = getCSFPoints(cloud_arr, rigidness = 1, resolution = 0.1)
+    
+    # a = time.time()
+    pc_csf_msg = pc_to_msg(pc_csf, stamp)
+    # print((time.time() - a).tosec())
+    points_pub_csf.publish(pc_csf_msg)
 
     # pointsMsg = PointCloud2()
     
