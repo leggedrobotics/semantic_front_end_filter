@@ -1,7 +1,7 @@
 from math import nan
 import torch
 import torch.nn as nn
-from pytorch3d.loss import chamfer_distance
+# from pytorch3d.loss import chamfer_distance
 from torch.nn.utils.rnn import pad_sequence
 from semantic_front_end_filter.adabins.pointcloudUtils import RaycastCamera
 import torchvision.transforms
@@ -156,5 +156,6 @@ class BinsChamferLoss(nn.Module):  # Bin centers regularizer used in AdaBins pap
         target_lengths = torch.Tensor([len(t) for t in target_points]).long().to(target_depth_maps.device)
         target_points = pad_sequence(target_points, batch_first=True).unsqueeze(2)  # .shape = n, T, 1
 
-        loss, _ = chamfer_distance(x=input_points, y=target_points, y_lengths=target_lengths)
+        # loss, _ = chamfer_distance(x=input_points, y=target_points, y_lengths=target_lengths)
+        loss = torch.tensor(0.).to('cuda')
         return loss

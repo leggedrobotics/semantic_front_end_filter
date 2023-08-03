@@ -26,7 +26,7 @@ class ModelConfig:
     interpolate_mode : str = "bilinear" # "bilinear" or "convT", define what is used in upsampling of decoder 
     output_mask : bool = True # Please keep this true
     # output_mask_channels : int = 1
-    decoder_num: int = 2 # One or two
+    decoder_num: int = 1 # One or two
     ablation: str = "onlyRGB" # "onlyRGB", "onlyPC"
 
 @dataclass
