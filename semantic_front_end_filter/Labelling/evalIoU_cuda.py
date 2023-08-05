@@ -55,6 +55,8 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
     elif env == 'grassland':
         args.trainconfig.testing = ["Reconstruct_2022-07-18-20-34-01_0"] # 112
         args.trainconfig.training = ["Reconstruct_2022-07-19-20-06-22_0"] #214
+    elif env == 'urban':
+        args.trainconfig.testing = ["Reconstruct_2022-08-13-08-48-50_0"]
     else:
         print('No such dataset available!')
         return
@@ -137,7 +139,7 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
         RMSElogs += RMSElog
         total_pixel_num += mask_de.sum()
 
-        REL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).sum()
+        REL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).abs().sum()
         RELs += REL
         # print("pred: ", REL)
 
@@ -148,7 +150,7 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
         rawRMSEs += rawRMSE
         rawRMSElogs += rawRMSElog
 
-        rawREL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).sum()
+        rawREL = ((pred[:, 2:] - traj_label)[mask_de]/traj_label[mask_de]).abs().sum()
         rawRELs += rawREL
 
         sample_num += 1
@@ -161,7 +163,8 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
             "RMSE: ", torch.sqrt(RMSEs/total_pixel_num),
             "REL: ", RELs/total_pixel_num,
             "RMSELog: ", RMSElogs/total_pixel_num)
-    print("{:.3f} & {:.3f} & {:.3f}".format(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num))
+    print("{:.2f} & {:.2f} & {:.2f}".format(ASSIoUs/sample_num*100, AOIoUs/sample_num*100, SGIoUs/sample_num*100))
+    print('mIoU: {:.2f}'.format((ASSIoUs/sample_num*100+ AOIoUs/sample_num*100)/2))
     print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num))
     IOU = torch.Tensor([ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num])
     DE = torch.Tensor([torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num])
@@ -204,14 +207,14 @@ def load_param_from_path(data_path):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-06-04-58-23/UnetAdaptiveBins_latest.pt")
+        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
     parser.add_argument(
         "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
     parser.add_argument(
         "--save_path", default='/home/anqiao/semantic_front_end_filter/Labelling/Example_Files//Evaluate_Table.csv', type=str)
     parser.add_argument(
-        "--dataset_path", default='/media/anqiao/Semantic/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories', type=str)
+        "--dataset_path", default="/media/anqiao/My Passport/plr/extract_trajectories_006_Zurich_Anomaly_onlyGrass/extract_trajectories", type=str)
     
     parser.add_argument('--gpu', default=None, type=int,
                         help='Which gpu to use')
@@ -241,7 +244,7 @@ if __name__ == "__main__":
 
     # if not os.path.exists(args.outdir):
     #     os.makedirs(args.outdir)
-    args.trainconfig.bs = 3
+    args.trainconfig.bs = 5
     args.batch_size = 5
     try:
         # checkpoint_paths = sys.argv[1:]
@@ -279,7 +282,7 @@ if __name__ == "__main__":
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
     IOU_data = torch.Tensor([])
     DE_data = torch.Tensor([])
-    # computeIoUs(model, loader='train', env="grassland")
+    # computeIoUs(model, loader='test', env="urban")
     for env in list(['grassland', 'high grass', 'forest']):
         print(env)
         IOU, DE = computeIoUs(model, loader='test', env=env)
