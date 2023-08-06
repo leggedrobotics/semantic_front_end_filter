@@ -26,6 +26,7 @@ test_loader_iter = None
 train_loader_iter = None
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+EVALMEAN = True
 # def full_extent(ax, pad=0.0):
 #     """Get the full extent of an axes, including axes labels, tick labels, and
 #     titles."""
@@ -207,14 +208,14 @@ def load_param_from_path(data_path):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
+        "--models", default="/media/anqiao/My Passport/plr/checkpoints/w_ablation/2023-08-05-19-43-49_w = 0.5/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
     parser.add_argument(
         "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
     parser.add_argument(
         "--save_path", default='/home/anqiao/semantic_front_end_filter/Labelling/Example_Files//Evaluate_Table.csv', type=str)
     parser.add_argument(
-        "--dataset_path", default="/media/anqiao/My Passport/plr/extract_trajectories_006_Zurich_Anomaly_onlyGrass/extract_trajectories", type=str)
+        "--dataset_path", default="/media/anqiao/My Passport/plr/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories", type=str)
     
     parser.add_argument('--gpu', default=None, type=int,
                         help='Which gpu to use')
@@ -288,6 +289,15 @@ if __name__ == "__main__":
         IOU, DE = computeIoUs(model, loader='test', env=env)
         IOU_data = torch.cat([IOU_data, IOU])
         DE_data = torch.cat([DE_data, DE])
+    if(EVALMEAN):
+        # prepare meanRMSE and meanIoU extraction
+        IoU_interest = [0, 1, 3, 4, 6, 7]
+        DE_interest = [0, 3, 6]
+        weight = torch.tensor([112, 96, 96])
+        weight = weight/weight.sum()
+        mIoU = (IOU_data[IoU_interest] * weight.repeat(2)/2).sum()
+        mRMSE = torch.sqrt(((DE_data[DE_interest] ** 2) * weight).sum())
+        print("mIoU, mRMSE: {:.3f}, {:.4f}".format(mRMSE, mIoU*100))
 
     if save_path is not None:
         df = pd.read_csv(save_path, header=0)
