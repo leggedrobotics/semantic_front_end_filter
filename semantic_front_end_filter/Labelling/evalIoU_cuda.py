@@ -27,6 +27,7 @@ train_loader_iter = None
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 EVALMEAN = True
+EVALNUM = 3
 # def full_extent(ax, pad=0.0):
 #     """Get the full extent of an axes, including axes labels, tick labels, and
 #     titles."""
@@ -48,16 +49,20 @@ SelfGenratedSSIoUs = np.array([])
 def computeIoUs(model, loader = 'test', env = 'forest'):
     # load dataset
     if env == 'high grass':
+        args.data_path = "/media/anqiao/My Passport/plr/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
         args.trainconfig.testing = ["Reconstruct_2022-07-19-18-16-39_0"] # 95
         args.trainconfig.training = ["Reconstruct_2022-07-19-20-46-08_0"] # 132
     elif env == 'forest':
+        args.data_path = "/media/anqiao/My Passport/plr/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
         args.trainconfig.testing = ["Reconstruct_2022-07-19-19-02-15_0"] # 96
         args.trainconfig.training = ["Reconstruct_2022-07-21-10-47-29_0"] # 118
     elif env == 'grassland':
+        args.data_path = "/media/anqiao/My Passport/plr/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
         args.trainconfig.testing = ["Reconstruct_2022-07-18-20-34-01_0"] # 112
         args.trainconfig.training = ["Reconstruct_2022-07-19-20-06-22_0"] #214
     elif env == 'urban':
-        args.trainconfig.testing = ["Reconstruct_2022-08-13-08-48-50_0"]
+        args.data_path = "/media/anqiao/My Passport/plr/extract_trajectories_006_Zurich_Anomaly_onlyGrass/extract_trajectories"
+        args.trainconfig.testing = ["Reconstruct_2022-08-13-08-48-50_0"] # 50
     else:
         print('No such dataset available!')
         return
@@ -208,14 +213,14 @@ def load_param_from_path(data_path):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/media/anqiao/My Passport/plr/checkpoints/w_ablation/2023-08-05-19-43-49_w = 0.5/UnetAdaptiveBins_latest.pt")
+        "--models", default="/media/anqiao/My Passport/plr/checkpoints/w_ablation/2023-08-06-00-59-54_w = 0.0008/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
     parser.add_argument(
         "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
     parser.add_argument(
         "--save_path", default='/home/anqiao/semantic_front_end_filter/Labelling/Example_Files//Evaluate_Table.csv', type=str)
     parser.add_argument(
-        "--dataset_path", default="/media/anqiao/My Passport/plr/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories", type=str)
+        "--dataset_path", default="/media/anqiao/My Passport/plr/extract_trajectories_006_Zurich_Anomaly_onlyGrass/extract_trajectories", type=str)
     
     parser.add_argument('--gpu', default=None, type=int,
                         help='Which gpu to use')
@@ -283,17 +288,27 @@ if __name__ == "__main__":
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
     IOU_data = torch.Tensor([])
     DE_data = torch.Tensor([])
-    # computeIoUs(model, loader='test', env="urban")
-    for env in list(['grassland', 'high grass', 'forest']):
+    if EVALNUM == 3:
+        env_list = list(['grassland', 'high grass', 'forest'])
+    elif EVALNUM == 4:
+        list(['grassland', 'high grass', 'forest', "urban"])
+    for env in env_list:
         print(env)
-        IOU, DE = computeIoUs(model, loader='test', env=env)
+        IOU, DE = computeIoUs(model, loader='train', env=env)
         IOU_data = torch.cat([IOU_data, IOU])
         DE_data = torch.cat([DE_data, DE])
+
+    # computeIoUs(model, loader='test', env="urban")
     if(EVALMEAN):
         # prepare meanRMSE and meanIoU extraction
-        IoU_interest = [0, 1, 3, 4, 6, 7]
-        DE_interest = [0, 3, 6]
-        weight = torch.tensor([112, 96, 96])
+        if(EVALNUM==3):
+            IoU_interest = [0, 1, 3, 4, 6, 7]
+            DE_interest = [0, 3, 6]
+            weight = torch.tensor([112, 96, 96])
+        if(EVALNUM==4):
+            IoU_interest = [0, 1, 3, 4, 6, 7, 9, 10]
+            DE_interest = [0, 3, 6, 9]
+            weight = torch.tensor([112, 96, 96, 50])
         weight = weight/weight.sum()
         mIoU = (IOU_data[IoU_interest] * weight.repeat(2)/2).sum()
         mRMSE = torch.sqrt(((DE_data[DE_interest] ** 2) * weight).sum())
