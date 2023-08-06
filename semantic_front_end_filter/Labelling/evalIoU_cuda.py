@@ -174,6 +174,7 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
     print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num))
     IOU = torch.Tensor([ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num])
     DE = torch.Tensor([torch.sqrt(RMSEs/total_pixel_num), RELs/total_pixel_num, RMSElogs/total_pixel_num])
+    DE_raw = torch.Tensor([torch.sqrt(rawRMSEs/total_pixel_num), rawRELs/total_pixel_num, rawRMSElogs/total_pixel_num])
     
     print(ASSIoUs/sample_num, AOIoUs/sample_num, SGIoUs/sample_num,
             "rawRMSE: ", torch.sqrt(rawRMSEs/total_pixel_num),
@@ -181,7 +182,7 @@ def computeIoUs(model, loader = 'test', env = 'forest'):
             "rawRMSELog: ", rawRMSElogs/total_pixel_num)
     print("{:.3f} & {:.3f} & {:.3f}".format(torch.sqrt(rawRMSEs/total_pixel_num), rawRELs/total_pixel_num, rawRMSElogs/total_pixel_num))
     
-    return IOU, DE
+    return IOU, DE, DE_raw
             # pred_origin = pred[:, 2:]
             # pred = pred[:, 2:].clone()
             # pred[~mask_weight] = sample["pc_image"][~mask_weight]
@@ -213,7 +214,7 @@ def load_param_from_path(data_path):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/media/anqiao/My Passport/plr/checkpoints/w_ablation/2023-08-06-00-59-54_w = 0.0008/UnetAdaptiveBins_latest.pt")
+        "--models", default="/media/anqiao/My Passport/plr/checkpoints/w_ablation/2023-08-06-15-07-31_0.1/UnetAdaptiveBins_latest.pt")
     parser.add_argument("--names", default="")
     parser.add_argument(
         "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
@@ -288,15 +289,17 @@ if __name__ == "__main__":
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
     IOU_data = torch.Tensor([])
     DE_data = torch.Tensor([])
+    DE_raw_data = torch.Tensor([])
     if EVALNUM == 3:
         env_list = list(['grassland', 'high grass', 'forest'])
     elif EVALNUM == 4:
         list(['grassland', 'high grass', 'forest', "urban"])
     for env in env_list:
         print(env)
-        IOU, DE = computeIoUs(model, loader='train', env=env)
+        IOU, DE, DE_raw = computeIoUs(model, loader='test', env=env)
         IOU_data = torch.cat([IOU_data, IOU])
         DE_data = torch.cat([DE_data, DE])
+        DE_raw_data = torch.cat([DE_raw_data, DE_raw])
 
     # computeIoUs(model, loader='test', env="urban")
     if(EVALMEAN):
@@ -312,7 +315,8 @@ if __name__ == "__main__":
         weight = weight/weight.sum()
         mIoU = (IOU_data[IoU_interest] * weight.repeat(2)/2).sum()
         mRMSE = torch.sqrt(((DE_data[DE_interest] ** 2) * weight).sum())
-        print("mIoU, mRMSE: {:.3f}, {:.4f}".format(mRMSE, mIoU*100))
+        mRMSE_raw = torch.sqrt(((DE_raw_data[DE_interest] ** 2) * weight).sum())
+        print(" mRMSE, raw_mRMSE, mIoU: {:.3f}, {:.3f}, {:.4f}".format(mRMSE, mRMSE_raw, mIoU*100))
 
     if save_path is not None:
         df = pd.read_csv(save_path, header=0)
