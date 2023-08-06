@@ -25,3 +25,4 @@ wandb
 Labelling/extract_trajectories/
 tmp/
 semantic_front_end_filter/Labelling/Example_Files/Evaluate_Table.csv
+tmp.sh
