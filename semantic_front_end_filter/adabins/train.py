@@ -273,7 +273,7 @@ def train_loss(args, criterion_ueff, criterion_bins, criterion_edge, criterion_c
         l_chamfer = torch.Tensor([0]).to(l_dense.device)
     
     l_consis = criterion_consistency(pred, pose) if args.trainconfig.consistency_W > 1e-3 else torch.tensor(0.).to('cuda')
-    print("MASK_L: ",l_mask.item(), "Mask_R", args.trainconfig.mask_regulation_W * l_mask_regulation.item(), "SSL: ", l_dense.item())
+    # print("MASK_L: ",l_mask.item(), "Mask_R", args.trainconfig.mask_regulation_W * l_mask_regulation.item(), "SSL: ", l_dense.item())
     return l_dense, l_chamfer, l_edge, l_consis, l_mask, l_mask_regulation, masktraj, maskpc
 
 
@@ -457,14 +457,22 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 model.train()
                 #################################################################################################
         wandb.log({f"train/{k}": v for k, v in train_metrics.get_value().items()}, step=step_count)
-        if (epoch+1)%2==0:
-            print("log_image")
-            log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
-            log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
+        if args.trainconfig.pure_training:
+        # if (epoch+1)%2==0:
+        #     print("log_image")
+        #     log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
+        #     log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
         
         # model.eval()
-        # model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
-        #                                      root=saver.data_dir)
+            model_io.save_checkpoint(model, optimizer, epoch, f"{experiment_name}_latest.pt",
+                                             root=saver.data_dir)
+        else:
+            if (epoch+1)%2==0:
+                print("log_image")
+                log_images(test_loader, model, "vis/test", step_count, use_adabins=args.modelconfig.use_adabins)
+                log_images(train_loader, model, "vis/train", step_count, use_adabins=args.modelconfig.use_adabins)
+
+
     return model
 
 

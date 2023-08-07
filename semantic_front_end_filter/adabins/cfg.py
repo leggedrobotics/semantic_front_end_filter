@@ -27,7 +27,7 @@ class ModelConfig:
     output_mask : bool = True # Please keep this true
     # output_mask_channels : int = 1
     decoder_num: int = 1 # One or two
-    ablation: str = "onlyRGB" # "onlyRGB", "onlyPC"
+    ablation: str = "no" # "onlyRGB", "onlyPC"
 
 @dataclass
 class TrainConfig:
@@ -111,7 +111,7 @@ class TrainConfig:
     wd: float =  0.1
     div_factor: int =  25 
     final_div_factor: int =  100
-    epochs: int =  10
+    epochs: int =  30
     w_chamfer: float =  0.1
     data_path: str = "extract_trajectories"
     camera_cali_path: str = "/semantic_front_end_filter/Labelling/Example_Files/alphasense"
@@ -124,12 +124,13 @@ class TrainConfig:
     random_crop: bool=True
     random_flip: bool=True
     traj_variance_threashold: float = 1 # trajectory label will be filtered by this thershold # if the variance is below this above this value, mask the corresponding traj label off
-    validate_every: int = 5
+    pure_training = False
+    validate_every: int = 100000
     same_lr: bool = True
     use_right: bool = False # if set, will randomly use right images when train on KITTI
     pc_image_label_W: float = 1 # pc_image_label_W and traj_label_W_4mask are used to control the crossentropy loss for the mask
     traj_label_W_4mask: float = 1
-    traj_label_W: float = 1 # 0.002
+    traj_label_W: float = 0.02 # 0.002
     edge_aware_label_W: float = 0
     consistency_W: float = 0 # if not zero, REMEMBER to set random crop and random flip to zero
     mask_loss_W: float = 1
