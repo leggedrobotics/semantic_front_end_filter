@@ -138,7 +138,7 @@ class TrainConfig:
     mask_regulation_CE_W: float = 0.0000
     mask_weight_mode: str='sigmoid' # binary or sigmoid
     filter_image_before_loss: bool = True
-    sprase_traj_mask: bool = True # True, if you want to train with support surface mask filtered by the pc label, 
+    sprase_traj_mask: bool = False # True, if you want to train with support surface mask filtered by the pc label, 
                                    # only in this brach it will set the model to predict the delta depth
     mask_ratio: float = 1 # Expected ratio of mask_ground/mask_nonground
 
