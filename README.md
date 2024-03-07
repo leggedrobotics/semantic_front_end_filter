@@ -25,9 +25,9 @@ To generate your own dataset, add rospackage `semantic_front_end_filter_ros` in 
 ### Dataset Generation
 1. Use `replay_and_record.launch` to get the re-record rosbag.
 2. Follow the comments in `scripts/build_dataset.py` to generate the dataset.  
-You can also download the data from xxx, which we build on data collected from Perugia, Italy.
+You can also download the data from [here](https://drive.google.com/drive/folders/1tRlrYeos8YdGmtDGacB-2Bt_fNqFKyHx), which we build on data collected from Perugia, Italy.
 
-For the details of how to build a map from the robot feet trajectories, see [here]("https://github.com/leggedrobotics/semantic_front_end_filter/tree/main/semantic_front_end_filter/utils/labelling").
+For the details of how to build a map from the robot feet trajectories, see [here](https://github.com/leggedrobotics/semantic_front_end_filter/tree/main/semantic_front_end_filter/utils/labelling).
 ### Train model 
 
 ```bash
