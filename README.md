@@ -2,7 +2,7 @@
 [[Project page]](https://sites.google.com/leggedrobotics.com/semantic-pointcloud-filter?usp=sharing)
 [[Paper]](https://arxiv.org/abs/2305.07995)
 [[Data]](https://drive.google.com/file/d/1MjcNVJ2iwSdw3h5Z6QahUG4deMm8cr8H/view?usp=sharing)
-[[Video(TBA)]]()
+[[Video]](https://youtu.be/y56zwSrnJTg)
 ## Installation
 
 ### Dependencies
