@@ -47,33 +47,26 @@ class UncertaintyLoss(nn.Module):  # Add variance to loss
 
 
 def train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, image, mask_gt):
-    # Only apply l_mask and l_mask_regulation
     l_mask = torch.tensor(0).to('cuda')
-    l_mask_regulation = torch.tensor(0).to('cuda')
+    l_dense = torch.tensor(0).to('cuda')
 
+    # Semantic Segmentation Loss   
+    l_mask = criterion_mask(pred[:, 0:2], mask_gt.squeeze(dim=1).long())
+
+    # Depth Estimation Loss
+    # The depth measurement we trust
     if(args.trainconfig.sprase_traj_mask):
         masktraj = (depth > args.min_depth) & (depth < args.max_depth) & (pc_image > 1e-9)
     else:
         masktraj = (depth > args.min_depth) & (depth < args.max_depth)
     depth[~masktraj] = 0.
-    # Apply traj mask
-
-    # Apply anomaly mask    
-    l_mask = criterion_mask(pred[:, 0:2], mask_gt.squeeze(dim=1).long())
-    l_mask_regulation = criterion_mask(pred[:, 0:2], masktraj.squeeze(dim=1).long())
     
-    mask_weight = (pred[:, 1:2] > pred[:, :1]).long()
-    mask_soft = nn.functional.softmax(pred[:, 0:2], dim = 1)
-
     pred = pred[:, 2:]
     l_dense = args.trainconfig.traj_label_W * criterion_depth(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
     mask0 = depth < 1e-9 # the mask of places with on label
     maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
-    depth_var_pc = depth_var if args.trainconfig.pc_label_uncertainty else torch.ones_like(depth_var)
-    l_pc = args.trainconfig.pc_image_label_W * criterion_depth(pred, pc_image, depth_var_pc, mask=maskpc.to(torch.bool), interpolate=True)
     
-    print("MASK_L: ",l_mask.item(), "SSL: ", l_dense.item())
-    return l_dense, l_mask, l_mask_regulation, masktraj, maskpc
+    return l_dense, l_mask, masktraj, maskpc
 
 
 def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root=".", device=None,
@@ -155,7 +148,7 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
                 pred[:, 2:] = pred[:, 2:]
             if(pred.shape != depth.shape): # need to enlarge the output prediction
                 pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
+            l_dense, l_mask, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -234,7 +227,7 @@ def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, e
             else:
                 pred[:, 2:] = pred[:, 2:]
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
-            l_dense, l_mask, l_mask_regulation, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
+            l_dense, l_mask, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -301,7 +294,7 @@ if __name__ == '__main__':
     parser.add_argument("--root", default=".", type=str,
                         help="Root folder to save data in")
     parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
-    parser.add_argument("--tqdm", default=False, action="store_true", help="show tqdm progress bar")
+    parser.add_argument("--tqdm", default=True, action="store_true", help="show tqdm progress bar")
 
 
     args = parse_args(parser, flatten = True)
