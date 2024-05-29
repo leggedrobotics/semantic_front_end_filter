@@ -31,7 +31,7 @@ SelfGenratedSSIoUs = np.array([])
 @torch.no_grad()
 def computeIoUs(model, args, loader = 'offline_eval', env = 'forest', depth_limit = 5, print_result=True):
     # load dataset
-    if env == 'high grass':
+    if env == 'hillside':
         args.trainconfig.testing = ["Reconstruct_2022-07-19-18-16-39_0"] # 95
         args.trainconfig.training = ["Reconstruct_2022-07-19-20-46-08_0"] # 132
     elif env == 'forest':
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     # Print results
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
     dg, eg, eg_raw = computeIoUs(model, args, loader='test', env='grassland')
-    dh, eh, eh_raw = computeIoUs(model, args, loader='test', env='high grass')
+    dh, eh, eh_raw = computeIoUs(model, args, loader='test', env='hillside')
     df, ef, ef_raw = computeIoUs(model, args, loader='test', env='forest')
     print("{:.2f}".format(((np.abs(eg)/dg).mean() + (np.abs(eh)/dh).mean() + np.abs(ef/df).mean())/3))
     print("{:.2f}".format(((np.abs(eg_raw)/dg).mean() + (np.abs(eh_raw)/dh).mean() + np.abs(ef_raw/df).mean())/3))

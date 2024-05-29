@@ -71,21 +71,13 @@ class TrainConfig:
     scale_loss_with_point_number: bool = True # if yes, the loss of each batch is scaled with the number of non-zero values in that batch
     
     train_with_sample: bool = False # if yes, the training set will be same as the testing set, contains only two trajectories
-    testing: list = field(default_factory=lambda: [ "Reconstruct_2022-07-19-18-16-39_0", # Perugia high grass
+    testing: list = field(default_factory=lambda: [ "Reconstruct_2022-07-19-18-16-39_0", # Perugia hillside
                                                     "Reconstruct_2022-07-19-19-02-15_0", # Perugia forest
                                                     "Reconstruct_2022-07-18-20-34-01_0", # Perugia grassland
-                                                    # "Reconstruct_2022-04-25-15-31-34_0", # South Africa
-                                                    # "Reconstruct_2022-04-26-16-34-01_0", # South Africa 
-                                                    # "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
-                                                    # "Reconstruct_2022-04-26-17-05-24_0"  # South Africa 
                                                     ]) 
-    training: list = field(default_factory=lambda: ["Reconstruct_2022-07-19-20-46-08_0", # Perugia high grass
+    training: list = field(default_factory=lambda: ["Reconstruct_2022-07-19-20-46-08_0", # Perugia hillside
                                                     "Reconstruct_2022-07-21-10-47-29_0", # Perugia forest
                                                     "Reconstruct_2022-07-19-20-06-22_0", # Perugia grassland
-                                                    # "Reconstruct_2022-04-25-15-31-34_0", # South Africa
-                                                    # "Reconstruct_2022-04-26-16-34-01_0", # South Africa 
-                                                    # "Reconstruct_2022-04-26-17-35-27_0", # South Africa 
-                                                    # "Reconstruct_2022-04-26-17-05-24_0"  # South Africa 
                                                     ]) 
 
 

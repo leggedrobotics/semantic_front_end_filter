@@ -103,7 +103,7 @@ if __name__ == '__main__':
     model = model.to(device)
 
     depth_list_G, err_list_G, err_list_raw_G = computeIoUs(model, args, loader='offline_eval', env='grassland', print_result=False, depth_limit=10)
-    depth_list_H, err_list_H, err_list_raw_H = computeIoUs(model, args, loader='offline_eval', env='high grass', print_result=False, depth_limit=10)
+    depth_list_H, err_list_H, err_list_raw_H = computeIoUs(model, args, loader='offline_eval', env='hillside', print_result=False, depth_limit=10)
     depth_list_F, err_list_F, err_list_raw_F = computeIoUs(model, args, loader='offline_eval', env='forest', print_result=False, depth_limit=10)
 
 
