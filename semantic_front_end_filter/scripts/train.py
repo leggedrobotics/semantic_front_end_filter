@@ -63,8 +63,9 @@ def train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc
     
     pred = pred[:, 2:]
     l_dense = args.trainconfig.traj_label_W * criterion_depth(pred, depth, depth_var, mask=masktraj.to(torch.bool), interpolate=True)
-    mask0 = depth < 1e-9 # the mask of places with on label
-    maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # pc image have label
+    
+    mask0 = depth < 1e-9 # the mask of pixels without depth label
+    maskpc = mask0 & (pc_image > 1e-9) & (pc_image < args.max_pc_depth) # the mask of pixels with pc
     
     return l_dense, l_mask, masktraj, maskpc
 
@@ -208,6 +209,7 @@ def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, e
         val_si = RunningAverage()
         metrics = RunningAverageDict()
         for batch in tqdm(test_loader, desc=f"Epoch: {epoch + 1}/{epochs}. Loop: Validation") if args.tqdm else test_loader:
+            # load data
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
             depth_var = batch['depth_variance'].to(device)
@@ -216,18 +218,24 @@ def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, e
                 if not batch['has_valid_depth']:
                     continue
 
+            # Ablation of different input modalities
             if(args.modelconfig.ablation == "onlyPC"):
                 img[:, 0:3] = 0
             elif(args.modelconfig.ablation == "onlyRGB"):
                 img[:, 3] = 0 
+
+            # prediction
             pred = model(img)
             pc_image = batch["pc_image"].to(device)
             if(args.trainconfig.sprase_traj_mask):
-                pred[:, 2:] = pred[:, 2:] + pc_image # with or withour pc_image
+                pred[:, 2:] = pred[:, 2:] + pc_image # predict resudual depth
             else:
-                pred[:, 2:] = pred[:, 2:]
+                pred[:, 2:] = pred[:, 2:] # predict full depth: more smooth output
             pred = nn.functional.interpolate(pred, depth.shape[-2:], mode='nearest')
+
+            # calculate loss
             l_dense, l_mask, masktraj, maskpc = train_loss(args, criterion_depth, criterion_mask, pred, depth, depth_var, pc_image, img, mask_gt)
+            # combine the raw pc depth and predicted depth with predicted segmentation mask
             if(pred.shape[1]==2):
                 mask_weight = pred[:, 1:, :, :]
                 pred = mask_weight * pred[:, :1, :, :] + (1-mask_weight)*pc_image[:, 0:, :, :]
@@ -237,6 +245,7 @@ def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, e
                 pred[~mask_weight] = pc_image[~mask_weight]
             loss = args.trainconfig.mask_loss_W*l_mask + l_dense
 
+            # log loss
             writer.add_scalar("Loss/test/l_sum", loss, global_step=epoch)
             writer.add_scalar("Loss/test/l_dense", l_dense, global_step=epoch)
 
@@ -245,6 +254,7 @@ def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, e
             mask = depth > args.min_depth
             val_si.append(loss.item())
 
+            # limit the predicted depth within the range
             pred = pred.squeeze().cpu().numpy()
             pred[pred < args.min_depth_eval] = args.min_depth_eval
             max_depth_gt = max(args.max_depth_eval, args.max_pc_depth)
@@ -252,6 +262,7 @@ def validate(args, model, test_loader, criterion_depth, criterion_mask, epoch, e
             pred[np.isinf(pred)] = max_depth_gt
             pred[np.isnan(pred)] = args.min_depth_eval
 
+            # log the metrics
             gt_depth = depth.squeeze().cpu().numpy()
             pc_image = pc_image.squeeze().cpu().numpy()
             masktraj = masktraj.squeeze().squeeze()
@@ -295,7 +306,6 @@ if __name__ == '__main__':
                         help="Root folder to save data in")
     parser.add_argument("--resume", default='', type=str, help="Resume from checkpoint")
     parser.add_argument("--tqdm", default=True, action="store_true", help="show tqdm progress bar")
-
 
     args = parse_args(parser, flatten = True)
 
