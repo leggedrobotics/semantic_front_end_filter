@@ -16,7 +16,6 @@ from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML
-import cv2
 from tqdm import tqdm
 from semantic_front_end_filter.utils.evalIoU_cuda import computeIoUs
 
@@ -70,10 +69,11 @@ def cal_err_bins(depth_list, err_list_raw, err_list):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    out_dir = os.path.dirname(os.path.abspath(__file__)) + "/../results/"
     parser.add_argument(
-        "--model", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
+        "--model", default="")
     parser.add_argument(
-        "--outdir", default="/home/anqiao/Desktop/plr_figures/")
+        "--outdir", default=out_dir)
     parser.add_argument('--gpu', default=None, type=int,
                         help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
@@ -90,9 +90,8 @@ if __name__ == '__main__':
     parser.add_argument("--tags", default='', type=str,
                         help="Wandb tags, seperate by `,`")
     args= parse_args(parser)
-    # args.data_path = "/media/anqiao/T7/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
 
-    model_cfg, train_cfg = load_param_from_path(os.path.dirname(args.models))    
+    model_cfg, train_cfg = load_param_from_path(os.path.dirname(args.model))    
     args.modelconfig.ablation = model_cfg['ablation']
     args.trainconfig.sprase_traj_mask = train_cfg['sprase_traj_mask']
     print(args.modelconfig.ablation, "skip_connection: ", args.trainconfig.sprase_traj_mask)
@@ -102,6 +101,7 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
+    # Compute IoUs
     depth_list_G, err_list_G, err_list_raw_G = computeIoUs(model, args, loader='offline_eval', env='grassland', print_result=False, depth_limit=10)
     depth_list_H, err_list_H, err_list_raw_H = computeIoUs(model, args, loader='offline_eval', env='hillside', print_result=False, depth_limit=10)
     depth_list_F, err_list_F, err_list_raw_F = computeIoUs(model, args, loader='offline_eval', env='forest', print_result=False, depth_limit=10)
@@ -133,10 +133,7 @@ if __name__ == '__main__':
     mpl.rcParams['pdf.fonttype'] = 42
     mpl.rcParams['ps.fonttype'] = 42
         
-    # sns.set(font_scale=1.5)
     g = sns.catplot(data=df_err, x="bins", y = 'err', hue="model", col="env", kind="box", order = ["0-2m", "2-4m", "4-6m", "6-8m", "8-10m"], hue_order=["ours", "raw"], fliersize=2, legend_out=False, palette =[paper_colors_rgb_u8["orange"], paper_colors_rgb_u8["blue"]] )
-    # g = sns.catplot(data=df_err, x="bins", y = 'err', hue="model" )
-    # g.set_titles(["Grassland", "Hillside", "Forest"])
     g.axes[0][0].set_title("Grassland", fontsize=fontsize)
     g.axes[0][0].set_xlabel("")
     g.axes[0][0].set_ylabel("Err(m)", fontsize=fontsize)
@@ -154,4 +151,4 @@ if __name__ == '__main__':
         ax.set_xticklabels(["0-2", "2-4", "4-6", "6-8", "8-10"])
 
     # plt.show()
-    plt.savefig(args.outdir + "raw&ours.pdf", bbox_inches='tight')
+    plt.savefig(args.outdir + "raw_vs_ours.pdf", bbox_inches='tight')

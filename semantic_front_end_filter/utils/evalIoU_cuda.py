@@ -17,7 +17,6 @@ from torch.utils.tensorboard import SummaryWriter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.transforms import Bbox
 from ruamel.yaml import YAML
-import cv2
 from tqdm import tqdm
 
 test_loader_iter = None
@@ -137,10 +136,10 @@ def computeIoUs(model, args, loader = 'offline_eval', env = 'forest', depth_limi
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
-        "--models", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-02-28-12-00-40_fixed/UnetAdaptiveBins_latest.pt")
+        "--models", default="")
     parser.add_argument("--names", default="")
     parser.add_argument(
-        "--outdir", default="/home/anqiao/tmp/semantic_front_end_filter/adabins/checkpoints/2023-03-02-18-15-59/results_best_test")
+        "--outdir", default="")
     parser.add_argument('--gpu', default=None, type=int,
                         help='Which gpu to use')
     parser.add_argument("--name", default="UnetAdaptiveBins")
@@ -159,7 +158,7 @@ if __name__ == "__main__":
 
 
     args = parse_args(parser)
-    args.data_path = "/media/anqiao/Semantic/Data/extract_trajectories_007_Italy_Anomaly_clean/extract_trajectories"
+    args.data_path = ""
 
     args.trainconfig.bs = 3
     args.batch_size = 5

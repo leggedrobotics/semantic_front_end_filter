@@ -1,10 +1,20 @@
-# Semantic Pointcloud Filter
-Official implementation of paper Seeing Through the Grass: Semantic Pointcloud Filter for Support Surface Learning. Here you can find the code for SPF training and the self-supervised label genration.
+<h1 align="center">
+  <br>
+  Semantic Pointcloud Filter
+  <br>
+</h1>
 
-[[Project page]](https://sites.google.com/leggedrobotics.com/semantic-pointcloud-filter?usp=sharing)
-[[Paper]](https://arxiv.org/abs/2305.07995)
-[[Data]](https://drive.google.com/file/d/1MjcNVJ2iwSdw3h5Z6QahUG4deMm8cr8H/view?usp=sharing)
-[[Video]](https://youtu.be/y56zwSrnJTg)
+<p align="center">
+  <a href="https://sites.google.com/leggedrobotics.com/semantic-pointcloud-filter?usp=sharing">[Project page]</a> &nbsp; 
+  <a href="https://arxiv.org/abs/2305.07995">[Paper]</a> &nbsp; 
+  <a href="https://drive.google.com/file/d/1MjcNVJ2iwSdw3h5Z6QahUG4deMm8cr8H/view?usp=sharing">[Data]</a> &nbsp; 
+  <a href="https://youtu.be/y56zwSrnJTg">[Video]</a>
+</p>
+
+![Overview](./intro.png)
+
+Official implementation of paper **Seeing Through the Grass: Semantic Pointcloud Filter for Support Surface Learning**. Here you can find the code for SPF training and the self-supervised label genration.
+
 ## Installation
 
 ### Dependencies
@@ -40,9 +50,18 @@ To validate the trained model, run
 ```bash
 python semantic_front_end_filter/scripts/eval.py --model <path-to-model-folder> --outdir <path-to-save-the-eveluation-plot> --data_path <path-to-data-folder>
 ```
-Our trained model can be downloaded [here](https://drive.google.com/drive/folders/1Lx5QfLrfS0vk_88-UAJolm3D_ovZh5wS). Please remember to download the whole folder.
+Our trained model can be downloaded [here](https://drive.google.com/drive/folders/1N1dHvVLqcGxWwW_Jcsr1a0xgog58q9Xg?usp). Please remember to download the whole folder.
 
-
-
+## Citing this work
+@ARTICLE{qiao23spf,
+  author={Li, Anqiao and Yang, Chenyu and Frey, Jonas and Lee, Joonho and Cadena, Cesar and Hutter, Marco},
+  journal={IEEE Robotics and Automation Letters}, 
+  title={Seeing Through the Grass: Semantic Pointcloud Filter for Support Surface Learning}, 
+  year={2023},
+  volume={8},
+  number={11},
+  pages={7687-7694},
+  keywords={Robots;Estimation;Surface treatment;Semantics;Vegetation mapping;Surface reconstruction;Semantic segmentation;Deep learning for visual perception;field robots;legged robots},
+  doi={10.1109/LRA.2023.3320016}}
 
 

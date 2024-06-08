@@ -2,7 +2,7 @@ from cProfile import label
 from cmath import nan
 from re import X
 from turtle import color
-from cv2 import mean
+# from cv2 import mean
 import msgpack
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -43,13 +43,18 @@ def visualizeArray(Larray):
     plt.show()
 
 def getRoundKernel(radius = 3):
-    """get a 0-1 kernel with radius sidelength and 1 filled in the center cicle"""
+    """Get a 0-1 kernel with radius sidelength and 1 filled in the center cicle"""
     X = range(2*radius+1)
     x, y = np.meshgrid(X, X)
     kernel = (np.sqrt((x.flatten()-radius)**2 + (y.flatten()-radius)**2).reshape((2*radius+1, 2*radius+1))<=radius).astype('int')
     return kernel
 
 def saveLocalMaps(feet_traj, save_path, localftLength = 2e4, step = 1e4):
+    """
+        Build multiple local ground maps from feet trajectories.
+        When generating depth label from support surface map, we slice the whole map into different submaps 
+        to increase the speed of loading maps in raycasting.
+    """
     # Open feet trajectories 
     with open (feet_traj , 'rb') as data_file:
         data = data_file.read()
@@ -256,7 +261,7 @@ class GFT:
             save_dict["Confidence"] = self.Confidence.tolist() # the recording confidence
 
         # print("Saving one msgpack...")
-        if(out_dir.rsplit('.', 1)[1]!='msgpack'):
+        if(out_dir.rsplit('.', 1)[-1]!='msgpack'):
             save_path = out_dir + "/GroundMap.msgpack"
         else:
             save_path = out_dir
@@ -510,13 +515,26 @@ class GFT:
         return self.xlength*self.ylength
 
 
-def main():
-    gft = GFT(FeetTrajsFile='/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_006_Italy/extract_trajectories/Reconstruct_2022-07-21-10-47-29_0/FeetTrajs.msgpack', InitializeGP = True)
-    gft.save('/home/anqiao/semantic_front_end_filter/Labelling/Example_Files/test')
-
-
 if __name__ == '__main__':
-    # main()
-    save_path = '/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_007_Italy/extract_trajectories/reconstruct_2023-05-24-05-48-22_0/'
-    feet_traj = '/home/anqiao/catkin_ws/SA_dataset/mountpoint/Data/extract_trajectories_007_Italy/extract_trajectories/reconstruct_2023-05-24-05-48-22_0/FeetTrajs.msgpack' 
-    saveLocalMaps(feet_traj, save_path)
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    ## Get a Grid Map by Gaussian Process. 
+    # Since the Gaussian Process will take about 30s, if you only want to use a sparse grid map, you can also set InitializeGP = False and fit with Gaussian Process later by GPT::initializeGPMap().
+    gft = GFT(FeetTrajsFile=dir_path + '/examples/FeetTrajs.msgpack', InitializeGP = True)
+    gft.save(dir_path + '/examples/', GPMap=True)
+
+    # Load Grid Map File
+    gftload = GFT(GroundMapFile=dir_path + '/examples/GroundMap.msgpack')
+
+    # Get Height
+    print(gftload.getHeight(0, 0))
+
+    xlist = np.zeros(3)
+    ylist = np.zeros(3)
+    print(gftload.getHeight(xlist, ylist))
+
+    # Get the whole map and confidence
+    GPMap = gftload.getGPMap()
+
+    # Visualize
+    gftload.visualizeGPMap()
+
