@@ -27,3 +27,7 @@ tmp
 
 # robot models
 semantic_front_end_filter/models/rsc/*
+.vscode/c_cpp_properties.json
+add_license.py
+semantic_front_end_filter/utils/labelling/examples/FeetTrajs.msgpack
+semantic_front_end_filter/utils/labelling/examples/GroundMap.msgpack

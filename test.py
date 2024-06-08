@@ -14,6 +14,10 @@
 # along with MyProject.  If not, see <https://www.gnu.org/licenses/>.
 
 
-import os
+from tqdm import tqdm
+import time
 
-SEMANTIC_FRONT_END_FILTER_ROOT_PATH = os.path.dirname(__file__)
+# Simulate a task with a loop, wrapped by tqdm for a progress bar
+for i in tqdm(range(100)):
+    # Simulate some work with a sleep
+    time.sleep(0.1)  # Sleep for 0.1 seconds

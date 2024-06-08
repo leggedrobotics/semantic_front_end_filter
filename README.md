@@ -53,6 +53,7 @@ python semantic_front_end_filter/scripts/eval.py --model <path-to-model-folder> 
 Our trained model can be downloaded [here](https://drive.google.com/drive/folders/1N1dHvVLqcGxWwW_Jcsr1a0xgog58q9Xg?usp). Please remember to download the whole folder.
 
 ## Citing this work
+```bibtex
 @ARTICLE{qiao23spf,
   author={Li, Anqiao and Yang, Chenyu and Frey, Jonas and Lee, Joonho and Cadena, Cesar and Hutter, Marco},
   journal={IEEE Robotics and Automation Letters}, 
@@ -61,7 +62,7 @@ Our trained model can be downloaded [here](https://drive.google.com/drive/folder
   volume={8},
   number={11},
   pages={7687-7694},
-  keywords={Robots;Estimation;Surface treatment;Semantics;Vegetation mapping;Surface reconstruction;Semantic segmentation;Deep learning for visual perception;field robots;legged robots},
-  doi={10.1109/LRA.2023.3320016}}
+  doi={10.1109/LRA.2023.3320016}
+ }
 
 
