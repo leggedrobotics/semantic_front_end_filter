@@ -5,6 +5,10 @@
 </h1>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3">
+</p>
+
+<p align="center">
   <a href="https://sites.google.com/leggedrobotics.com/semantic-pointcloud-filter?usp=sharing">[Project page]</a> &nbsp; 
   <a href="https://arxiv.org/abs/2305.07995">[Paper]</a> &nbsp; 
   <a href="https://drive.google.com/file/d/1MjcNVJ2iwSdw3h5Z6QahUG4deMm8cr8H/view?usp=sharing">[Data]</a> &nbsp; 
