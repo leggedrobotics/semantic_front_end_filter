@@ -42,10 +42,24 @@ pip install -e .
 ### Self-supervised label generation
 For the details of how to reconstruct the support surface from the robot feet trajectories, see [here](https://github.com/leggedrobotics/semantic_front_end_filter/tree/public/semantic_front_end_filter/utils/labelling).
 
-### Train model 
-For your own robot, you need to raycast the reconstructed support in the camera point of view to get the supervison label for depth estimation. 
-
+### Dataset structure
 You can download our training data from [here](https://drive.google.com/drive/folders/1tRlrYeos8YdGmtDGacB-2Bt_fNqFKyHx), which we build on data collected from Perugia, Italy.
+
+This dataset contains six trajectories: three for training and three for evaluation. To visualize a single data point from any trajectory, use the following command:
+```bash
+python semantic_front_end_filter/scripts/dataset_vis.py --data_path <path-to-data-folder>
+```
+This will display an image like the one shown below:
+![Overview](./dataset_vis.png)
+- **Left column**: Model input for the SPF network.
+- **Right column**: Ground truth labels needed for training. 
+  - SSDE Label: Support Surface Depth Estimation (mean and variance)
+  - SSSeg Label: Support Surface Semantic Segmentation (Obstacles vs. Support Surface)
+
+### Train model 
+For your own robot, you need to raycast the reconstructed support surface in the camera point of view to get the supervison label for depth estimation. 
+
+To starting training, run
 
 ```bash
 python semantic_front_end_filter/scripts/train.py --data_path <path-to-data-folder>

@@ -104,18 +104,18 @@ def visualize(data):
 
     [axi.set_axis_off() for axi in axs.ravel()]
 
+    # plt.savefig("dataset_vis.png")
     plt.show()
-
 
 if __name__ == "__main__":
     # This file visualize what the dataset contains
     # In the left column, the input RGB image and the input PC depth image are shown
     # In the right column, the SSDE label and the SSSeg label are shown
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, default="/media/anqiao/AnqiaoT7/semantic_front_end_filter/extract_trajectories", help="Path to the dataset")
+    parser.add_argument("--data_path", type=str, default="/media/anqiao/AnqiaoT7/semantic_front_end_filter/extract_trajectories", help="Path to the dataset")
     parser.add_argument("--datum", type=str, default="Reconstruct_2022-07-21-10-47-29_0/traj_5_datum_10.msgpack", help="Path to the datum")
     args = parser.parse_args()
     
-    traj_path = os.path.join(args.dataset, args.datum)
+    traj_path = os.path.join(args.data_path, args.datum)
     data = unpackMsgpack(traj_path)
     visualize(data) 
